@@ -7,8 +7,8 @@ A project workflow system that eliminates build and release glue from C++ projec
 
 ## Plan
 
-Goals
------
+*Goals*
+
 ✓ Build projects
 ✓ Run projects
 ✓ Package projects
@@ -21,8 +21,8 @@ Goals
 
 ✓ Recipe-driven workflow
 
-Non-goals (for now)
--------------------
+*Non-goals (for now)*
+
 ✗ Replace CMake
 ✗ Replace compilers
 ✗ Replace IDEs
