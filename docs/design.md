@@ -11,6 +11,8 @@ compilers and build systems rather than replacing them.
 - `forge.lock.toml` records exact resolved dependencies and artifacts.
 - A **box** is a packaged C++ artifact stored in a `.cbox` file.
 - Forge starts locally. Remote registries and shared caches come later.
+- `forge init` adopts an existing project and never creates, moves, or modifies
+  source files.
 
 ## Project workspace
 
@@ -44,4 +46,3 @@ that box.
 - Binary compatibility identity, including compiler and runtime ABI
 - Version constraint syntax
 - Registry protocol and shared binary cache behavior
-

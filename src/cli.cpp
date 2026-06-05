@@ -26,7 +26,7 @@ namespace forge::cli
         << "  forge --help\n"
         << "  forge --version\n\n"
         << "Commands:\n"
-        << "  init      Create a Forge recipe\n"
+        << "  init      Adopt the current project\n"
         << "  build     Build the current project\n"
         << "  run       Run the current project\n"
         << "  release   Create a release artifact\n";

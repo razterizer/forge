@@ -71,5 +71,15 @@ Run:
 ./build/dev/forge --help
 ```
 
+Adopt an existing C++ project:
+
+```sh
+cd path/to/project
+/path/to/forge/build/dev/forge init
+```
+
+`forge init` creates only `forge.recipe.toml`. It discovers existing `.cpp`,
+`.cc`, and `.cxx` files without moving or modifying project sources.
+
 See [docs/design.md](docs/design.md) for the current design baseline and
 roadmap.

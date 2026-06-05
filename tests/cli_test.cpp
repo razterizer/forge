@@ -63,6 +63,13 @@ namespace
     };
   }
 
+  void write_file(const std::filesystem::path& path, std::string_view contents)
+  {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream file { path };
+    file << contents;
+  }
+
   void test_help()
   {
     std::ostringstream output;
@@ -93,12 +100,17 @@ namespace
     expect(contains(error.str(), "not implemented yet"), "planned command explains its state");
   }
 
-  void test_init()
+  void test_init_discovers_existing_sources()
   {
     TemporaryDirectory directory;
     constexpr std::array arguments { std::string_view { "init" } };
     std::ostringstream output;
     std::ostringstream error;
+
+    write_file(directory.path() / "main.cpp", "int main() {}\n");
+    write_file(directory.path() / "source/game.cc", "");
+    write_file(directory.path() / "source/render.cxx", "");
+    write_file(directory.path() / "source/readme.txt", "");
 
     expect(
       forge::cli::run(arguments, directory.path(), output, error) == 0,
@@ -109,14 +121,54 @@ namespace
       "init creates a recipe"
     );
     expect(
-      std::filesystem::exists(directory.path() / "src/main.cpp"),
-      "init creates a source file"
+      contains(read_file(directory.path() / "forge.recipe.toml"), "main.cpp"),
+      "recipe contains a root source"
     );
     expect(
-      contains(read_file(directory.path() / "forge.recipe.toml"), directory.path().filename().string()),
-      "recipe contains the project name"
+      contains(read_file(directory.path() / "forge.recipe.toml"), "source/game.cc"),
+      "recipe contains a nested source"
     );
+    expect(contains(output.str(), "Found 3 C++ source files"), "init reports discovered sources");
     expect(error.str().empty(), "init does not write an error");
+  }
+
+  void test_init_ignores_generated_directories()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "init" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    write_file(directory.path() / "app.cpp", "");
+    write_file(directory.path() / ".git/generated.cpp", "");
+    write_file(directory.path() / ".forge/generated.cpp", "");
+    write_file(directory.path() / "build/generated.cpp", "");
+    write_file(directory.path() / "out/generated.cpp", "");
+    write_file(directory.path() / "cmake-build-debug/generated.cpp", "");
+
+    forge::cli::run(arguments, directory.path(), output, error);
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+
+    expect(contains(recipe, "app.cpp"), "init discovers project sources");
+    expect(!contains(recipe, "generated.cpp"), "init ignores generated directories");
+  }
+
+  void test_init_empty_project()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "init" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "init accepts an empty project"
+    );
+    expect(
+      contains(read_file(directory.path() / "forge.recipe.toml"), "paths = []"),
+      "empty project has an empty source list"
+    );
+    expect(!std::filesystem::exists(directory.path() / "src"), "init does not create source files");
   }
 
   void test_init_refuses_to_overwrite()
@@ -159,7 +211,9 @@ int main()
   test_help();
   test_version();
   test_planned_command();
-  test_init();
+  test_init_discovers_existing_sources();
+  test_init_ignores_generated_directories();
+  test_init_empty_project();
   test_init_refuses_to_overwrite();
   test_unknown_command();
 
