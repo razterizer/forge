@@ -17,11 +17,8 @@ namespace forge
     std::vector<std::filesystem::path> sources;
   };
 
-  bool read_recipe(
-    const std::filesystem::path& path,
-    Recipe& recipe,
-    std::ostream& error
-  );
+  bool read_recipe(const std::filesystem::path& path,
+                   Recipe& recipe,
+                   std::ostream& error);
 
 } // namespace forge
-

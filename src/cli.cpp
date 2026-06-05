@@ -52,11 +52,9 @@ namespace forge::cli
 
   } // namespace
 
-  int run(
-    std::span<const std::string_view> arguments,
-    std::ostream& output,
-    std::ostream& error
-  )
+  int run(std::span<const std::string_view> arguments,
+          std::ostream& output,
+          std::ostream& error)
   {
     std::error_code filesystem_error;
     const auto working_directory = std::filesystem::current_path(filesystem_error);
@@ -70,12 +68,10 @@ namespace forge::cli
     return run(arguments, working_directory, output, error);
   }
 
-  int run(
-    std::span<const std::string_view> arguments,
-    const std::filesystem::path& working_directory,
-    std::ostream& output,
-    std::ostream& error
-  )
+  int run(std::span<const std::string_view> arguments,
+          const std::filesystem::path& working_directory,
+          std::ostream& output,
+          std::ostream& error)
   {
     if (arguments.empty() || arguments.front() == "--help" || arguments.front() == "-h")
     {

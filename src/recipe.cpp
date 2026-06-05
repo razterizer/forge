@@ -122,11 +122,9 @@ namespace forge
 
   } // namespace
 
-  bool read_recipe(
-    const std::filesystem::path& path,
-    Recipe& recipe,
-    std::ostream& error
-  )
+  bool read_recipe(const std::filesystem::path& path,
+                   Recipe& recipe,
+                   std::ostream& error)
   {
     std::ifstream file { path };
 
@@ -206,4 +204,3 @@ namespace forge
   }
 
 } // namespace forge
-

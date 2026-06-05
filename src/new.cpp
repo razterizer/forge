@@ -37,11 +37,9 @@ namespace forge
       return escaped;
     }
 
-    bool write_file(
-      const std::filesystem::path& path,
-      std::string_view contents,
-      std::ostream& error
-    )
+    bool write_file(const std::filesystem::path& path,
+                    std::string_view contents,
+                    std::ostream& error)
     {
       std::ofstream file { path };
 
@@ -64,12 +62,10 @@ namespace forge
 
   } // namespace
 
-  int new_project(
-    const std::filesystem::path& parent_directory,
-    std::string_view project_name,
-    std::ostream& output,
-    std::ostream& error
-  )
+  int new_project(const std::filesystem::path& parent_directory,
+                  std::string_view project_name,
+                  std::ostream& output,
+                  std::ostream& error)
   {
     if (!is_valid_project_name(project_name))
     {
@@ -133,4 +129,3 @@ namespace forge
   }
 
 } // namespace forge
-

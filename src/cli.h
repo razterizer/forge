@@ -10,17 +10,13 @@ namespace forge::cli
 
   inline constexpr std::string_view version = "0.1.0-dev";
 
-  int run(
-    std::span<const std::string_view> arguments,
-    std::ostream& output,
-    std::ostream& error
-  );
+  int run(std::span<const std::string_view> arguments,
+          std::ostream& output,
+          std::ostream& error);
 
-  int run(
-    std::span<const std::string_view> arguments,
-    const std::filesystem::path& working_directory,
-    std::ostream& output,
-    std::ostream& error
-  );
+  int run(std::span<const std::string_view> arguments,
+          const std::filesystem::path& working_directory,
+          std::ostream& output,
+          std::ostream& error);
 
 } // namespace forge::cli

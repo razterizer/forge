@@ -13,11 +13,9 @@
 namespace forge
 {
 
-  int run_process(
-    const std::vector<std::string>& arguments,
-    const std::filesystem::path& working_directory,
-    std::ostream& error
-  )
+  int run_process(const std::vector<std::string>& arguments,
+                  const std::filesystem::path& working_directory,
+                  std::ostream& error)
   {
     if (arguments.empty())
     {
@@ -86,4 +84,3 @@ namespace forge
   }
 
 } // namespace forge
-

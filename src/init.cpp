@@ -48,11 +48,9 @@ namespace forge
       return extension == ".cpp" || extension == ".cc" || extension == ".cxx";
     }
 
-    bool discover_sources(
-      const std::filesystem::path& project_directory,
-      std::vector<std::string>& sources,
-      std::ostream& error
-    )
+    bool discover_sources(const std::filesystem::path& project_directory,
+                          std::vector<std::string>& sources,
+                          std::ostream& error)
     {
       std::error_code filesystem_error;
       std::filesystem::recursive_directory_iterator iterator {
@@ -123,11 +121,9 @@ namespace forge
       return formatted;
     }
 
-    bool write_file(
-      const std::filesystem::path& path,
-      std::string_view contents,
-      std::ostream& error
-    )
+    bool write_file(const std::filesystem::path& path,
+                    std::string_view contents,
+                    std::ostream& error)
     {
       std::ofstream file { path };
 
@@ -150,11 +146,9 @@ namespace forge
 
   } // namespace
 
-  int init_project(
-    const std::filesystem::path& project_directory,
-    std::ostream& output,
-    std::ostream& error
-  )
+  int init_project(const std::filesystem::path& project_directory,
+                   std::ostream& output,
+                   std::ostream& error)
   {
     const auto recipe_path = project_directory / "forge.recipe.toml";
 

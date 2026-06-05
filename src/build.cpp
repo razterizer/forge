@@ -30,11 +30,9 @@ namespace forge
       return escaped;
     }
 
-    bool write_generated_cmake(
-      const std::filesystem::path& path,
-      const Recipe& recipe,
-      std::ostream& error
-    )
+    bool write_generated_cmake(const std::filesystem::path& path,
+                               const Recipe& recipe,
+                               std::ostream& error)
     {
       std::ofstream file { path };
 
@@ -71,11 +69,9 @@ namespace forge
 
   } // namespace
 
-  int build_project(
-    const std::filesystem::path& project_directory,
-    std::ostream& output,
-    std::ostream& error
-  )
+  int build_project(const std::filesystem::path& project_directory,
+                    std::ostream& output,
+                    std::ostream& error)
   {
     Recipe recipe;
 
