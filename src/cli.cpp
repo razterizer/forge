@@ -1,6 +1,8 @@
 #include "cli.h"
+#include "init.h"
 
 #include <array>
+#include <filesystem>
 #include <ostream>
 
 namespace forge::cli
@@ -51,6 +53,25 @@ namespace forge::cli
     std::ostream& error
   )
   {
+    std::error_code filesystem_error;
+    const auto working_directory = std::filesystem::current_path(filesystem_error);
+
+    if (filesystem_error)
+    {
+      error << "forge: could not determine the current directory\n";
+      return 2;
+    }
+
+    return run(arguments, working_directory, output, error);
+  }
+
+  int run(
+    std::span<const std::string_view> arguments,
+    const std::filesystem::path& working_directory,
+    std::ostream& output,
+    std::ostream& error
+  )
+  {
     if (arguments.empty() || arguments.front() == "--help" || arguments.front() == "-h")
     {
       print_help(output);
@@ -73,6 +94,11 @@ namespace forge::cli
     {
       error << "forge: unknown command '" << arguments.front() << "'\n";
       return 2;
+    }
+
+    if (arguments.front() == "init")
+    {
+      return init_project(working_directory, output, error);
     }
 
     error << "forge: '" << arguments.front() << "' is not implemented yet\n";
