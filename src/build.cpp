@@ -73,6 +73,14 @@ namespace forge
                     std::ostream& output,
                     std::ostream& error)
   {
+    return build_project(project_directory, run_process, output, error);
+  }
+
+  int build_project(const std::filesystem::path& project_directory,
+                    const ProcessRunner& process_runner,
+                    std::ostream& output,
+                    std::ostream& error)
+  {
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
@@ -138,7 +146,7 @@ namespace forge
       "-DFORGE_PROJECT_ROOT=" + project_directory.string()
     };
 
-    if (run_process(configure_arguments, project_directory, error) != 0)
+    if (process_runner(configure_arguments, project_directory, error) != 0)
     {
       error << "forge: CMake configuration failed\n";
       return 2;
@@ -152,7 +160,7 @@ namespace forge
       build_directory.string()
     };
 
-    if (run_process(build_arguments, project_directory, error) != 0)
+    if (process_runner(build_arguments, project_directory, error) != 0)
     {
       error << "forge: build failed\n";
       return 2;
