@@ -90,16 +90,6 @@ namespace
     expect(contains(output.str(), forge::cli::version), "version reports the current version");
   }
 
-  void test_planned_command()
-  {
-    constexpr std::array arguments { std::string_view { "release" } };
-    std::ostringstream output;
-    std::ostringstream error;
-
-    expect(forge::cli::run(arguments, output, error) == 2, "planned command reports unavailable");
-    expect(contains(error.str(), "not implemented yet"), "planned command explains its state");
-  }
-
   void test_init_discovers_existing_sources()
   {
     TemporaryDirectory directory;
@@ -358,6 +348,34 @@ namespace
     expect(run_error.str().empty(), "successful run does not write an error");
   }
 
+  void test_release_new_project()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array new_arguments {
+      std::string_view { "new" },
+      std::string_view { "hello" }
+    };
+    constexpr std::array release_arguments { std::string_view { "release" } };
+    std::ostringstream new_output;
+    std::ostringstream new_error;
+    std::ostringstream release_output;
+    std::ostringstream release_error;
+
+    forge::cli::run(new_arguments, directory.path(), new_output, new_error);
+    const auto project_directory = directory.path() / "hello";
+
+    expect(
+      forge::cli::run(release_arguments, project_directory, release_output, release_error) == 0,
+      "release succeeds for a new project"
+    );
+    expect(
+      std::filesystem::exists(project_directory / ".forge/release/hello-0.1.0.zip"),
+      "release creates a zip archive"
+    );
+    expect(contains(release_output.str(), "Released"), "release reports the archive");
+    expect(release_error.str().empty(), "successful release does not write an error");
+  }
+
   void test_unknown_command()
   {
     constexpr std::array arguments { std::string_view { "confuse" } };
@@ -374,7 +392,6 @@ int main()
 {
   test_help();
   test_version();
-  test_planned_command();
   test_init_discovers_existing_sources();
   test_init_ignores_generated_directories();
   test_init_empty_project();
@@ -386,6 +403,7 @@ int main()
   test_build_new_project();
   test_build_rejects_empty_project();
   test_run_new_project();
+  test_release_new_project();
   test_unknown_command();
 
   return failures == 0 ? 0 : 1;

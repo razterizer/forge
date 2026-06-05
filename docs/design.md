@@ -19,6 +19,8 @@ compilers and build systems rather than replacing them.
   and writes artifacts under `.forge/build`.
 - `forge run` performs an incremental build before launching the executable and
   forwarding its arguments and exit status.
+- `forge release` stages an application release and creates a versioned ZIP
+  archive. Release archives are distinct from dependency `.cbox` artifacts.
 
 ## Project workspace
 

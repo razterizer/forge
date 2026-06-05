@@ -2,6 +2,7 @@
 #include "build.h"
 #include "init.h"
 #include "new.h"
+#include "release.h"
 #include "run.h"
 
 #include <array>
@@ -123,6 +124,11 @@ namespace forge::cli
     if (arguments.front() == "build")
     {
       return build_project(working_directory, output, error);
+    }
+
+    if (arguments.front() == "release")
+    {
+      return release_project(working_directory, output, error);
     }
 
     error << "forge: '" << arguments.front() << "' is not implemented yet\n";

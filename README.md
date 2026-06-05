@@ -118,5 +118,15 @@ Build and run a Forge project:
 `forge run` performs an incremental build, forwards its remaining arguments to
 the executable, and returns the executable's exit status.
 
+Create a release archive:
+
+```sh
+/path/to/forge/build/dev/forge release
+```
+
+`forge release` builds the project, stages the executable with root-level
+`README.md` and `LICENSE` files when present, and creates
+`.forge/release/<name>-<version>.zip`.
+
 See [docs/design.md](docs/design.md) for the current design baseline and
 roadmap.
