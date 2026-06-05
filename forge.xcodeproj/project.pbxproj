@@ -1,0 +1,266 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		100000000000000000000001 /* build.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* build.cpp */; };
+		100000000000000000000002 /* cli.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* cli.cpp */; };
+		100000000000000000000003 /* init.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* init.cpp */; };
+		100000000000000000000004 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* main.cpp */; };
+		100000000000000000000005 /* new.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* new.cpp */; };
+		100000000000000000000006 /* process.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000A /* process.cpp */; };
+		100000000000000000000007 /* recipe.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000C /* recipe.cpp */; };
+		100000000000000000000008 /* release.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000E /* release.cpp */; };
+		100000000000000000000009 /* run.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000010 /* run.cpp */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		200000000000000000000001 /* build.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = build.cpp; sourceTree = "<group>"; };
+		200000000000000000000002 /* build.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = build.h; sourceTree = "<group>"; };
+		200000000000000000000003 /* cli.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cli.cpp; sourceTree = "<group>"; };
+		200000000000000000000004 /* cli.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = cli.h; sourceTree = "<group>"; };
+		200000000000000000000005 /* init.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = init.cpp; sourceTree = "<group>"; };
+		200000000000000000000006 /* init.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = init.h; sourceTree = "<group>"; };
+		200000000000000000000007 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+		200000000000000000000008 /* new.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = new.cpp; sourceTree = "<group>"; };
+		200000000000000000000009 /* new.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = new.h; sourceTree = "<group>"; };
+		20000000000000000000000A /* process.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = process.cpp; sourceTree = "<group>"; };
+		20000000000000000000000B /* process.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = process.h; sourceTree = "<group>"; };
+		20000000000000000000000C /* recipe.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = recipe.cpp; sourceTree = "<group>"; };
+		20000000000000000000000D /* recipe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = recipe.h; sourceTree = "<group>"; };
+		20000000000000000000000E /* release.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = release.cpp; sourceTree = "<group>"; };
+		20000000000000000000000F /* release.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = release.h; sourceTree = "<group>"; };
+		200000000000000000000010 /* run.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = run.cpp; sourceTree = "<group>"; };
+		200000000000000000000011 /* run.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = run.h; sourceTree = "<group>"; };
+		200000000000000000000012 /* CMakeLists.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = CMakeLists.txt; sourceTree = "<group>"; };
+		200000000000000000000013 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		200000000000000000000014 /* forge */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = forge; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		300000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		400000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				400000000000000000000002 /* src */,
+				200000000000000000000012 /* CMakeLists.txt */,
+				200000000000000000000013 /* README.md */,
+				400000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		400000000000000000000002 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000001 /* build.cpp */,
+				200000000000000000000002 /* build.h */,
+				200000000000000000000003 /* cli.cpp */,
+				200000000000000000000004 /* cli.h */,
+				200000000000000000000005 /* init.cpp */,
+				200000000000000000000006 /* init.h */,
+				200000000000000000000007 /* main.cpp */,
+				200000000000000000000008 /* new.cpp */,
+				200000000000000000000009 /* new.h */,
+				20000000000000000000000A /* process.cpp */,
+				20000000000000000000000B /* process.h */,
+				20000000000000000000000C /* recipe.cpp */,
+				20000000000000000000000D /* recipe.h */,
+				20000000000000000000000E /* release.cpp */,
+				20000000000000000000000F /* release.h */,
+				200000000000000000000010 /* run.cpp */,
+				200000000000000000000011 /* run.h */,
+			);
+			path = src;
+			sourceTree = "<group>";
+		};
+		400000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000014 /* forge */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		500000000000000000000001 /* forge */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 600000000000000000000002 /* Build configuration list for PBXNativeTarget "forge" */;
+			buildPhases = (
+				300000000000000000000002 /* Sources */,
+				300000000000000000000001 /* Frameworks */,
+				300000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = forge;
+			productName = forge;
+			productReference = 200000000000000000000014 /* forge */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		500000000000000000000002 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					500000000000000000000001 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+				};
+			};
+			buildConfigurationList = 600000000000000000000001 /* Build configuration list for PBXProject "forge" */;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 400000000000000000000001;
+			productRefGroup = 400000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				500000000000000000000001 /* forge */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		300000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		300000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				100000000000000000000001 /* build.cpp in Sources */,
+				100000000000000000000002 /* cli.cpp in Sources */,
+				100000000000000000000003 /* init.cpp in Sources */,
+				100000000000000000000004 /* main.cpp in Sources */,
+				100000000000000000000005 /* new.cpp in Sources */,
+				100000000000000000000006 /* process.cpp in Sources */,
+				100000000000000000000007 /* recipe.cpp in Sources */,
+				100000000000000000000008 /* release.cpp in Sources */,
+				100000000000000000000009 /* run.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		700000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				ONLY_ACTIVE_ARCH = YES;
+			};
+			name = Debug;
+		};
+		700000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		700000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/src",
+					"$(inherited)",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		700000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/src",
+					"$(inherited)",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		600000000000000000000001 /* Build configuration list for PBXProject "forge" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				700000000000000000000001 /* Debug */,
+				700000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		600000000000000000000002 /* Build configuration list for PBXNativeTarget "forge" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				700000000000000000000003 /* Debug */,
+				700000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 500000000000000000000002 /* Project object */;
+}

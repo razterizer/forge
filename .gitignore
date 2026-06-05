@@ -1,4 +1,4 @@
 /.forge/
 /build/
 /out/
-
+**/xcuserdata/
