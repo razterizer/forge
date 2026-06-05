@@ -17,11 +17,17 @@
 		100000000000000000000007 /* recipe.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000C /* recipe.cpp */; };
 		100000000000000000000008 /* release.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000E /* release.cpp */; };
 		100000000000000000000009 /* run.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000010 /* run.cpp */; };
+		10000000000000000000000B /* sha256.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000017 /* sha256.cpp */; };
+		10000000000000000000000C /* zip.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000019 /* zip.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		200000000000000000000015 /* box.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = box.cpp; sourceTree = "<group>"; };
 		200000000000000000000016 /* box.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = box.h; sourceTree = "<group>"; };
+		200000000000000000000017 /* sha256.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = sha256.cpp; sourceTree = "<group>"; };
+		200000000000000000000018 /* sha256.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = sha256.h; sourceTree = "<group>"; };
+		200000000000000000000019 /* zip.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = zip.cpp; sourceTree = "<group>"; };
+		20000000000000000000001A /* zip.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = zip.h; sourceTree = "<group>"; };
 		200000000000000000000001 /* build.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = build.cpp; sourceTree = "<group>"; };
 		200000000000000000000002 /* build.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = build.h; sourceTree = "<group>"; };
 		200000000000000000000003 /* cli.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cli.cpp; sourceTree = "<group>"; };
@@ -87,6 +93,10 @@
 				20000000000000000000000F /* release.h */,
 				200000000000000000000010 /* run.cpp */,
 				200000000000000000000011 /* run.h */,
+				200000000000000000000017 /* sha256.cpp */,
+				200000000000000000000018 /* sha256.h */,
+				200000000000000000000019 /* zip.cpp */,
+				20000000000000000000001A /* zip.h */,
 			);
 			path = src;
 			sourceTree = "<group>";
@@ -176,6 +186,8 @@
 				100000000000000000000007 /* recipe.cpp in Sources */,
 				100000000000000000000008 /* release.cpp in Sources */,
 				100000000000000000000009 /* run.cpp in Sources */,
+				10000000000000000000000B /* sha256.cpp in Sources */,
+				10000000000000000000000C /* zip.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

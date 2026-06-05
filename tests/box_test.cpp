@@ -1,4 +1,5 @@
 #include "box.h"
+#include "sha256.h"
 
 #include <chrono>
 #include <filesystem>
@@ -61,6 +62,28 @@ namespace
       std::istreambuf_iterator<char> { file },
       std::istreambuf_iterator<char> {}
     };
+  }
+
+  std::filesystem::path write_test_box(const std::filesystem::path& directory)
+  {
+    const auto staging = directory / "archive-staging";
+    const auto box = directory / "hello.cbox";
+    std::filesystem::create_directories(staging / "bin");
+    std::ofstream { staging / "cbox.toml" };
+    std::ofstream { staging / "bin/hello" };
+    const std::vector<std::string> arguments {
+      "cmake",
+      "-E",
+      "tar",
+      "cf",
+      box.string(),
+      "--format=zip",
+      "cbox.toml",
+      "bin"
+    };
+    std::ostringstream error;
+    forge::run_process(arguments, staging, error);
+    return box;
   }
 
   void write_project(const std::filesystem::path& directory,
@@ -135,6 +158,7 @@ namespace
 
     expect(std::filesystem::exists(manifest), "box create stages a manifest");
     expect(!contains(read_file(manifest), "build ="), "box manifest omits an unspecified build number");
+    expect(contains(read_file(manifest), "sha256 = \""), "box manifest includes an artifact checksum");
     expect(contains(output.str(), "Created"), "box create reports its archive");
     expect(error.str().empty(), "successful box create does not write an error");
   }
@@ -191,9 +215,7 @@ namespace
   void test_inspect_prints_manifest()
   {
     TemporaryDirectory directory;
-    const auto box = directory.path() / "hello.cbox";
-    std::ofstream box_file { box };
-    box_file << "placeholder";
+    const auto box = write_test_box(directory.path());
     std::ostringstream output;
     std::ostringstream error;
 
@@ -202,8 +224,24 @@ namespace
          const std::filesystem::path& working_directory,
          std::ostream&)
       {
+        std::filesystem::create_directories(working_directory / "bin");
+        std::ofstream artifact { working_directory / "bin/hello" };
+        artifact.close();
         std::ofstream manifest { working_directory / "cbox.toml" };
-        manifest << "[cbox]\nformat = 1\n";
+        manifest
+          << "[cbox]\n"
+          << "format = 1\n\n"
+          << "[package]\n"
+          << "name = \"hello\"\n"
+          << "version = \"0.1.0\"\n"
+          << "type = \"executable\"\n\n"
+          << "[target]\n"
+          << "os = \"test\"\n"
+          << "arch = \"test\"\n\n"
+          << "[artifact]\n"
+          << "path = \"bin/hello\"\n"
+          << "kind = \"executable\"\n"
+          << "sha256 = \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"\n";
         return 0;
       };
 
@@ -214,12 +252,189 @@ namespace
     expect(contains(output.str(), "format = 1"), "box inspect prints the manifest");
   }
 
+  void test_verify_rejects_checksum_mismatch()
+  {
+    TemporaryDirectory directory;
+    const auto box = write_test_box(directory.path());
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path& working_directory,
+         std::ostream&)
+      {
+        std::filesystem::create_directories(working_directory / "bin");
+        std::ofstream { working_directory / "bin/hello" } << "changed";
+        std::ofstream manifest { working_directory / "cbox.toml" };
+        manifest
+          << "[cbox]\nformat = 1\n"
+          << "[package]\nname = \"hello\"\nversion = \"0.1.0\"\ntype = \"executable\"\n"
+          << "[target]\nos = \"test\"\narch = \"test\"\n"
+          << "[artifact]\npath = \"bin/hello\"\nkind = \"executable\"\n"
+          << "sha256 = \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"\n";
+        return 0;
+      };
+
+    expect(
+      forge::verify_box(box, directory.path(), runner, output, error) == 2,
+      "box verify rejects a checksum mismatch"
+    );
+    expect(contains(error.str(), "checksum"), "checksum mismatch has a useful error");
+  }
+
+  void test_verify_rejects_unexpected_file()
+  {
+    TemporaryDirectory directory;
+    const auto box = write_test_box(directory.path());
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path& working_directory,
+         std::ostream&)
+      {
+        std::filesystem::create_directories(working_directory / "bin");
+        std::ofstream { working_directory / "bin/hello" };
+        std::ofstream { working_directory / "surprise.txt" };
+        std::ofstream manifest { working_directory / "cbox.toml" };
+        manifest
+          << "[cbox]\nformat = 1\n"
+          << "[package]\nname = \"hello\"\nversion = \"0.1.0\"\ntype = \"executable\"\n"
+          << "[target]\nos = \"test\"\narch = \"test\"\n"
+          << "[artifact]\npath = \"bin/hello\"\nkind = \"executable\"\n"
+          << "sha256 = \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"\n";
+        return 0;
+      };
+
+    expect(
+      forge::verify_box(box, directory.path(), runner, output, error) == 2,
+      "box verify rejects an unexpected file"
+    );
+    expect(contains(error.str(), "unexpected file"), "unexpected file has a useful error");
+  }
+
+  void test_verify_rejects_unsupported_format()
+  {
+    TemporaryDirectory directory;
+    const auto box = write_test_box(directory.path());
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path& working_directory,
+         std::ostream&)
+      {
+        std::ofstream manifest { working_directory / "cbox.toml" };
+        manifest
+          << "[cbox]\nformat = 2\n"
+          << "[package]\nname = \"hello\"\nversion = \"0.1.0\"\ntype = \"executable\"\n"
+          << "[target]\nos = \"test\"\narch = \"test\"\n"
+          << "[artifact]\npath = \"bin/hello\"\nkind = \"executable\"\n"
+          << "sha256 = \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"\n";
+        return 0;
+      };
+
+    expect(
+      forge::verify_box(box, directory.path(), runner, output, error) == 2,
+      "box verify rejects an unsupported format"
+    );
+    expect(contains(error.str(), "unsupported box format"), "unsupported format has a useful error");
+  }
+
+  void test_verify_rejects_unsafe_artifact_path()
+  {
+    TemporaryDirectory directory;
+    const auto box = write_test_box(directory.path());
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path& working_directory,
+         std::ostream&)
+      {
+        std::ofstream manifest { working_directory / "cbox.toml" };
+        manifest
+          << "[cbox]\nformat = 1\n"
+          << "[package]\nname = \"hello\"\nversion = \"0.1.0\"\ntype = \"executable\"\n"
+          << "[target]\nos = \"test\"\narch = \"test\"\n"
+          << "[artifact]\npath = \"../hello\"\nkind = \"executable\"\n"
+          << "sha256 = \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"\n";
+        return 0;
+      };
+
+    expect(
+      forge::verify_box(box, directory.path(), runner, output, error) == 2,
+      "box verify rejects an unsafe artifact path"
+    );
+    expect(contains(error.str(), "invalid package or artifact"), "unsafe path has a useful error");
+  }
+
+  void test_verify_rejects_unsafe_archive_entry()
+  {
+    TemporaryDirectory directory;
+    const auto staging = directory.path() / "archive-staging";
+    const auto box = directory.path() / "unsafe.cbox";
+    std::filesystem::create_directories(staging / "bin");
+    std::ofstream { staging / "cbox.toml" };
+    std::ofstream { staging / "bin/hello" };
+    std::ofstream { directory.path() / "escape.txt" };
+    const std::vector<std::string> arguments {
+      "cmake",
+      "-E",
+      "tar",
+      "cf",
+      box.string(),
+      "--format=zip",
+      "cbox.toml",
+      "bin",
+      "../escape.txt"
+    };
+    std::ostringstream archive_error;
+    forge::run_process(arguments, staging, archive_error);
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::verify_box(box, directory.path(), runner, output, error) == 2,
+      "box verify rejects an unsafe archive entry"
+    );
+    expect(invocations == 0, "unsafe archive entry is rejected before extraction");
+    expect(contains(error.str(), "unsafe archive entry"), "unsafe archive entry has a useful error");
+  }
+
+  void test_sha256_known_value()
+  {
+    TemporaryDirectory directory;
+    const auto path = directory.path() / "value.txt";
+    std::ofstream { path } << "abc";
+    std::string checksum;
+    std::ostringstream error;
+
+    expect(forge::sha256_file(path, checksum, error), "SHA-256 reads a file");
+    expect(
+      checksum == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+      "SHA-256 matches its known value"
+    );
+  }
+
   void test_extract_refuses_existing_destination()
   {
     TemporaryDirectory directory;
-    const auto box = directory.path() / "hello.cbox";
-    std::ofstream box_file { box };
-    box_file << "placeholder";
+    const auto box = write_test_box(directory.path());
     std::filesystem::create_directory(directory.path() / "hello");
     int invocations = 0;
     std::ostringstream output;
@@ -248,6 +463,12 @@ int main()
   test_create_box_stages_manifest_and_executable();
   test_create_box_includes_build_number();
   test_inspect_prints_manifest();
+  test_verify_rejects_checksum_mismatch();
+  test_verify_rejects_unexpected_file();
+  test_verify_rejects_unsupported_format();
+  test_verify_rejects_unsafe_artifact_path();
+  test_verify_rejects_unsafe_archive_entry();
+  test_sha256_known_value();
   test_extract_refuses_existing_destination();
 
   return failures == 0 ? 0 : 1;

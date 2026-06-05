@@ -435,6 +435,20 @@ namespace
     );
     expect(contains(inspect_output.str(), "format = 1"), "box inspect prints the manifest");
     expect(contains(inspect_output.str(), "build = 6"), "box inspect prints the build number");
+    expect(contains(inspect_output.str(), "sha256 = \""), "box inspect prints the artifact checksum");
+
+    const std::array verify_arguments {
+      std::string_view { "box" },
+      std::string_view { "verify" },
+      std::string_view { box_path_string }
+    };
+    std::ostringstream verify_output;
+    std::ostringstream verify_error;
+    expect(
+      forge::cli::run(verify_arguments, project_directory, verify_output, verify_error) == 0,
+      "box verify succeeds"
+    );
+    expect(contains(verify_output.str(), "Verified"), "box verify reports success");
 
     const std::array extract_arguments {
       std::string_view { "box" },

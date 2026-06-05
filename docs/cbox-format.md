@@ -39,6 +39,7 @@ arch = "arm64"
 [artifact]
 path = "bin/hello"
 kind = "executable"
+sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 ```
 
 The manifest determines package identity. The archive filename is only a
@@ -63,9 +64,25 @@ individual compiled artifacts.
 - Absolute paths and parent traversal are forbidden.
 - `bin/` contains executable artifacts.
 - Future profiles may add `include/`, `lib/`, `runtime/`, and `licenses/`.
+- Format 1 boxes contain exactly `cbox.toml` and the declared artifact.
+
+## Verification
+
+`forge box inspect`, `forge box verify`, and `forge box extract` validate:
+
+- The manifest uses supported format version 1 and contains every required
+  field.
+- The artifact path is relative, remains inside the archive, and starts with
+  `bin/`.
+- The archive contains no undeclared files, symbolic links, or unsupported
+  entries.
+- The artifact matches its lowercase SHA-256 checksum.
+
+Forge validates the ZIP directory before extraction. Extraction then copies only
+the validated manifest and artifact into the destination.
 
 ## Compatibility
 
 One box represents one OS and architecture target. Compiler, standard-library,
-ABI, build-type, checksums, permissions, and deterministic archive rules will
-be added before binary dependency resolution relies on boxes.
+ABI, build-type, permissions, and deterministic archive rules will be added
+before binary dependency resolution relies on boxes.

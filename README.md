@@ -128,11 +128,12 @@ Create a release archive:
 `README.md` and `LICENSE` files when present, and creates
 `.forge/release/<name>-<version>.zip`.
 
-Create, inspect, and extract an executable box:
+Create, inspect, verify, and extract an executable box:
 
 ```sh
 /path/to/forge/build/dev/forge box create
 /path/to/forge/build/dev/forge box inspect .forge/boxes/hello-0.1.0-macos-arm64.cbox
+/path/to/forge/build/dev/forge box verify .forge/boxes/hello-0.1.0-macos-arm64.cbox
 /path/to/forge/build/dev/forge box extract .forge/boxes/hello-0.1.0-macos-arm64.cbox
 ```
 

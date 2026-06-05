@@ -19,6 +19,8 @@ add_library(forge_core STATIC
     src/recipe.cpp
     src/release.cpp
     src/run.cpp
+    src/sha256.cpp
+    src/zip.cpp
 )
 add_library(forge::core ALIAS forge_core)
 

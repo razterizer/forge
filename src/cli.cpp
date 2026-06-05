@@ -31,12 +31,12 @@ namespace forge::cli
         << "Usage:\n"
         << "  forge <command>\n"
         << "  forge new <name>\n"
-        << "  forge box <create|inspect|extract> [path]\n"
+        << "  forge box <create|inspect|verify|extract> [path]\n"
         << "  forge run [arguments...]\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
         << "Commands:\n"
-        << "  box       Create, inspect, or extract boxes\n"
+        << "  box       Create, inspect, verify, or extract boxes\n"
         << "  init      Adopt the current project\n"
         << "  new       Create a new project\n"
         << "  build     Build the current project\n"
@@ -121,12 +121,17 @@ namespace forge::cli
         return inspect_box(arguments[2], working_directory, output, error);
       }
 
+      if (arguments.size() == 3 && arguments[1] == "verify")
+      {
+        return verify_box(arguments[2], working_directory, output, error);
+      }
+
       if (arguments.size() == 3 && arguments[1] == "extract")
       {
         return extract_box(arguments[2], working_directory, output, error);
       }
 
-      error << "forge: usage: forge box <create|inspect|extract> [path]\n";
+      error << "forge: usage: forge box <create|inspect|verify|extract> [path]\n";
       return 2;
     }
 
