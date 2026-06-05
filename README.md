@@ -65,6 +65,13 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
+Run only fast unit tests or external-tool integration tests:
+
+```sh
+ctest --preset dev -L unit
+ctest --preset dev -L integration
+```
+
 Run:
 
 ```sh
