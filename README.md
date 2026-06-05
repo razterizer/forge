@@ -90,5 +90,16 @@ cd path/to/project
 `forge init` creates only `forge.recipe.toml`. It discovers existing `.cpp`,
 `.cc`, and `.cxx` files without moving or modifying project sources.
 
+Build a Forge project:
+
+```sh
+cd path/to/project
+/path/to/forge/build/dev/forge build
+```
+
+The first build implementation supports executable projects with exact source
+paths. Forge generates CMake infrastructure under `.forge/generated/` and
+builds into `.forge/build/`.
+
 See [docs/design.md](docs/design.md) for the current design baseline and
 roadmap.

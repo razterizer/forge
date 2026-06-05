@@ -1,4 +1,5 @@
 #include "cli.h"
+#include "build.h"
 #include "init.h"
 #include "new.h"
 
@@ -114,6 +115,11 @@ namespace forge::cli
     if (arguments.front() == "init")
     {
       return init_project(working_directory, output, error);
+    }
+
+    if (arguments.front() == "build")
+    {
+      return build_project(working_directory, output, error);
     }
 
     error << "forge: '" << arguments.front() << "' is not implemented yet\n";

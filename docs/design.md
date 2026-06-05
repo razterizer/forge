@@ -15,6 +15,8 @@ compilers and build systems rather than replacing them.
   source files.
 - `forge new <name>` explicitly creates a new project with a recipe and starter
   source file.
+- `forge build` generates private CMake infrastructure under `.forge/generated`
+  and writes artifacts under `.forge/build`.
 
 ## Project workspace
 

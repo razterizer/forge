@@ -92,7 +92,7 @@ namespace
 
   void test_planned_command()
   {
-    constexpr std::array arguments { std::string_view { "build" } };
+    constexpr std::array arguments { std::string_view { "release" } };
     std::ostringstream output;
     std::ostringstream error;
 
@@ -277,6 +277,64 @@ namespace
     expect(contains(error.str(), "forge new <name>"), "new prints its usage");
   }
 
+  void test_build_new_project()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array new_arguments {
+      std::string_view { "new" },
+      std::string_view { "hello" }
+    };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    std::ostringstream new_output;
+    std::ostringstream new_error;
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+
+    forge::cli::run(new_arguments, directory.path(), new_output, new_error);
+    const auto project_directory = directory.path() / "hello";
+
+    expect(
+      forge::cli::run(build_arguments, project_directory, build_output, build_error) == 0,
+      "build succeeds for a new project"
+    );
+    expect(
+      std::filesystem::exists(project_directory / ".forge/generated/CMakeLists.txt"),
+      "build generates CMake infrastructure"
+    );
+#ifdef _WIN32
+    expect(
+      std::filesystem::exists(project_directory / ".forge/build/hello.exe"),
+      "build creates an executable"
+    );
+#else
+    expect(
+      std::filesystem::exists(project_directory / ".forge/build/hello"),
+      "build creates an executable"
+    );
+#endif
+    expect(contains(build_output.str(), "Built"), "build reports the resulting executable");
+    expect(build_error.str().empty(), "successful build does not write an error");
+  }
+
+  void test_build_rejects_empty_project()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array init_arguments { std::string_view { "init" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    std::ostringstream init_output;
+    std::ostringstream init_error;
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+
+    forge::cli::run(init_arguments, directory.path(), init_output, init_error);
+
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 2,
+      "build rejects an empty project"
+    );
+    expect(contains(build_error.str(), "no source files"), "build explains an empty project");
+  }
+
   void test_unknown_command()
   {
     constexpr std::array arguments { std::string_view { "confuse" } };
@@ -302,6 +360,8 @@ int main()
   test_new_refuses_existing_path();
   test_new_requires_simple_name();
   test_new_requires_name();
+  test_build_new_project();
+  test_build_rejects_empty_project();
   test_unknown_command();
 
   return failures == 0 ? 0 : 1;
