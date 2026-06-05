@@ -12,6 +12,13 @@ hello-0.1.0-macos-arm64.cbox
     └── hello
 ```
 
+When a project specifies a build number, Forge preserves it as SemVer build
+metadata in the filename:
+
+```text
+termin8or-3.0.0+build.6-macos-arm64.cbox
+```
+
 ## Manifest
 
 Every box contains `cbox.toml` at its root:
@@ -37,6 +44,19 @@ kind = "executable"
 The manifest determines package identity. The archive filename is only a
 human-readable label.
 
+An optional build number is stored separately from the package version:
+
+```toml
+[package]
+name = "termin8or"
+version = "3.0.0"
+build = 6
+type = "executable"
+```
+
+This keeps dependency compatibility based on `3.0.0` while distinguishing
+individual compiled artifacts.
+
 ## Paths
 
 - Archive paths use `/` separators.
@@ -49,4 +69,3 @@ human-readable label.
 One box represents one OS and architecture target. Compiler, standard-library,
 ABI, build-type, checksums, permissions, and deterministic archive rules will
 be added before binary dependency resolution relies on boxes.
-

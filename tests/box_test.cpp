@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -53,7 +54,17 @@ namespace
     return text.find(fragment) != std::string::npos;
   }
 
-  void write_project(const std::filesystem::path& directory)
+  std::string read_file(const std::filesystem::path& path)
+  {
+    std::ifstream file { path };
+    return {
+      std::istreambuf_iterator<char> { file },
+      std::istreambuf_iterator<char> {}
+    };
+  }
+
+  void write_project(const std::filesystem::path& directory,
+                     bool include_build_number = false)
   {
     std::ofstream recipe { directory / "forge.recipe.toml" };
     recipe
@@ -61,7 +72,17 @@ namespace
       << "name = \"hello\"\n"
       << "version = \"0.1.0\"\n"
       << "type = \"executable\"\n"
-      << "cpp_std = 20\n\n"
+      << "cpp_std = 20\n";
+
+    if (include_build_number)
+    {
+      recipe
+        << "\n[build]\n"
+        << "number = 6\n";
+    }
+
+    recipe
+      << "\n"
       << "[sources]\n"
       << "paths = [\"main.cpp\"]\n";
 
@@ -113,8 +134,58 @@ namespace
     }
 
     expect(std::filesystem::exists(manifest), "box create stages a manifest");
+    expect(!contains(read_file(manifest), "build ="), "box manifest omits an unspecified build number");
     expect(contains(output.str(), "Created"), "box create reports its archive");
     expect(error.str().empty(), "successful box create does not write an error");
+  }
+
+  void test_create_box_includes_build_number()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path(), true);
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&commands, &directory](const std::vector<std::string>& command,
+                             const std::filesystem::path&,
+                             std::ostream&)
+      {
+        commands.push_back(command);
+
+        if (command.size() > 1 && command[1] == "--build")
+        {
+          std::filesystem::create_directories(directory.path() / ".forge/build");
+#ifdef _WIN32
+          std::ofstream executable { directory.path() / ".forge/build/hello.exe" };
+#else
+          std::ofstream executable { directory.path() / ".forge/build/hello" };
+#endif
+        }
+
+        return 0;
+      };
+
+    expect(
+      forge::create_box(directory.path(), runner, output, error) == 0,
+      "box create succeeds with a build number"
+    );
+    expect(
+      commands.size() == 3 && contains(commands[2][4], "hello-0.1.0+build.6-"),
+      "box archive name includes build metadata"
+    );
+
+    std::filesystem::path manifest;
+
+    for (const auto& entry : std::filesystem::directory_iterator {
+      directory.path() / ".forge/boxes/staging"
+    })
+    {
+      manifest = entry.path() / "cbox.toml";
+    }
+
+    expect(contains(read_file(manifest), "build = 6"), "box manifest includes the build number");
   }
 
   void test_inspect_prints_manifest()
@@ -175,9 +246,9 @@ namespace
 int main()
 {
   test_create_box_stages_manifest_and_executable();
+  test_create_box_includes_build_number();
   test_inspect_prints_manifest();
   test_extract_refuses_existing_destination();
 
   return failures == 0 ? 0 : 1;
 }
-

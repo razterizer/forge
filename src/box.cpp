@@ -90,7 +90,14 @@ namespace forge
         << "format = 1\n\n"
         << "[package]\n"
         << "name = \"" << recipe.name << "\"\n"
-        << "version = \"" << recipe.version << "\"\n"
+        << "version = \"" << recipe.version << "\"\n";
+
+      if (recipe.build_number)
+      {
+        manifest << "build = " << *recipe.build_number << "\n";
+      }
+
+      manifest
         << "type = \"executable\"\n\n"
         << "[target]\n"
         << "os = \"" << target_os() << "\"\n"
@@ -100,6 +107,18 @@ namespace forge
         << "kind = \"executable\"\n";
 
       return static_cast<bool>(manifest);
+    }
+
+    std::string package_version(const Recipe& recipe)
+    {
+      auto version = recipe.version;
+
+      if (recipe.build_number)
+      {
+        version += "+build." + std::to_string(*recipe.build_number);
+      }
+
+      return version;
     }
 
     std::filesystem::path resolve_box_path(const std::filesystem::path& path,
@@ -170,7 +189,7 @@ namespace forge
     }
 
     const auto box_name =
-      recipe.name + "-" + recipe.version + "-" + target_os() + "-" + target_arch();
+      recipe.name + "-" + package_version(recipe) + "-" + target_os() + "-" + target_arch();
     const auto boxes_directory = project_directory / ".forge" / "boxes";
     const auto staging_directory = boxes_directory / "staging" / box_name;
     const auto archive_path = boxes_directory / (box_name + ".cbox");
@@ -324,4 +343,3 @@ namespace forge
   }
 
 } // namespace forge
-

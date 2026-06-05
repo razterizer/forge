@@ -136,6 +136,17 @@ Create, inspect, and extract an executable box:
 /path/to/forge/build/dev/forge box extract .forge/boxes/hello-0.1.0-macos-arm64.cbox
 ```
 
+Projects may specify an optional build number without changing their dependency
+version:
+
+```toml
+[build]
+number = 6
+```
+
+Forge packages version `3.0.0`, build `6` as
+`<name>-3.0.0+build.6-<os>-<arch>.cbox`.
+
 See [docs/cbox-format.md](docs/cbox-format.md) for the implemented format.
 
 See [docs/design.md](docs/design.md) for the current design baseline and

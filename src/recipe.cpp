@@ -182,6 +182,16 @@ namespace forge
       {
         valid = parse_integer(value, recipe.cpp_standard);
       }
+      else if (section == "build" && key == "number")
+      {
+        int build_number = 0;
+        valid = parse_integer(value, build_number) && build_number >= 0;
+
+        if (valid)
+        {
+          recipe.build_number = build_number;
+        }
+      }
       else if (section == "sources" && key == "paths")
       {
         valid = parse_sources(value, recipe.sources);

@@ -394,6 +394,11 @@ namespace
 
     forge::cli::run(new_arguments, directory.path(), new_output, new_error);
     const auto project_directory = directory.path() / "hello";
+    std::ofstream recipe { project_directory / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[build]\n"
+      << "number = 6\n";
+    recipe.close();
 
     expect(
       forge::cli::run(create_arguments, project_directory, create_output, create_error) == 0,
@@ -411,6 +416,10 @@ namespace
     }
 
     expect(!box_path.empty(), "box create produces a cbox archive");
+    expect(
+      contains(box_path.filename().string(), "hello-0.1.0+build.6-"),
+      "box filename includes build metadata"
+    );
     const auto box_path_string = box_path.string();
 
     const std::array inspect_arguments {
@@ -425,6 +434,7 @@ namespace
       "box inspect succeeds"
     );
     expect(contains(inspect_output.str(), "format = 1"), "box inspect prints the manifest");
+    expect(contains(inspect_output.str(), "build = 6"), "box inspect prints the build number");
 
     const std::array extract_arguments {
       std::string_view { "box" },
