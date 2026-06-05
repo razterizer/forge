@@ -44,3 +44,32 @@ Forge aims to reduce this accidental complexity so developers can focus on writi
 * ✗ Replace compilers
 * ✗ Replace IDEs
 * ✗ Solve every C++ packaging problem
+
+## Development
+
+Forge is beginning as a dependency-free C++20 command-line application. CMake
+is its first build backend, and packaged C++ artifacts are called **boxes** and
+use the `.cbox` extension.
+
+Requirements:
+
+* CMake 3.25 or newer
+* A C++20 compiler
+* Ninja
+
+Build and test:
+
+```sh
+cmake --preset dev
+cmake --build --preset dev
+ctest --preset dev
+```
+
+Run:
+
+```sh
+./build/dev/forge --help
+```
+
+See [docs/design.md](docs/design.md) for the current design baseline and
+roadmap.
