@@ -194,6 +194,89 @@ namespace
     expect(contains(second_error.str(), "already exists"), "init explains overwrite refusal");
   }
 
+  void test_new()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments {
+      std::string_view { "new" },
+      std::string_view { "hello" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "new succeeds"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / "hello/forge.recipe.toml"),
+      "new creates a recipe"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / "hello/main.cpp"),
+      "new creates a source file"
+    );
+    expect(
+      contains(read_file(directory.path() / "hello/forge.recipe.toml"), "name = \"hello\""),
+      "new recipe contains the project name"
+    );
+    expect(
+      contains(read_file(directory.path() / "hello/forge.recipe.toml"), "paths = [\"main.cpp\"]"),
+      "new recipe contains the starter source"
+    );
+    expect(error.str().empty(), "new does not write an error");
+  }
+
+  void test_new_refuses_existing_path()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments {
+      std::string_view { "new" },
+      std::string_view { "hello" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    std::filesystem::create_directory(directory.path() / "hello");
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "new refuses an existing path"
+    );
+    expect(contains(error.str(), "already exists"), "new explains existing path refusal");
+  }
+
+  void test_new_requires_simple_name()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments {
+      std::string_view { "new" },
+      std::string_view { "nested/hello" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "new rejects path-like names"
+    );
+    expect(contains(error.str(), "single directory name"), "new explains invalid names");
+  }
+
+  void test_new_requires_name()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "new" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "new requires a project name"
+    );
+    expect(contains(error.str(), "forge new <name>"), "new prints its usage");
+  }
+
   void test_unknown_command()
   {
     constexpr std::array arguments { std::string_view { "confuse" } };
@@ -215,6 +298,10 @@ int main()
   test_init_ignores_generated_directories();
   test_init_empty_project();
   test_init_refuses_to_overwrite();
+  test_new();
+  test_new_refuses_existing_path();
+  test_new_requires_simple_name();
+  test_new_requires_name();
   test_unknown_command();
 
   return failures == 0 ? 0 : 1;

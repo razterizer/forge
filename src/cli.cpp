@@ -1,5 +1,6 @@
 #include "cli.h"
 #include "init.h"
+#include "new.h"
 
 #include <array>
 #include <filesystem>
@@ -12,6 +13,7 @@ namespace forge::cli
 
     constexpr std::array commands {
       std::string_view { "init" },
+      std::string_view { "new" },
       std::string_view { "build" },
       std::string_view { "run" },
       std::string_view { "release" },
@@ -23,10 +25,12 @@ namespace forge::cli
         << "Forge - a project workflow system for C++\n\n"
         << "Usage:\n"
         << "  forge <command>\n"
+        << "  forge new <name>\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
         << "Commands:\n"
         << "  init      Adopt the current project\n"
+        << "  new       Create a new project\n"
         << "  build     Build the current project\n"
         << "  run       Run the current project\n"
         << "  release   Create a release artifact\n";
@@ -84,15 +88,26 @@ namespace forge::cli
       return 0;
     }
 
-    if (arguments.size() != 1)
-    {
-      error << "forge: commands do not accept arguments yet\n";
-      return 2;
-    }
-
     if (!is_command(arguments.front()))
     {
       error << "forge: unknown command '" << arguments.front() << "'\n";
+      return 2;
+    }
+
+    if (arguments.front() == "new")
+    {
+      if (arguments.size() != 2)
+      {
+        error << "forge: usage: forge new <name>\n";
+        return 2;
+      }
+
+      return new_project(working_directory, arguments[1], output, error);
+    }
+
+    if (arguments.size() != 1)
+    {
+      error << "forge: commands do not accept arguments yet\n";
       return 2;
     }
 

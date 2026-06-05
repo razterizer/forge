@@ -12,6 +12,7 @@ option(FORGE_BUILD_TESTS "Build Forge tests" ON)
 add_library(forge_core STATIC
     src/cli.cpp
     src/init.cpp
+    src/new.cpp
 )
 add_library(forge::core ALIAS forge_core)
 

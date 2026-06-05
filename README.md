@@ -71,6 +71,15 @@ Run:
 ./build/dev/forge --help
 ```
 
+Create a new C++ project:
+
+```sh
+./build/dev/forge new hello
+```
+
+This creates `hello/forge.recipe.toml` and `hello/main.cpp`. Forge refuses to
+overwrite an existing path.
+
 Adopt an existing C++ project:
 
 ```sh

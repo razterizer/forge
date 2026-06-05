@@ -13,6 +13,8 @@ compilers and build systems rather than replacing them.
 - Forge starts locally. Remote registries and shared caches come later.
 - `forge init` adopts an existing project and never creates, moves, or modifies
   source files.
+- `forge new <name>` explicitly creates a new project with a recipe and starter
+  source file.
 
 ## Project workspace
 
@@ -34,7 +36,8 @@ that box.
 
 ## Initial roadmap
 
-1. v0.1: `forge init`, `forge build`, `forge run`, and `forge release`
+1. v0.1: `forge new`, `forge init`, `forge build`, `forge run`, and
+   `forge release`
 2. v0.2: local path dependencies
 3. v0.3: `.cbox` creation and consumption
 4. v0.4: Git dependencies
