@@ -29,3 +29,11 @@ target_link_libraries(forge_release_unit_tests PRIVATE forge::core)
 
 add_test(NAME forge.release.unit COMMAND forge_release_unit_tests)
 set_tests_properties(forge.release.unit PROPERTIES LABELS unit)
+
+add_executable(forge_box_unit_tests
+    box_test.cpp
+)
+target_link_libraries(forge_box_unit_tests PRIVATE forge::core)
+
+add_test(NAME forge.box.unit COMMAND forge_box_unit_tests)
+set_tests_properties(forge.box.unit PROPERTIES LABELS unit)

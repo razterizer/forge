@@ -51,7 +51,7 @@ that box.
 
 ## Deferred decisions
 
-- The `.cbox` manifest schema and archive layout
+- Extended `.cbox` compatibility identity and deterministic archive rules
 - Binary compatibility identity, including compiler and runtime ABI
 - Version constraint syntax
 - Registry protocol and shared binary cache behavior

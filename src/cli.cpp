@@ -1,4 +1,5 @@
 #include "cli.h"
+#include "box.h"
 #include "build.h"
 #include "init.h"
 #include "new.h"
@@ -15,6 +16,7 @@ namespace forge::cli
   {
 
     constexpr std::array commands {
+      std::string_view { "box" },
       std::string_view { "init" },
       std::string_view { "new" },
       std::string_view { "build" },
@@ -29,10 +31,12 @@ namespace forge::cli
         << "Usage:\n"
         << "  forge <command>\n"
         << "  forge new <name>\n"
+        << "  forge box <create|inspect|extract> [path]\n"
         << "  forge run [arguments...]\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
         << "Commands:\n"
+        << "  box       Create, inspect, or extract boxes\n"
         << "  init      Adopt the current project\n"
         << "  new       Create a new project\n"
         << "  build     Build the current project\n"
@@ -103,6 +107,27 @@ namespace forge::cli
       }
 
       return new_project(working_directory, arguments[1], output, error);
+    }
+
+    if (arguments.front() == "box")
+    {
+      if (arguments.size() == 2 && arguments[1] == "create")
+      {
+        return create_box(working_directory, output, error);
+      }
+
+      if (arguments.size() == 3 && arguments[1] == "inspect")
+      {
+        return inspect_box(arguments[2], working_directory, output, error);
+      }
+
+      if (arguments.size() == 3 && arguments[1] == "extract")
+      {
+        return extract_box(arguments[2], working_directory, output, error);
+      }
+
+      error << "forge: usage: forge box <create|inspect|extract> [path]\n";
+      return 2;
     }
 
     if (arguments.front() == "run")

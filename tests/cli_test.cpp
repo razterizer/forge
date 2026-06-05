@@ -376,6 +376,73 @@ namespace
     expect(release_error.str().empty(), "successful release does not write an error");
   }
 
+  void test_box_round_trip()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array new_arguments {
+      std::string_view { "new" },
+      std::string_view { "hello" }
+    };
+    constexpr std::array create_arguments {
+      std::string_view { "box" },
+      std::string_view { "create" }
+    };
+    std::ostringstream new_output;
+    std::ostringstream new_error;
+    std::ostringstream create_output;
+    std::ostringstream create_error;
+
+    forge::cli::run(new_arguments, directory.path(), new_output, new_error);
+    const auto project_directory = directory.path() / "hello";
+
+    expect(
+      forge::cli::run(create_arguments, project_directory, create_output, create_error) == 0,
+      "box create succeeds for a new project"
+    );
+
+    std::filesystem::path box_path;
+
+    for (const auto& entry : std::filesystem::directory_iterator { project_directory / ".forge/boxes" })
+    {
+      if (entry.path().extension() == ".cbox")
+      {
+        box_path = entry.path();
+      }
+    }
+
+    expect(!box_path.empty(), "box create produces a cbox archive");
+    const auto box_path_string = box_path.string();
+
+    const std::array inspect_arguments {
+      std::string_view { "box" },
+      std::string_view { "inspect" },
+      std::string_view { box_path_string }
+    };
+    std::ostringstream inspect_output;
+    std::ostringstream inspect_error;
+    expect(
+      forge::cli::run(inspect_arguments, project_directory, inspect_output, inspect_error) == 0,
+      "box inspect succeeds"
+    );
+    expect(contains(inspect_output.str(), "format = 1"), "box inspect prints the manifest");
+
+    const std::array extract_arguments {
+      std::string_view { "box" },
+      std::string_view { "extract" },
+      std::string_view { box_path_string }
+    };
+    std::ostringstream extract_output;
+    std::ostringstream extract_error;
+    expect(
+      forge::cli::run(extract_arguments, directory.path(), extract_output, extract_error) == 0,
+      "box extract succeeds"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / box_path.stem() / "cbox.toml"),
+      "box extract restores the manifest"
+    );
+  }
+
   void test_unknown_command()
   {
     constexpr std::array arguments { std::string_view { "confuse" } };
@@ -404,6 +471,7 @@ int main()
   test_build_rejects_empty_project();
   test_run_new_project();
   test_release_new_project();
+  test_box_round_trip();
   test_unknown_command();
 
   return failures == 0 ? 0 : 1;

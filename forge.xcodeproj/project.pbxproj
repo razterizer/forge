@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		10000000000000000000000A /* box.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000015 /* box.cpp */; };
 		100000000000000000000001 /* build.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* build.cpp */; };
 		100000000000000000000002 /* cli.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* cli.cpp */; };
 		100000000000000000000003 /* init.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* init.cpp */; };
@@ -19,6 +20,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		200000000000000000000015 /* box.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = box.cpp; sourceTree = "<group>"; };
+		200000000000000000000016 /* box.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = box.h; sourceTree = "<group>"; };
 		200000000000000000000001 /* build.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = build.cpp; sourceTree = "<group>"; };
 		200000000000000000000002 /* build.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = build.h; sourceTree = "<group>"; };
 		200000000000000000000003 /* cli.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cli.cpp; sourceTree = "<group>"; };
@@ -65,6 +68,8 @@
 		400000000000000000000002 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				200000000000000000000015 /* box.cpp */,
+				200000000000000000000016 /* box.h */,
 				200000000000000000000001 /* build.cpp */,
 				200000000000000000000002 /* build.h */,
 				200000000000000000000003 /* cli.cpp */,
@@ -161,6 +166,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				10000000000000000000000A /* box.cpp in Sources */,
 				100000000000000000000001 /* build.cpp in Sources */,
 				100000000000000000000002 /* cli.cpp in Sources */,
 				100000000000000000000003 /* init.cpp in Sources */,
