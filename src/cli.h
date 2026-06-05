@@ -1,0 +1,18 @@
+#pragma once
+
+#include <iosfwd>
+#include <span>
+#include <string_view>
+
+namespace forge::cli
+{
+
+  inline constexpr std::string_view version = "0.1.0-dev";
+
+  int run(
+    std::span<const std::string_view> arguments,
+    std::ostream& output,
+    std::ostream& error
+  );
+
+} // namespace forge::cli
