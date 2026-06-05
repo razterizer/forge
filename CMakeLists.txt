@@ -16,6 +16,7 @@ add_library(forge_core STATIC
     src/new.cpp
     src/process.cpp
     src/recipe.cpp
+    src/run.cpp
 )
 add_library(forge::core ALIAS forge_core)
 

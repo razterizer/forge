@@ -335,6 +335,29 @@ namespace
     expect(contains(build_error.str(), "no source files"), "build explains an empty project");
   }
 
+  void test_run_new_project()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array new_arguments {
+      std::string_view { "new" },
+      std::string_view { "hello" }
+    };
+    constexpr std::array run_arguments { std::string_view { "run" } };
+    std::ostringstream new_output;
+    std::ostringstream new_error;
+    std::ostringstream run_output;
+    std::ostringstream run_error;
+
+    forge::cli::run(new_arguments, directory.path(), new_output, new_error);
+
+    expect(
+      forge::cli::run(run_arguments, directory.path() / "hello", run_output, run_error) == 0,
+      "run succeeds for a new project"
+    );
+    expect(contains(run_output.str(), "Running hello"), "run reports the launched project");
+    expect(run_error.str().empty(), "successful run does not write an error");
+  }
+
   void test_unknown_command()
   {
     constexpr std::array arguments { std::string_view { "confuse" } };
@@ -362,6 +385,7 @@ int main()
   test_new_requires_name();
   test_build_new_project();
   test_build_rejects_empty_project();
+  test_run_new_project();
   test_unknown_command();
 
   return failures == 0 ? 0 : 1;

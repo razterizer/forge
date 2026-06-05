@@ -108,5 +108,15 @@ The first build implementation supports executable projects with exact source
 paths. Forge generates CMake infrastructure under `.forge/generated/` and
 builds into `.forge/build/`.
 
+Build and run a Forge project:
+
+```sh
+/path/to/forge/build/dev/forge run
+/path/to/forge/build/dev/forge run --message "hello world"
+```
+
+`forge run` performs an incremental build, forwards its remaining arguments to
+the executable, and returns the executable's exit status.
+
 See [docs/design.md](docs/design.md) for the current design baseline and
 roadmap.

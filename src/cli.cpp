@@ -2,6 +2,7 @@
 #include "build.h"
 #include "init.h"
 #include "new.h"
+#include "run.h"
 
 #include <array>
 #include <filesystem>
@@ -27,6 +28,7 @@ namespace forge::cli
         << "Usage:\n"
         << "  forge <command>\n"
         << "  forge new <name>\n"
+        << "  forge run [arguments...]\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
         << "Commands:\n"
@@ -100,6 +102,11 @@ namespace forge::cli
       }
 
       return new_project(working_directory, arguments[1], output, error);
+    }
+
+    if (arguments.front() == "run")
+    {
+      return run_project(working_directory, arguments.subspan(1), output, error);
     }
 
     if (arguments.size() != 1)
