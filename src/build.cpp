@@ -252,7 +252,9 @@ namespace forge
       file
         << "set_target_properties(forge_project PROPERTIES "
         << "BUILD_WITH_INSTALL_RPATH TRUE "
-        << "INSTALL_RPATH \"@loader_path/runtime\")\n";
+        << "INSTALL_RPATH \""
+        << (recipe.type == "shared_library" ? "@loader_path" : "@loader_path/runtime")
+        << "\")\n";
 
       if (recipe.type == "shared_library")
       {
