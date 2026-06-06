@@ -176,11 +176,12 @@ namespace forge
         return false;
       }
 
-      artifacts.push_back(BoxArtifact {
-        artifact_path,
-        std::string { kind },
-        checksum
-      });
+      artifacts.push_back(BoxArtifact
+        {
+          artifact_path,
+          std::string { kind },
+          checksum
+        });
       return true;
     }
 
