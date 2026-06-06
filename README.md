@@ -225,6 +225,28 @@ Forge downloads the box through CMake into `.forge/cache/downloads/`, verifies
 the expected SHA-256 before opening it, and then applies normal box validation
 and installation. The checksum is the immutable cache key.
 
+For boxes published by Forge's generated GitHub release workflows, the
+repository and packaged version are sufficient:
+
+```toml
+[dependencies]
+answer = { github = "example/answer", version = "1.0.0" }
+```
+
+Forge resolves the target-qualified `.cbox` and sibling `.sha256` asset from
+the `release-1.0.0` GitHub Release, verifies and caches the box, and writes the
+exact resolved URL and checksum to `forge.lock.toml`. Commit the lockfile so
+other builds can inspect the exact artifact resolution.
+
+When selecting a box with build metadata, include it in the dependency version:
+
+```toml
+answer = { github = "example/answer", version = "1.0.0+build.6" }
+```
+
+The box filename includes `+build.6`, while the GitHub release tag remains
+`release-1.0.0`.
+
 ### Local dependency example
 
 A workspace may contain a static library, a header-only library, and an

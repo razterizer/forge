@@ -430,6 +430,110 @@ namespace
     expect(contains(error.str(), "cycle detected"), "build explains the dependency cycle");
   }
 
+  void test_build_resolves_github_dependency()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[dependencies]\n"
+      << "answer = { github = \"example/answer\", version = \"1.2.3+build.6\" }\n";
+    recipe.close();
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+    const std::string checksum =
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+#ifdef _WIN32
+    const std::string target = "windows-x86_64";
+#elif __APPLE__
+    const std::string target = "macos-arm64";
+#else
+    const std::string target = "linux-x86_64";
+#endif
+
+    const auto asset = "answer-1.2.3+build.6-" + target + ".cbox";
+    const std::string release_url =
+      "https://github.com/example/answer/releases/download/release-1.2.3/";
+
+    const forge::ProcessRunner runner =
+      [&commands, &checksum, &asset](const std::vector<std::string>& arguments,
+                                    const std::filesystem::path&,
+                                    std::ostream&)
+      {
+        commands.push_back(arguments);
+
+        if (arguments.size() > 2
+            && arguments[1].starts_with("-DURL=")
+            && arguments[1].ends_with(".sha256"))
+        {
+          const auto destination = arguments[2].substr(std::string { "-DDESTINATION=" }.size());
+          std::ofstream { destination } << checksum << "  " << asset << '\n';
+          return 0;
+        }
+
+        if (arguments.size() > 2 && arguments[1].starts_with("-DURL="))
+        {
+          const auto destination = arguments[2].substr(std::string { "-DDESTINATION=" }.size());
+          std::ofstream { destination };
+          return 0;
+        }
+
+        return 1;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 2,
+      "GitHub dependency reaches box download"
+    );
+    expect(commands.size() >= 2, "GitHub dependency downloads checksum before box");
+    expect(
+      commands[0][1] == "-DURL=" + release_url + asset + ".sha256",
+      "GitHub dependency resolves the checksum asset URL"
+    );
+    expect(
+      commands[1][1] == "-DURL=" + release_url + asset,
+      "GitHub dependency resolves the box asset URL"
+    );
+    const auto lock = read_file(directory.path() / "forge.lock.toml");
+    expect(contains(lock, "format = 1"), "GitHub dependency writes a lockfile");
+    expect(contains(lock, "github = \"example/answer\""), "lockfile records the GitHub repository");
+    expect(contains(lock, "version = \"1.2.3+build.6\""), "lockfile records the packaged version");
+    expect(contains(lock, "url = \"" + release_url + asset + "\""), "lockfile records the exact asset URL");
+    expect(contains(lock, "sha256 = \"" + checksum + "\""), "lockfile records the exact checksum");
+  }
+
+  void test_build_rejects_incomplete_github_dependency()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[dependencies]\n"
+      << "answer = { github = \"example/answer\" }\n";
+    recipe.close();
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 2,
+      "build rejects an incomplete GitHub dependency"
+    );
+    expect(invocations == 0, "invalid GitHub dependency does not invoke external tools");
+    expect(contains(error.str(), "invalid recipe value"), "incomplete GitHub dependency is explained");
+  }
+
 } // namespace
 
 int main()
@@ -442,6 +546,8 @@ int main()
   test_build_rejects_missing_source_without_running_process();
   test_build_rejects_dependency_name_mismatch();
   test_build_rejects_dependency_cycle();
+  test_build_resolves_github_dependency();
+  test_build_rejects_incomplete_github_dependency();
 
   return failures == 0 ? 0 : 1;
 }

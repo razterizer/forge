@@ -54,6 +54,11 @@ Downloadable `.cbox` dependencies require an explicit SHA-256 checksum. Forge
 uses the checksum as an immutable local cache key before applying normal box
 verification and installation.
 
+GitHub Release dependencies use `{ github = "owner/repository", version =
+"<version>" }`. Forge resolves the conventional target-qualified box and
+checksum assets from the matching `release-<version>` tag, then records the
+exact URL and checksum in `forge.lock.toml`.
+
 ## Initial roadmap
 
 1. v0.1: `forge new`, `forge init`, `forge build`, `forge run`, and

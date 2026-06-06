@@ -29,6 +29,8 @@
 - Added `forge clean` for removing all generated project state under `.forge/`.
 - Added verified direct local `.cbox` dependencies through `{ box = "..." }`.
 - Added checksum-verified downloadable `.cbox` dependencies with local caching.
+- Added GitHub Release `.cbox` dependency shorthand with target-aware asset
+  resolution and generated `forge.lock.toml` entries.
 - Added `forge box publish <box>` for verified local publication and checksum
   generation.
 - Added runnable examples, unit and integration tests, CMake presets, and an

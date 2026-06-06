@@ -84,7 +84,7 @@
     },
     "dependencies": {
       "type": "object",
-      "description": "Local project, local cbox, or downloadable cbox dependencies.",
+      "description": "Local project, local cbox, downloadable cbox, or GitHub Release cbox dependencies.",
       "propertyNames": {
         "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
       },
@@ -112,6 +112,16 @@
             "type": "string",
             "pattern": "^[0-9a-f]{64}$",
             "description": "Expected SHA-256 checksum of the downloaded cbox file."
+          },
+          "github": {
+            "type": "string",
+            "pattern": "^[^/\\\\]+/[^/\\\\]+$",
+            "description": "GitHub repository containing Forge release assets, in owner/repository form."
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+build\\.(0|[1-9][0-9]*))?$",
+            "description": "Packaged dependency version to resolve from the GitHub release."
           }
         },
         "oneOf": [
@@ -123,6 +133,9 @@
           },
           {
             "required": ["url", "sha256"]
+          },
+          {
+            "required": ["github", "version"]
           }
         ]
       }

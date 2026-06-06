@@ -189,6 +189,14 @@ namespace forge
         {
           dependency.sha256 = parsed_value;
         }
+        else if (kind == "github" && dependency.github.empty())
+        {
+          dependency.github = parsed_value;
+        }
+        else if (kind == "version" && dependency.version.empty())
+        {
+          dependency.version = parsed_value;
+        }
         else
         {
           return false;
@@ -212,8 +220,21 @@ namespace forge
 
       const auto local_sources = !dependency.path.empty() + !dependency.box.empty();
       return fields > 0
-        && ((local_sources == 1 && dependency.url.empty() && dependency.sha256.empty())
-            || (local_sources == 0 && !dependency.url.empty() && !dependency.sha256.empty()));
+        && ((local_sources == 1
+             && dependency.url.empty()
+             && dependency.sha256.empty()
+             && dependency.github.empty()
+             && dependency.version.empty())
+            || (local_sources == 0
+                && !dependency.url.empty()
+                && !dependency.sha256.empty()
+                && dependency.github.empty()
+                && dependency.version.empty())
+            || (local_sources == 0
+                && dependency.url.empty()
+                && dependency.sha256.empty()
+                && !dependency.github.empty()
+                && !dependency.version.empty()));
     }
 
   } // namespace

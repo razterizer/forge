@@ -26,6 +26,8 @@ rules:
 - Projects may declare local static-library, shared-library, and header-only
   dependencies using name and either project-path or cbox-path inline tables.
 - Downloadable cbox dependencies require both `url` and lowercase `sha256`.
+- GitHub Release cbox dependencies require `github = "owner/repository"` and a
+  packaged `version`.
 
 ## Taplo and VS Code
 

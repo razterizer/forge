@@ -172,6 +172,113 @@ namespace forge
         && value.find_first_not_of("0123456789abcdef") == std::string_view::npos;
     }
 
+    bool is_safe_url_component(std::string_view value)
+    {
+      return !value.empty()
+        && value != "."
+        && value != ".."
+        && value.find_first_not_of(
+          "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-"
+        ) == std::string_view::npos;
+    }
+
+    bool is_github_repository(std::string_view value)
+    {
+      const auto separator = value.find('/');
+      return separator != std::string_view::npos
+        && separator == value.rfind('/')
+        && is_safe_url_component(value.substr(0, separator))
+        && is_safe_url_component(value.substr(separator + 1));
+    }
+
+    bool is_numeric_identifier(std::string_view value)
+    {
+      return !value.empty()
+        && value.find_first_not_of("0123456789") == std::string_view::npos
+        && (value.size() == 1 || value.front() != '0');
+    }
+
+    bool is_github_package_version(std::string_view value)
+    {
+      const auto build = value.find("+build.");
+
+      if (build != std::string_view::npos)
+      {
+        if (!is_numeric_identifier(value.substr(build + std::string_view { "+build." }.size())))
+        {
+          return false;
+        }
+
+        value = value.substr(0, build);
+      }
+
+      const auto prerelease = value.find('-');
+      const auto core = value.substr(0, prerelease);
+      std::size_t offset = 0;
+
+      for (int component = 0; component < 3; ++component)
+      {
+        const auto separator = core.find('.', offset);
+        const auto end = component == 2 ? core.size() : separator;
+
+        if ((component != 2 && separator == std::string_view::npos)
+            || !is_numeric_identifier(core.substr(offset, end - offset)))
+        {
+          return false;
+        }
+
+        offset = end + 1;
+      }
+
+      return prerelease == std::string_view::npos
+        || is_safe_url_component(value.substr(prerelease + 1));
+    }
+
+    bool download_file(const std::filesystem::path& parent_directory,
+                       std::string_view url,
+                       const std::filesystem::path& destination,
+                       bool always_download,
+                       const ProcessRunner& process_runner,
+                       std::ostream& error)
+    {
+      if (!always_download && std::filesystem::is_regular_file(destination))
+      {
+        return true;
+      }
+
+      const auto script = destination.parent_path() / "download.cmake";
+      std::ofstream file { script };
+
+      if (!file)
+      {
+        error << "forge: could not create the dependency download script\n";
+        return false;
+      }
+
+      file
+        << "file(DOWNLOAD \"${URL}\" \"${DESTINATION}.tmp\" STATUS status TLS_VERIFY ON)\n"
+        << "list(GET status 0 code)\n"
+        << "if(NOT code EQUAL 0)\n"
+        << "  file(REMOVE \"${DESTINATION}.tmp\")\n"
+        << "  message(FATAL_ERROR \"download failed: ${status}\")\n"
+        << "endif()\n"
+        << "file(REMOVE \"${DESTINATION}\")\n"
+        << "file(RENAME \"${DESTINATION}.tmp\" \"${DESTINATION}\")\n";
+      file.close();
+
+      return process_runner(
+        {
+          "cmake",
+          "-DURL=" + std::string { url },
+          "-DDESTINATION=" + destination.generic_string(),
+          "-P",
+          script.string()
+        },
+        parent_directory,
+        error
+      ) == 0;
+    }
+
     bool download_dependency_box(const std::filesystem::path& parent_directory,
                                  const Dependency& dependency,
                                  const ProcessRunner& process_runner,
@@ -186,7 +293,6 @@ namespace forge
       }
 
       const auto cache_directory = parent_directory / ".forge" / "cache" / "downloads";
-      const auto script = cache_directory / "download.cmake";
       box = cache_directory / (dependency.sha256 + ".cbox");
       std::error_code filesystem_error;
       std::filesystem::create_directories(cache_directory, filesystem_error);
@@ -199,36 +305,16 @@ namespace forge
 
       if (!std::filesystem::is_regular_file(box))
       {
-        std::ofstream file { script };
-
-        if (!file)
-        {
-          error << "forge: could not create the dependency download script\n";
-          return false;
-        }
-
-        file
-          << "file(DOWNLOAD \"${URL}\" \"${DESTINATION}.tmp\" STATUS status TLS_VERIFY ON)\n"
-          << "list(GET status 0 code)\n"
-          << "if(NOT code EQUAL 0)\n"
-          << "  file(REMOVE \"${DESTINATION}.tmp\")\n"
-          << "  message(FATAL_ERROR \"download failed: ${status}\")\n"
-          << "endif()\n"
-          << "file(RENAME \"${DESTINATION}.tmp\" \"${DESTINATION}\")\n";
-        file.close();
         output << "Downloading dependency " << dependency.name << '\n' << std::flush;
 
-        if (process_runner(
-          {
-            "cmake",
-            "-DURL=" + dependency.url,
-            "-DDESTINATION=" + box.generic_string(),
-            "-P",
-            script.string()
-          },
+        if (!download_file(
           parent_directory,
+          dependency.url,
+          box,
+          false,
+          process_runner,
           error
-        ) != 0)
+        ))
         {
           error << "forge: could not download dependency '" << dependency.name << "'\n";
           return false;
@@ -241,6 +327,149 @@ namespace forge
       {
         std::filesystem::remove(box, filesystem_error);
         error << "forge: downloaded dependency '" << dependency.name << "' checksum does not match\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    bool resolve_github_dependency(const std::filesystem::path& parent_directory,
+                                   Dependency& dependency,
+                                   const ProcessRunner& process_runner,
+                                   std::ostream& output,
+                                   std::ostream& error)
+    {
+      if (!is_github_repository(dependency.github)
+          || !is_github_package_version(dependency.version))
+      {
+        error << "forge: dependency '" << dependency.name
+              << "' has an invalid GitHub repository or version\n";
+        return false;
+      }
+
+      auto tag_version = dependency.version;
+      const auto build_metadata = tag_version.find("+build.");
+
+      if (build_metadata != std::string::npos)
+      {
+        tag_version.resize(build_metadata);
+      }
+
+      const auto asset = dependency.name
+        + "-" + dependency.version
+        + "-" + target_os()
+        + "-" + target_arch()
+        + ".cbox";
+      const auto release_url =
+        "https://github.com/" + dependency.github + "/releases/download/release-" + tag_version + "/";
+      const auto checksum_url = release_url + asset + ".sha256";
+      const auto cache_directory =
+        parent_directory / ".forge" / "cache" / "github"
+          / std::filesystem::path { dependency.github }
+          / dependency.version
+          / (target_os() + "-" + target_arch());
+      const auto checksum_path = cache_directory / (asset + ".sha256");
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(cache_directory, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not create the GitHub dependency cache\n";
+        return false;
+      }
+
+      output << "Resolving GitHub dependency " << dependency.name << '\n' << std::flush;
+
+      if (!download_file(
+        parent_directory,
+        checksum_url,
+        checksum_path,
+        true,
+        process_runner,
+        error
+      ))
+      {
+        error << "forge: could not download checksum for dependency '" << dependency.name << "'\n";
+        return false;
+      }
+
+      std::ifstream checksum_file { checksum_path };
+      std::string checksum;
+      std::string filename;
+      checksum_file >> checksum >> filename;
+
+      if (!checksum_file || !is_sha256(checksum) || filename != asset)
+      {
+        error << "forge: dependency '" << dependency.name
+              << "' has an invalid GitHub release checksum file\n";
+        return false;
+      }
+
+      dependency.url = release_url + asset;
+      dependency.sha256 = std::move(checksum);
+      return true;
+    }
+
+    bool write_github_lock_header(const std::filesystem::path& project_directory,
+                                  const Recipe& recipe,
+                                  std::ostream& error)
+    {
+      const auto has_github_dependency = std::any_of(
+        recipe.dependencies.begin(),
+        recipe.dependencies.end(),
+        [](const Dependency& dependency)
+        {
+          return !dependency.github.empty();
+        }
+      );
+
+      if (!has_github_dependency)
+      {
+        return true;
+      }
+
+      std::ofstream lock { project_directory / "forge.lock.toml" };
+
+      if (!lock)
+      {
+        error << "forge: could not write forge.lock.toml\n";
+        return false;
+      }
+
+      lock << "format = 1\n";
+
+      if (!lock)
+      {
+        error << "forge: could not write forge.lock.toml\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    bool append_github_lock(const std::filesystem::path& project_directory,
+                            const Dependency& dependency,
+                            std::ostream& error)
+    {
+      std::ofstream lock { project_directory / "forge.lock.toml", std::ios::app };
+
+      if (!lock)
+      {
+        error << "forge: could not write forge.lock.toml\n";
+        return false;
+      }
+
+      lock
+        << "\n[[dependency]]\n"
+        << "name = \"" << dependency.name << "\"\n"
+        << "github = \"" << dependency.github << "\"\n"
+        << "version = \"" << dependency.version << "\"\n"
+        << "url = \"" << dependency.url << "\"\n"
+        << "sha256 = \"" << dependency.sha256 << "\"\n";
+
+      if (!lock)
+      {
+        error << "forge: could not write forge.lock.toml\n";
         return false;
       }
 
@@ -469,11 +698,24 @@ namespace forge
 
       std::error_code filesystem_error;
       std::filesystem::path downloaded_box;
+      auto resolved_dependency = dependency;
 
-      if (!dependency.url.empty()
+      if (!resolved_dependency.github.empty()
+          && !resolve_github_dependency(
+            parent_directory,
+            resolved_dependency,
+            process_runner,
+            output,
+            error
+          ))
+      {
+        return false;
+      }
+
+      if (!resolved_dependency.url.empty()
           && !download_dependency_box(
             parent_directory,
-            dependency,
+            resolved_dependency,
             process_runner,
             downloaded_box,
             output,
@@ -483,9 +725,20 @@ namespace forge
         return false;
       }
 
-      const auto is_box = !dependency.box.empty() || !dependency.url.empty();
+      if (!resolved_dependency.github.empty()
+          && !append_github_lock(parent_directory, resolved_dependency, error))
+      {
+        return false;
+      }
+
+      const auto is_box =
+        !resolved_dependency.box.empty()
+        || !resolved_dependency.url.empty()
+        || !resolved_dependency.github.empty();
       const auto dependency_location =
-        !downloaded_box.empty() ? downloaded_box : (dependency.box.empty() ? dependency.path : dependency.box);
+        !downloaded_box.empty()
+          ? downloaded_box
+          : (resolved_dependency.box.empty() ? resolved_dependency.path : resolved_dependency.box);
       const auto directory =
         std::filesystem::weakly_canonical(parent_directory / dependency_location, filesystem_error);
 
@@ -801,6 +1054,11 @@ namespace forge
       std::set<std::string> direct_names;
       std::set<std::filesystem::path> collected;
       std::vector<DependencyNode*> ordered;
+
+      if (!write_github_lock_header(project_directory, recipe, error))
+      {
+        return false;
+      }
 
       for (const auto& dependency : recipe.dependencies)
       {
