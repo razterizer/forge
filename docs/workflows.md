@@ -42,7 +42,21 @@ notes file without a matching version section causes release to fail.
 Each workflow reacts to `release-*` and `v*` tags, bootstraps Forge, runs
 `forge release`, gives the archive a platform-specific name, and publishes it
 to the matching GitHub Release. Existing workflow and release-note files are
-left unchanged. Forge does not yet create or push release tags.
+left unchanged. Tag creation remains an explicit opt-in action.
+
+Tagged releases are opt-in:
+
+```sh
+forge release --tag
+forge release --tag="release-<version>-<curr-date>"
+```
+
+The default tag is `release-<version>`. Formats may use `<name>`, `<version>`,
+`<build-nr>`, `<curr-date>`, `<target>`, and `<configuration>`. Forge validates
+the expanded tag and clean tracked Git state before and after building, then
+creates an annotated tag from the extracted release notes and pushes it to
+`origin`. Custom formats must match `release-*` or `v*`, or the generated
+workflow triggers must be customized, to publish hosted artifacts.
 
 ## Planned
 
@@ -51,7 +65,7 @@ The next workflow slices should be:
 1. Named build and test profiles.
 2. Release variants and platform-specific release contents.
 3. Generated release manifests and checksums.
-4. Dry-run-first Git tagging.
+4. Dry-run support for Git tagging.
 5. Generated version headers.
 
 Local commands and CI should execute the same Forge-defined workflow. CI files

@@ -53,6 +53,19 @@ namespace
     return text.find(fragment) != std::string::npos;
   }
 
+  bool command_contains(const std::vector<std::string>& command, std::string_view argument)
+  {
+    for (const auto& value : command)
+    {
+      if (value == argument)
+      {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   void write_project(const std::filesystem::path& directory)
   {
     std::ofstream recipe { directory / "forge.recipe.toml" };
@@ -278,6 +291,116 @@ namespace
     expect(contains(error.str(), "were not found"), "release explains missing version notes");
   }
 
+  void test_release_creates_and_pushes_custom_tag()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe << "\n[build]\nnumber = 7\n";
+    recipe.close();
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+    forge::ReleaseOptions options;
+    options.tag_format = "<name>-<version>+build.<build-nr>-<configuration>";
+
+    const forge::ProcessRunner runner =
+      [&commands, &directory](const std::vector<std::string>& command,
+                             const std::filesystem::path&,
+                             std::ostream&)
+      {
+        commands.push_back(command);
+
+        if (command_contains(command, "show-ref"))
+        {
+          return 1;
+        }
+
+        if (command.size() > 1 && command[1] == "--build")
+        {
+          std::filesystem::create_directories(directory.path() / ".forge/build");
+#ifdef _WIN32
+          std::ofstream executable { directory.path() / ".forge/build/hello.exe" };
+#else
+          std::ofstream executable { directory.path() / ".forge/build/hello" };
+#endif
+        }
+
+        return 0;
+      };
+
+    expect(
+      forge::release_project(directory.path(), options, runner, output, error) == 0,
+      "tagged release succeeds"
+    );
+    expect(commands.size() == 10, "tagged release preflights, releases, rechecks, tags, and pushes");
+    expect(
+      command_contains(commands[8], "hello-0.1.0+build.7-release"),
+      "tagged release expands custom placeholders"
+    );
+    expect(command_contains(commands[8], "-F"), "tag annotation uses extracted release notes");
+    expect(
+      command_contains(commands[9], "refs/tags/hello-0.1.0+build.7-release"),
+      "tagged release pushes the exact tag"
+    );
+    expect(contains(output.str(), "Tagged and pushed"), "tagged release reports the pushed tag");
+    expect(error.str().empty(), "successful tagged release does not write an error");
+  }
+
+  void test_release_tag_rejects_dirty_tree_before_build()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+    forge::ReleaseOptions options;
+    options.tag_format = "release-<version>";
+
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>& command,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return command_contains(command, "diff-index") ? 1 : 0;
+      };
+
+    expect(
+      forge::release_project(directory.path(), options, runner, output, error) == 2,
+      "tagged release rejects a dirty tree"
+    );
+    expect(invocations == 3, "dirty tree is rejected before building");
+    expect(contains(error.str(), "clean working tree"), "tagged release explains dirty tree");
+  }
+
+  void test_release_tag_requires_declared_build_number()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+    forge::ReleaseOptions options;
+    options.tag_format = "release-<version>-<build-nr>";
+
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::release_project(directory.path(), options, runner, output, error) == 2,
+      "tagged release requires a declared build number"
+    );
+    expect(invocations == 0, "invalid tag format runs no processes");
+    expect(contains(error.str(), "no build number"), "tagged release explains missing build number");
+  }
+
 } // namespace
 
 int main()
@@ -286,6 +409,9 @@ int main()
   test_release_reports_archive_failure();
   test_release_rejects_file_outside_project();
   test_release_rejects_missing_version_notes();
+  test_release_creates_and_pushes_custom_tag();
+  test_release_tag_rejects_dirty_tree_before_build();
+  test_release_tag_requires_declared_build_number();
 
   return failures == 0 ? 0 : 1;
 }

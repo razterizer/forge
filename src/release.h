@@ -4,11 +4,23 @@
 
 #include <filesystem>
 #include <iosfwd>
+#include <optional>
+#include <string>
 
 namespace forge
 {
 
+  struct ReleaseOptions
+  {
+    std::optional<std::string> tag_format;
+  };
+
   int release_project(const std::filesystem::path& project_directory,
+                      std::ostream& output,
+                      std::ostream& error);
+
+  int release_project(const std::filesystem::path& project_directory,
+                      const ReleaseOptions& options,
                       std::ostream& output,
                       std::ostream& error);
 
@@ -17,5 +29,10 @@ namespace forge
                       std::ostream& output,
                       std::ostream& error);
 
-} // namespace forge
+  int release_project(const std::filesystem::path& project_directory,
+                      const ReleaseOptions& options,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error);
 
+} // namespace forge

@@ -32,6 +32,7 @@ namespace forge::cli
         << "  forge <command>\n"
         << "  forge new <name>\n"
         << "  forge box <create|inspect|verify|extract> [path]\n"
+        << "  forge release [--tag[=<format>]]\n"
         << "  forge run [arguments...]\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
@@ -140,6 +141,35 @@ namespace forge::cli
       return run_project(working_directory, arguments.subspan(1), output, error);
     }
 
+    if (arguments.front() == "release")
+    {
+      ReleaseOptions options;
+
+      if (arguments.size() == 2 && arguments[1] == "--tag")
+      {
+        options.tag_format = "release-<version>";
+      }
+      else if (arguments.size() == 2 && arguments[1].starts_with("--tag="))
+      {
+        options.tag_format = std::string {
+          arguments[1].substr(std::string_view { "--tag=" }.size())
+        };
+
+        if (options.tag_format->empty())
+        {
+          error << "forge: tag format cannot be empty\n";
+          return 2;
+        }
+      }
+      else if (arguments.size() != 1)
+      {
+        error << "forge: usage: forge release [--tag[=<format>]]\n";
+        return 2;
+      }
+
+      return release_project(working_directory, options, output, error);
+    }
+
     if (arguments.size() != 1)
     {
       error << "forge: commands do not accept arguments yet\n";
@@ -154,11 +184,6 @@ namespace forge::cli
     if (arguments.front() == "build")
     {
       return build_project(working_directory, output, error);
-    }
-
-    if (arguments.front() == "release")
-    {
-      return release_project(working_directory, output, error);
     }
 
     error << "forge: '" << arguments.front() << "' is not implemented yet\n";

@@ -173,7 +173,14 @@ namespace forge
       "\n"
       "- Initial release.\n";
 
-    return write_new_file(project_directory / "RELEASE_NOTES.md", release_notes, error);
+    constexpr std::string_view gitignore =
+      "**/.forge/\n"
+      "/build/\n"
+      "/out/\n";
+
+    return
+      write_new_file(project_directory / "RELEASE_NOTES.md", release_notes, error)
+      && write_new_file(project_directory / ".gitignore", gitignore, error);
   }
 
 } // namespace forge

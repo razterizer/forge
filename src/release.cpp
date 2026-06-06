@@ -4,7 +4,10 @@
 #include "recipe.h"
 
 #include <array>
+#include <chrono>
+#include <ctime>
 #include <fstream>
+#include <iomanip>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -245,6 +248,188 @@ namespace forge
       return true;
     }
 
+    std::string target()
+    {
+      std::string os;
+      std::string architecture;
+
+#ifdef _WIN32
+      os = "windows";
+#elif __APPLE__
+      os = "macos";
+#elif __linux__
+      os = "linux";
+#else
+      os = "unknown";
+#endif
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+      architecture = "arm64";
+#elif defined(__x86_64__) || defined(_M_X64)
+      architecture = "x86_64";
+#elif defined(__i386__) || defined(_M_IX86)
+      architecture = "x86";
+#else
+      architecture = "unknown";
+#endif
+
+      return os + "-" + architecture;
+    }
+
+    std::string current_date()
+    {
+      const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+      std::tm utc {};
+
+#ifdef _WIN32
+      gmtime_s(&utc, &now);
+#else
+      gmtime_r(&now, &utc);
+#endif
+
+      std::ostringstream date;
+      date << std::put_time(&utc, "%Y-%m-%d");
+      return date.str();
+    }
+
+    void replace_placeholder(std::string& value,
+                             std::string_view placeholder,
+                             std::string_view replacement)
+    {
+      std::size_t position = 0;
+
+      while ((position = value.find(placeholder, position)) != std::string::npos)
+      {
+        value.replace(position, placeholder.size(), replacement);
+        position += replacement.size();
+      }
+    }
+
+    bool expand_tag_format(std::string_view format,
+                           const Recipe& recipe,
+                           std::string& tag,
+                           std::ostream& error)
+    {
+      tag = format;
+      replace_placeholder(tag, "<name>", recipe.name);
+      replace_placeholder(tag, "<version>", recipe.version);
+      replace_placeholder(tag, "<curr-date>", current_date());
+      replace_placeholder(tag, "<target>", target());
+      replace_placeholder(tag, "<configuration>", "release");
+
+      if (tag.find("<build-nr>") != std::string::npos)
+      {
+        if (!recipe.build_number)
+        {
+          error << "forge: tag format uses <build-nr>, but the recipe has no build number\n";
+          return false;
+        }
+
+        replace_placeholder(tag, "<build-nr>", std::to_string(*recipe.build_number));
+      }
+
+      if (tag.empty()
+          || tag.find('<') != std::string::npos
+          || tag.find('>') != std::string::npos)
+      {
+        error << "forge: tag format contains an unknown or incomplete placeholder\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    bool preflight_tag(const std::filesystem::path& project_directory,
+                       std::string_view tag,
+                       const ProcessRunner& process_runner,
+                       std::ostream& error)
+    {
+      if (process_runner({ "git", "check-ref-format", "refs/tags/" + std::string { tag } },
+                         project_directory,
+                         error) != 0)
+      {
+        error << "forge: expanded tag '" << tag << "' is not a valid Git tag\n";
+        return false;
+      }
+
+      if (process_runner(
+        { "git", "cat-file", "-e", "HEAD^{commit}" },
+        project_directory,
+        error
+      ) != 0)
+      {
+        error << "forge: release tagging requires a Git repository with at least one commit\n";
+        return false;
+      }
+
+      if (process_runner({ "git", "diff-index", "--quiet", "HEAD", "--" },
+                         project_directory,
+                         error) != 0)
+      {
+        error << "forge: release tagging requires a clean working tree\n";
+        return false;
+      }
+
+      const auto existing = process_runner(
+        { "git", "show-ref", "--verify", "--quiet", "refs/tags/" + std::string { tag } },
+        project_directory,
+        error
+      );
+
+      if (existing == 0)
+      {
+        error << "forge: tag '" << tag << "' already exists locally\n";
+        return false;
+      }
+
+      if (existing != 1)
+      {
+        error << "forge: could not inspect existing Git tags\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    bool create_and_push_tag(const std::filesystem::path& project_directory,
+                             const Recipe& recipe,
+                             std::string_view tag,
+                             const ProcessRunner& process_runner,
+                             std::ostream& output,
+                             std::ostream& error)
+    {
+      const auto notes_path = project_directory / ".forge" / "release" / "RELEASE_NOTES.md";
+      std::vector<std::string> tag_arguments { "git", "tag", "-a", std::string { tag } };
+
+      if (std::filesystem::is_regular_file(notes_path))
+      {
+        tag_arguments.insert(tag_arguments.end(), { "-F", notes_path.string() });
+      }
+      else
+      {
+        tag_arguments.insert(tag_arguments.end(), { "-m", "Release " + recipe.version });
+      }
+
+      if (process_runner(tag_arguments, project_directory, error) != 0)
+      {
+        error << "forge: could not create tag '" << tag << "'\n";
+        return false;
+      }
+
+      if (process_runner(
+        { "git", "push", "origin", "refs/tags/" + std::string { tag } },
+        project_directory,
+        error
+      ) != 0)
+      {
+        error << "forge: could not push tag '" << tag << "'; the local tag remains\n";
+        return false;
+      }
+
+      output << "Tagged and pushed " << tag << '\n';
+      return true;
+    }
+
   } // namespace
 
   int release_project(const std::filesystem::path& project_directory,
@@ -252,6 +437,14 @@ namespace forge
                       std::ostream& error)
   {
     return release_project(project_directory, run_process, output, error);
+  }
+
+  int release_project(const std::filesystem::path& project_directory,
+                      const ReleaseOptions& options,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    return release_project(project_directory, options, run_process, output, error);
   }
 
   int release_project(const std::filesystem::path& project_directory,
@@ -293,10 +486,13 @@ namespace forge
     const auto release_directory = project_directory / ".forge" / "release";
     const auto staging_directory = release_directory / package_name;
     const auto archive_path = release_directory / (package_name + ".zip");
+    const auto extracted_notes_path = release_directory / "RELEASE_NOTES.md";
     std::error_code filesystem_error;
     std::filesystem::remove_all(staging_directory, filesystem_error);
     filesystem_error.clear();
     std::filesystem::remove(archive_path, filesystem_error);
+    filesystem_error.clear();
+    std::filesystem::remove(extracted_notes_path, filesystem_error);
     filesystem_error.clear();
     std::filesystem::create_directories(staging_directory, filesystem_error);
 
@@ -395,6 +591,55 @@ namespace forge
 
     output << "Released " << archive_path.string() << '\n';
     return 0;
+  }
+
+  int release_project(const std::filesystem::path& project_directory,
+                      const ReleaseOptions& options,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    if (!options.tag_format)
+    {
+      return release_project(project_directory, process_runner, output, error);
+    }
+
+    Recipe recipe;
+
+    if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
+    {
+      return 2;
+    }
+
+    std::string tag;
+
+    if (!expand_tag_format(*options.tag_format, recipe, tag, error)
+        || !preflight_tag(project_directory, tag, process_runner, error))
+    {
+      return 2;
+    }
+
+    if (release_project(project_directory, process_runner, output, error) != 0)
+    {
+      return 2;
+    }
+
+    if (process_runner({ "git", "diff-index", "--quiet", "HEAD", "--" },
+                       project_directory,
+                       error) != 0)
+    {
+      error << "forge: release changed tracked files; commit them before tagging\n";
+      return 2;
+    }
+
+    return create_and_push_tag(
+      project_directory,
+      recipe,
+      tag,
+      process_runner,
+      output,
+      error
+    ) ? 0 : 2;
   }
 
 } // namespace forge
