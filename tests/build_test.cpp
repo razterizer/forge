@@ -199,6 +199,44 @@ namespace
     expect(contains(output.str(), "libhello.a"), "build reports the static library artifact");
   }
 
+  void test_build_generates_shared_library()
+  {
+#ifndef _WIN32
+    TemporaryDirectory directory;
+    write_library_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml" };
+    recipe
+      << "[project]\n"
+      << "name = \"hello\"\n"
+      << "version = \"0.1.0\"\n"
+      << "type = \"shared_library\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = [\"src/hello.cpp\"]\n"
+      << "public_headers = [\"include/hello/hello.h\"]\n";
+    recipe.close();
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 0,
+      "shared library build succeeds"
+    );
+
+    const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
+    expect(contains(generated, "add_library(forge_project SHARED"), "build generates a shared library target");
+    expect(contains(generated, "runtime"), "build configures a runtime search path");
+#endif
+  }
+
   void test_build_validates_header_only_project()
   {
     TemporaryDirectory directory;
@@ -385,6 +423,7 @@ int main()
 {
   test_build_generates_cmake_and_commands();
   test_build_generates_static_library();
+  test_build_generates_shared_library();
   test_build_validates_header_only_project();
   test_build_stops_after_configuration_failure();
   test_build_rejects_missing_source_without_running_process();

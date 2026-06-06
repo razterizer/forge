@@ -23,6 +23,7 @@ namespace forge
       std::string name;
       std::filesystem::path root;
       std::optional<std::filesystem::path> library;
+      std::optional<std::filesystem::path> runtime;
     };
 
     struct DependencyNode
@@ -120,6 +121,17 @@ namespace forge
         && name.find('\\') == std::string_view::npos;
     }
 
+    std::filesystem::path shared_library_filename(std::string_view name)
+    {
+#ifdef __APPLE__
+      return "lib" + std::string { name } + ".dylib";
+#elif defined(__linux__)
+      return "lib" + std::string { name } + ".so";
+#else
+      return {};
+#endif
+    }
+
     bool write_header_validation_sources(const std::filesystem::path& directory,
                                          const Recipe& recipe,
                                          std::ostream& error)
@@ -174,6 +186,10 @@ namespace forge
       {
         file << "add_library(forge_project STATIC\n";
       }
+      else if (recipe.type == "shared_library")
+      {
+        file << "add_library(forge_project SHARED\n";
+      }
       else if (recipe.type == "header_only")
       {
         file << "add_library(forge_project OBJECT\n";
@@ -219,7 +235,8 @@ namespace forge
         if (dependency.library)
         {
           file
-            << "add_library(forge_dependency_" << index << " STATIC IMPORTED)\n"
+            << "add_library(forge_dependency_" << index << ' '
+            << (dependency.runtime ? "SHARED" : "STATIC") << " IMPORTED)\n"
             << "set_target_properties(forge_dependency_" << index
             << " PROPERTIES IMPORTED_LOCATION \""
             << escape_cmake(dependency.library->string()) << "\")\n"
@@ -230,6 +247,24 @@ namespace forge
       file
         << "set_target_properties(forge_project PROPERTIES OUTPUT_NAME \""
         << escape_cmake(recipe.name) << "\")\n";
+
+#ifdef __APPLE__
+      file
+        << "set_target_properties(forge_project PROPERTIES "
+        << "BUILD_WITH_INSTALL_RPATH TRUE "
+        << "INSTALL_RPATH \"@loader_path/runtime\")\n";
+
+      if (recipe.type == "shared_library")
+      {
+        file
+          << "set_target_properties(forge_project PROPERTIES "
+          << "BUILD_WITH_INSTALL_NAME_DIR TRUE INSTALL_NAME_DIR \"@rpath\")\n";
+      }
+#elif defined(__linux__)
+      file
+        << "set_target_properties(forge_project PROPERTIES "
+        << "BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH \"$ORIGIN/runtime\")\n";
+#endif
 
       if (!file)
       {
@@ -345,10 +380,12 @@ namespace forge
           return false;
         }
 
-        if (dependency_recipe.type != "static_library" && dependency_recipe.type != "header_only")
+        if (dependency_recipe.type != "static_library"
+            && dependency_recipe.type != "shared_library"
+            && dependency_recipe.type != "header_only")
         {
           error << "forge: dependency '" << dependency.name
-                << "' must be a static_library or header_only project\n";
+                << "' must be a static_library, shared_library, or header_only project\n";
           return false;
         }
 
@@ -476,6 +513,7 @@ namespace forge
         {
           node.recipe.name,
           destination,
+          std::nullopt,
           std::nullopt
         };
 
@@ -486,6 +524,51 @@ namespace forge
 #else
         resolved.library = destination / "lib" / ("lib" + node.recipe.name + ".a");
 #endif
+      }
+      else if (node.recipe.type == "shared_library")
+      {
+        resolved.library = destination / "runtime" / shared_library_filename(node.recipe.name);
+        resolved.runtime = resolved.library;
+      }
+
+      return true;
+    }
+
+    bool stage_runtime_dependencies(const std::filesystem::path& runtime_directory,
+                                    const std::vector<ResolvedDependency>& dependencies,
+                                    std::ostream& error)
+    {
+      std::error_code filesystem_error;
+      std::filesystem::remove_all(runtime_directory, filesystem_error);
+      filesystem_error.clear();
+
+      for (const auto& dependency : dependencies)
+      {
+        if (!dependency.runtime)
+        {
+          continue;
+        }
+
+        std::filesystem::create_directories(runtime_directory, filesystem_error);
+
+        if (filesystem_error)
+        {
+          error << "forge: could not create runtime dependency directory\n";
+          return false;
+        }
+
+        std::filesystem::copy_file(
+          *dependency.runtime,
+          runtime_directory / dependency.runtime->filename(),
+          std::filesystem::copy_options::overwrite_existing,
+          filesystem_error
+        );
+
+        if (filesystem_error)
+        {
+          error << "forge: could not stage runtime dependency '" << dependency.name << "'\n";
+          return false;
+        }
       }
 
       return true;
@@ -591,11 +674,20 @@ namespace forge
 
     if (recipe.type != "executable"
         && recipe.type != "static_library"
+        && recipe.type != "shared_library"
         && recipe.type != "header_only")
     {
       error << "forge: unsupported project type '" << recipe.type << "'\n";
       return 2;
     }
+
+#ifdef _WIN32
+    if (recipe.type == "shared_library")
+    {
+      error << "forge: shared_library projects are not supported on Windows yet\n";
+      return 2;
+    }
+#endif
 
     if (recipe.sources.empty() && recipe.type != "header_only")
     {
@@ -618,7 +710,9 @@ namespace forge
       }
     }
 
-    if ((recipe.type == "static_library" || recipe.type == "header_only")
+    if ((recipe.type == "static_library"
+         || recipe.type == "shared_library"
+         || recipe.type == "header_only")
         && recipe.public_headers.empty())
     {
       error << "forge: library projects require public headers\n";
@@ -662,6 +756,11 @@ namespace forge
       output,
       error
     ))
+    {
+      return 2;
+    }
+
+    if (!stage_runtime_dependencies(build_directory / "runtime", dependencies, error))
     {
       return 2;
     }
@@ -747,6 +846,10 @@ namespace forge
 #else
       artifact = build_directory / ("lib" + recipe.name + ".a");
 #endif
+    }
+    else if (recipe.type == "shared_library")
+    {
+      artifact = build_directory / shared_library_filename(recipe.name);
     }
 
     output << "Built " << artifact.string() << '\n';

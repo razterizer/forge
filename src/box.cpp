@@ -100,6 +100,17 @@ namespace forge
 #endif
     }
 
+    std::filesystem::path shared_library_filename(std::string_view name)
+    {
+#ifdef __APPLE__
+      return "lib" + std::string { name } + ".dylib";
+#elif defined(__linux__)
+      return "lib" + std::string { name } + ".so";
+#else
+      return {};
+#endif
+    }
+
     bool is_safe_path_component(std::string_view value)
     {
       return
@@ -452,6 +463,7 @@ namespace forge
           || !is_safe_path_component(manifest.version)
           || (manifest.type != "executable"
               && manifest.type != "static_library"
+              && manifest.type != "shared_library"
               && manifest.type != "header_only")
           || manifest.artifacts.empty())
       {
@@ -462,6 +474,7 @@ namespace forge
       std::set<std::filesystem::path> artifact_paths;
       std::size_t executable_count = 0;
       std::size_t library_count = 0;
+      std::size_t shared_library_count = 0;
       std::size_t header_count = 0;
 
       for (std::size_t index = 0; index < manifest.artifacts.size(); ++index)
@@ -490,6 +503,10 @@ namespace forge
         {
           ++library_count;
         }
+        else if (artifact.kind == "shared_library" && prefix == "runtime")
+        {
+          ++shared_library_count;
+        }
         else if (artifact.kind == "public_header" && prefix == "include")
         {
           ++header_count;
@@ -507,6 +524,10 @@ namespace forge
               && (library_count != 1
                   || header_count == 0
                   || library_count + header_count != manifest.artifacts.size()))
+          || (manifest.type == "shared_library"
+              && (shared_library_count != 1
+                  || header_count == 0
+                  || shared_library_count + header_count != manifest.artifacts.size()))
           || (manifest.type == "header_only"
               && (header_count == 0 || header_count != manifest.artifacts.size())))
       {
@@ -722,6 +743,10 @@ namespace forge
     {
       built_artifact = project_directory / ".forge" / "build" / ("lib" + recipe.name + ".a");
     }
+    else if (recipe.type == "shared_library")
+    {
+      built_artifact = project_directory / ".forge" / "build" / shared_library_filename(recipe.name);
+    }
 #endif
 
     if (recipe.type != "header_only" && !std::filesystem::is_regular_file(built_artifact))
@@ -763,6 +788,35 @@ namespace forge
         built_artifact,
         std::filesystem::path { "lib" } / built_artifact.filename(),
         "static_library",
+        staging_directory,
+        artifacts,
+        error
+      ))
+      {
+        return 2;
+      }
+
+      for (const auto& header : recipe.public_headers)
+      {
+        if (!stage_artifact(
+          project_directory / header,
+          header,
+          "public_header",
+          staging_directory,
+          artifacts,
+          error
+        ))
+        {
+          return 2;
+        }
+      }
+    }
+    else if (recipe.type == "shared_library")
+    {
+      if (!stage_artifact(
+        built_artifact,
+        std::filesystem::path { "runtime" } / built_artifact.filename(),
+        "shared_library",
         staging_directory,
         artifacts,
         error
@@ -836,6 +890,11 @@ namespace forge
     {
       archive_arguments.push_back("include");
       archive_arguments.push_back("lib");
+    }
+    else if (recipe.type == "shared_library")
+    {
+      archive_arguments.push_back("include");
+      archive_arguments.push_back("runtime");
     }
     else
     {

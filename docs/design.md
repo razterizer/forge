@@ -40,10 +40,11 @@ Dependency resolution should prefer a compatible cached box. When no matching
 box exists, Forge fetches or uses source, builds it, creates a box, and caches
 that box.
 
-Local path dependencies may be declared by executable, static-library, and
-header-only projects. Forge recursively builds static-library and header-only
-dependencies, rejects cycles and conflicting project names, and links the
-transitive static-library closure in dependency order.
+Local path dependencies may be declared by executable, static-library,
+shared-library, and header-only projects. Forge recursively builds library
+dependencies, rejects cycles and conflicting project names, links the
+transitive static-library closure in dependency order, and stages shared
+libraries for running and releasing applications.
 
 ## Initial roadmap
 
@@ -51,7 +52,8 @@ transitive static-library closure in dependency order.
    `forge release`
 2. v0.2: local path dependencies
 3. v0.3: `.cbox` creation and consumption
-4. v0.4: shared-library projects and dynamically linked boxes
+4. v0.4: shared-library projects and dynamically linked boxes on macOS and
+   Linux; Windows DLL/import-library support remains
 5. v0.5: compatible local box caching
 6. v0.6: Git dependencies
 7. v0.7: lock file generation and reproducible resolution
@@ -76,6 +78,5 @@ building, running, and releasing an executable.
 - Binary compatibility identity, including compiler and runtime ABI
 - Version constraint syntax
 - Registry protocol and shared binary cache behavior
-- Platform-specific shared-library identity, runtime search paths, and import
-  library handling
+- Windows DLL identity, runtime search paths, and import-library handling
 - Imported binary recipe syntax and vendor SDK redistribution rules

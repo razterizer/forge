@@ -34,7 +34,7 @@ Forge aims to reduce this accidental complexity so developers can focus on writi
 * ✓ Header-only dependencies
 * ✓ Source dependencies
 * ✓ Static libraries
-* Dynamic libraries
+* ✓ Dynamic libraries on macOS and Linux
 * Imported vendor SDKs and precompiled binaries
 * Reproducible runtime dependency assembly
 
@@ -106,8 +106,8 @@ cd path/to/project
 /path/to/forge/build/dev/forge build
 ```
 
-Forge builds executable and static-library projects with exact source paths.
-Static libraries declare public headers under `include/`:
+Forge builds executable, static-library, and shared-library projects with
+exact source paths. Libraries declare public headers under `include/`:
 
 ```toml
 [project]
@@ -123,6 +123,26 @@ public_headers = ["include/hello/hello.h"]
 
 Forge generates CMake infrastructure under `.forge/generated/` and builds into
 `.forge/build/`.
+
+Shared libraries use the same source and public-header layout:
+
+```toml
+[project]
+name = "hello"
+version = "1.0.0"
+type = "shared_library"
+cpp_std = 20
+
+[sources]
+paths = ["src/hello.cpp"]
+public_headers = ["include/hello/hello.h"]
+```
+
+Shared-library dependencies are boxed with their runtime artifact, installed
+under `.forge/deps/`, and copied into `.forge/build/runtime`. Forge-generated
+binaries use an origin-relative runtime search path, and `forge release`
+includes the runtime directory. Shared libraries currently support macOS and
+Linux; Windows DLL and import-library support remains planned.
 
 Header-only projects declare no source files:
 
@@ -142,7 +162,8 @@ Forge generates and compiles one private validation translation unit per public
 header. These temporary sources remain under `.forge/generated/`; header-only
 boxes contain only the declared headers.
 
-Projects may use local static-library and header-only dependencies:
+Projects may use local static-library, shared-library, and header-only
+dependencies:
 
 ```toml
 [dependencies]
@@ -271,8 +292,8 @@ Create a release archive:
 `README.md` and `LICENSE` files when present, and creates
 `.forge/release/<name>-<version>.zip`.
 
-Create, inspect, verify, and extract an executable, static-library, or
-header-only box:
+Create, inspect, verify, and extract an executable, static-library,
+shared-library, or header-only box:
 
 ```sh
 /path/to/forge/build/dev/forge box create

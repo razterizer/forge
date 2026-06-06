@@ -19,11 +19,12 @@ rules:
 
 - Executables require at least one source path.
 - Static libraries require source paths and public headers.
+- Shared libraries require source paths and public headers.
 - Header-only projects require public headers and an empty source-path array.
 - Public headers must remain under `include/`.
 - Build numbers must be non-negative.
-- Projects may declare local static-library and header-only dependencies using
-  name and path inline tables.
+- Projects may declare local static-library, shared-library, and header-only
+  dependencies using name and path inline tables.
 
 ## Taplo and VS Code
 

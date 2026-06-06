@@ -3,8 +3,8 @@
 A `.cbox` is a ZIP archive containing one reusable C++ package for one target.
 It is distinct from an application release archive.
 
-The implemented profiles support executable, static-library, and header-only
-packages:
+The implemented profiles support executable, static-library, shared-library,
+and header-only packages:
 
 ```text
 hello-0.1.0-macos-arm64.cbox
@@ -65,8 +65,10 @@ sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 Each `[[artifact]]` entry declares one packaged file. Static-library boxes
 contain one `static_library` artifact under `lib/` and one or more
-`public_header` artifacts under `include/`. Header-only boxes contain one or
-more `public_header` artifacts and no library artifact.
+`public_header` artifacts under `include/`. Shared-library boxes contain one
+`shared_library` artifact under `runtime/` and one or more `public_header`
+artifacts under `include/`. Header-only boxes contain one or more
+`public_header` artifacts and no library artifact.
 
 The manifest determines package identity. The archive filename is only a
 human-readable label.
@@ -91,7 +93,8 @@ individual compiled artifacts.
 - `bin/` contains executable artifacts.
 - `include/` contains public headers.
 - `lib/` contains static-library artifacts.
-- Future profiles may add `runtime/` and `licenses/`.
+- `runtime/` contains shared-library runtime artifacts.
+- Future profiles may add `licenses/`.
 - Format 1 boxes contain exactly `cbox.toml` and the declared artifacts.
 
 ## Verification

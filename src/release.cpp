@@ -45,6 +45,37 @@ namespace forge
       return true;
     }
 
+    bool copy_runtime_dependencies(const std::filesystem::path& source,
+                                   const std::filesystem::path& destination,
+                                   std::ostream& error)
+    {
+      if (!std::filesystem::is_directory(source))
+      {
+        return true;
+      }
+
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(destination, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not create runtime dependency directory\n";
+        return false;
+      }
+
+      for (const auto& entry : std::filesystem::directory_iterator { source, filesystem_error })
+      {
+        if (filesystem_error
+            || !entry.is_regular_file()
+            || !copy_file(entry.path(), destination / entry.path().filename(), error))
+        {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
   } // namespace
 
   int release_project(const std::filesystem::path& project_directory,
@@ -107,6 +138,15 @@ namespace forge
     }
 
     if (!copy_file(executable, staging_directory / executable.filename(), error))
+    {
+      return 2;
+    }
+
+    if (!copy_runtime_dependencies(
+      project_directory / ".forge" / "build" / "runtime",
+      staging_directory / "runtime",
+      error
+    ))
     {
       return 2;
     }

@@ -1,4 +1,5 @@
 #include "cli.h"
+#include "process.h"
 
 #include <array>
 #include <chrono>
@@ -779,6 +780,133 @@ namespace
     expect(error.str().empty(), "successful dependency build does not write an error");
   }
 
+  void test_run_and_release_with_shared_dependency()
+  {
+#ifndef _WIN32
+    TemporaryDirectory directory;
+    const auto answer = directory.path() / "answer";
+    const auto shared_library = directory.path() / "greeting";
+    const auto application = directory.path() / "app";
+    write_file(
+      answer / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"answer\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"shared_library\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"src/answer.cpp\"]\n"
+      "public_headers = [\"include/answer/answer.h\"]\n"
+    );
+    write_file(answer / "include/answer/answer.h", "int answer();\n");
+    write_file(
+      answer / "src/answer.cpp",
+      "#include <answer/answer.h>\n"
+      "int answer() { return 42; }\n"
+    );
+    write_file(
+      shared_library / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"greeting\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"shared_library\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"src/greeting.cpp\"]\n"
+      "public_headers = [\"include/greeting/greeting.h\"]\n\n"
+      "[dependencies]\n"
+      "answer = { path = \"../answer\" }\n"
+    );
+    write_file(shared_library / "include/greeting/greeting.h", "int greeting();\n");
+    write_file(
+      shared_library / "src/greeting.cpp",
+      "#include <answer/answer.h>\n"
+      "#include <greeting/greeting.h>\n"
+      "int greeting() { return answer(); }\n"
+    );
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[dependencies]\n"
+      "greeting = { path = \"../greeting\" }\n"
+    );
+    write_file(
+      application / "main.cpp",
+      "#include <greeting/greeting.h>\n"
+      "int main() { return greeting() == 42 ? 0 : 1; }\n"
+    );
+    constexpr std::array run_arguments { std::string_view { "run" } };
+    std::ostringstream run_output;
+    std::ostringstream run_error;
+
+    expect(
+      forge::cli::run(run_arguments, application, run_output, run_error) == 0,
+      "run succeeds with a shared-library dependency"
+    );
+#ifdef __APPLE__
+    constexpr std::string_view runtime_filename = "libgreeting.dylib";
+    constexpr std::string_view transitive_runtime_filename = "libanswer.dylib";
+#else
+    constexpr std::string_view runtime_filename = "libgreeting.so";
+    constexpr std::string_view transitive_runtime_filename = "libanswer.so";
+#endif
+    expect(
+      std::filesystem::exists(application / ".forge/build/runtime" / runtime_filename),
+      "build stages the shared-library runtime"
+    );
+    expect(
+      std::filesystem::exists(
+        application / ".forge/build/runtime" / transitive_runtime_filename
+      ),
+      "build stages the transitive shared-library runtime"
+    );
+    expect(
+      std::filesystem::exists(application / ".forge/deps/greeting/runtime" / runtime_filename),
+      "build installs the shared-library box"
+    );
+    constexpr std::array release_arguments { std::string_view { "release" } };
+    std::ostringstream release_output;
+    std::ostringstream release_error;
+
+    expect(
+      forge::cli::run(release_arguments, application, release_output, release_error) == 0,
+      "release succeeds with a shared-library dependency"
+    );
+    expect(
+      std::filesystem::exists(
+        application / ".forge/release/app-1.0.0/runtime" / runtime_filename
+      ),
+      "release stages the shared-library runtime"
+    );
+    expect(
+      std::filesystem::exists(
+        application / ".forge/release/app-1.0.0/runtime" / transitive_runtime_filename
+      ),
+      "release stages the transitive shared-library runtime"
+    );
+    const auto released_executable = application / ".forge/release/app-1.0.0/app";
+    const std::vector<std::string> released_arguments { released_executable.string() };
+    std::ostringstream released_error;
+    expect(
+      forge::run_process(
+        released_arguments,
+        released_executable.parent_path(),
+        released_error
+      ) == 0,
+      "released executable loads its shared-library runtime"
+    );
+    expect(run_error.str().empty(), "shared-library run does not write an error");
+    expect(release_error.str().empty(), "shared-library release does not write an error");
+    expect(released_error.str().empty(), "released executable does not write an error");
+#endif
+  }
+
   void test_unknown_command()
   {
     constexpr std::array arguments { std::string_view { "confuse" } };
@@ -811,6 +939,7 @@ int main()
   test_static_library_box_round_trip();
   test_header_only_box_round_trip();
   test_run_with_local_dependencies();
+  test_run_and_release_with_shared_dependency();
   test_unknown_command();
 
   return failures == 0 ? 0 : 1;

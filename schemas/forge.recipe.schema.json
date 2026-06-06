@@ -36,6 +36,7 @@
           "enum": [
             "executable",
             "static_library",
+            "shared_library",
             "header_only"
           ],
           "description": "Kind of project Forge builds and packages."
@@ -83,7 +84,7 @@
     },
     "dependencies": {
       "type": "object",
-      "description": "Local static-library and header-only dependencies.",
+      "description": "Local static-library, shared-library, and header-only dependencies.",
       "propertyNames": {
         "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
       },
@@ -142,6 +143,43 @@
             "properties": {
               "type": {
                 "const": "static_library"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "sources": {
+            "type": "object",
+            "required": [
+              "public_headers"
+            ],
+            "properties": {
+              "paths": {
+                "type": "array",
+                "minItems": 1
+              },
+              "public_headers": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "project": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "shared_library"
               }
             },
             "required": [
