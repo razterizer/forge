@@ -22,6 +22,7 @@ namespace forge
     std::string sha256;
     std::string github;
     std::string version;
+    std::string type;
   };
 
   struct Recipe

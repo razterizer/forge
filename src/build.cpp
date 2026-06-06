@@ -1017,8 +1017,21 @@ namespace forge
 
       if (existing_name != dependency_session->names.end() && existing_name->second != directory)
       {
+        const auto existing = dependency_session->nodes.find(existing_name->second);
+        std::string existing_checksum;
+
+        if (!dependency.sha256.empty()
+            && existing != dependency_session->nodes.end()
+            && !existing->second.box.empty()
+            && sha256_file(existing->second.box, existing_checksum, error)
+            && existing_checksum == dependency.sha256)
+        {
+          node = &existing->second;
+          return true;
+        }
+
         error << "forge: dependency name '" << dependency.name
-              << "' refers to multiple project paths\n";
+              << "' refers to conflicting packages\n";
         return false;
       }
 
@@ -1045,6 +1058,20 @@ namespace forge
             return false;
           }
 
+          if (!dependency.version.empty() && metadata.version != dependency.version)
+          {
+            error << "forge: dependency '" << dependency.name << "' requires version '"
+                  << dependency.version << "', but box contains version '" << metadata.version << "'\n";
+            return false;
+          }
+
+          if (!dependency.type.empty() && metadata.type != dependency.type)
+          {
+            error << "forge: dependency '" << dependency.name << "' declares type '"
+                  << dependency.type << "', but box contains type '" << metadata.type << "'\n";
+            return false;
+          }
+
           if (metadata.os != target_os() || metadata.arch != target_arch())
           {
             error << "forge: dependency '" << dependency.name
@@ -1057,6 +1084,23 @@ namespace forge
           dependency_recipe.version = metadata.version;
           dependency_recipe.type = metadata.type;
           dependency_recipe.build_number = metadata.build_number;
+
+          for (const auto& child : metadata.dependencies)
+          {
+            dependency_recipe.dependencies.push_back(
+              {
+                child.name,
+                {},
+                child.path,
+                {},
+                child.sha256,
+                {},
+                child.version,
+                child.type
+              }
+            );
+          }
+
           box_metadata = std::move(metadata);
         }
         else if (!read_recipe(directory / "forge.recipe.toml", dependency_recipe, error))
@@ -1096,6 +1140,13 @@ namespace forge
       {
         error << "forge: dependency name '" << dependency.name << "' does not match recipe name '"
               << existing_node->second.recipe.name << "'\n";
+        return false;
+      }
+      else if (!dependency.version.empty()
+               && existing_node->second.recipe.version != dependency.version)
+      {
+        error << "forge: dependency '" << dependency.name << "' requires conflicting versions '"
+              << existing_node->second.recipe.version << "' and '" << dependency.version << "'\n";
         return false;
       }
 
@@ -1166,6 +1217,7 @@ namespace forge
     }
 
     bool install_dependency(const std::filesystem::path& dependencies_directory,
+                            const std::filesystem::path& dependency_boxes_directory,
                             const DependencyNode& node,
                             const ProcessRunner& process_runner,
                             ResolvedDependency& resolved,
@@ -1198,6 +1250,27 @@ namespace forge
       if (filesystem_error)
       {
         error << "forge: could not install dependency '" << node.recipe.name << "'\n";
+        return false;
+      }
+
+      std::filesystem::create_directories(dependency_boxes_directory, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not create resolved dependency box directory\n";
+        return false;
+      }
+
+      std::filesystem::copy_file(
+        node.box,
+        dependency_boxes_directory / (node.recipe.name + ".cbox"),
+        std::filesystem::copy_options::overwrite_existing,
+        filesystem_error
+      );
+
+      if (filesystem_error)
+      {
+        error << "forge: could not retain dependency box '" << node.recipe.name << "'\n";
         return false;
       }
 
@@ -1308,9 +1381,12 @@ namespace forge
                               std::ostream& error)
     {
       const auto dependencies_directory = project_directory / ".forge" / "deps";
+      const auto dependency_boxes_directory = project_directory / ".forge" / "dependency-boxes";
       std::set<std::string> direct_names;
       std::set<std::filesystem::path> collected;
       std::vector<DependencyNode*> ordered;
+      std::error_code filesystem_error;
+      std::filesystem::remove_all(dependency_boxes_directory, filesystem_error);
 
       for (const auto& dependency : recipe.dependencies)
       {
@@ -1342,6 +1418,7 @@ namespace forge
 
         if (!install_dependency(
           dependencies_directory,
+          dependency_boxes_directory,
           *node,
           process_runner,
           resolved_dependency,

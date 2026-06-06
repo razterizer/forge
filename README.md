@@ -208,8 +208,8 @@ answer = { box = "../packages/answer-1.0.0-macos-arm64.cbox" }
 
 Forge verifies the box, checks its package name and target, installs its exact
 declared artifacts under `.forge/deps/answer/`, and imports its headers and
-library. Format-1 boxes do not yet record dependency graphs, so direct boxes
-must currently be self-contained leaf dependencies.
+library. Format-2 boxes embed their direct dependency boxes, so Forge also
+installs, links, and stages the complete transitive dependency closure.
 
 Boxes may also be downloaded from a URL with an explicit external checksum:
 

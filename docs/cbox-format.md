@@ -1,4 +1,4 @@
-# CBox format version 1
+# CBox format version 2
 
 A `.cbox` is a ZIP archive containing one reusable C++ package for one target.
 It is distinct from an application release archive.
@@ -26,6 +26,8 @@ hello-1.0.0-macos-arm64.cbox
 ```text
 hello-1.0.0-macos-arm64.cbox
 ├── cbox.toml
+├── dependencies/
+│   └── doubled.cbox
 ├── include/
 │   └── hello/
 │       └── hello.h
@@ -46,7 +48,7 @@ Every box contains `cbox.toml` at its root:
 
 ```toml
 [cbox]
-format = 1
+format = 2
 
 [package]
 name = "hello"
@@ -61,6 +63,13 @@ arch = "arm64"
 path = "bin/hello"
 kind = "executable"
 sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+[[dependency]]
+name = "doubled"
+version = "1.0.0"
+type = "header_only"
+path = "dependencies/doubled.cbox"
+sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 ```
 
 Each `[[artifact]]` entry declares one packaged file. Static-library boxes
@@ -72,6 +81,11 @@ artifacts under `include/`. Header-only boxes contain one or more
 
 The manifest determines package identity. The archive filename is only a
 human-readable label.
+
+Each `[[dependency]]` entry declares one direct dependency embedded as another
+verified `.cbox`. Child boxes recursively carry their own direct dependencies,
+making a format-2 box self-contained and portable without source projects,
+lockfiles, or additional downloads.
 
 An optional build number is stored separately from the package version:
 
@@ -94,24 +108,30 @@ individual compiled artifacts.
 - `include/` contains public headers.
 - `lib/` contains static-library artifacts.
 - `runtime/` contains shared-library runtime artifacts.
+- `dependencies/` contains direct dependency boxes.
 - Future profiles may add `licenses/`.
-- Format 1 boxes contain exactly `cbox.toml` and the declared artifacts.
+- Format 2 boxes contain exactly `cbox.toml`, declared artifacts, and declared
+  dependency boxes.
 
 ## Verification
 
 `forge box inspect`, `forge box verify`, `forge box publish`, and
 `forge box extract` validate:
 
-- The manifest uses supported format version 1 and contains every required
+- The manifest uses a supported format version and contains every required
   field.
 - Artifact paths are relative, remain inside the archive, and use the directory
   required by their artifact kind.
 - The archive contains no undeclared files, symbolic links, or unsupported
   entries.
 - Every artifact matches its lowercase SHA-256 checksum.
+- Every embedded dependency matches its declared checksum.
 
 Forge validates the ZIP directory before extraction. Extraction then copies only
-the validated manifest and artifacts into the destination.
+the validated manifest, artifacts, and dependency boxes into the destination.
+Verification, publication, and dependency consumption recursively validate each
+embedded box and ensure its package identity, package type, and target match its
+declaration.
 
 `forge box publish <box>` publishes a verified box locally into the
 project-root `boxes/` directory and writes `<box>.sha256` using the standard
@@ -123,3 +143,6 @@ One box represents one OS and architecture target. Forge validates both before
 installing a direct local box dependency. Compiler, standard-library, ABI,
 build-type, permissions, and deterministic archive rules remain future
 compatibility dimensions.
+
+Forge continues to consume format-1 boxes as self-contained leaf dependencies.
+New boxes are written as format 2.

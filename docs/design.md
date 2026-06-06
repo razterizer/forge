@@ -47,8 +47,9 @@ transitive static-library closure in dependency order, and stages shared
 libraries for running and releasing applications.
 
 Local `.cbox` dependencies are verified and installed directly without their
-source project. Format-1 boxes do not contain dependency graph metadata, so
-direct boxes are currently treated as self-contained leaf dependencies.
+source project. Format-2 boxes embed their direct dependency boxes and Forge
+recursively installs the complete graph. Format-1 boxes remain supported as
+self-contained leaf dependencies.
 
 Downloadable `.cbox` dependencies require an explicit SHA-256 checksum. Forge
 uses the checksum as an immutable local cache key before applying normal box

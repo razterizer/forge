@@ -740,7 +740,7 @@ namespace
       forge::cli::run(inspect_arguments, project_directory, inspect_output, inspect_error) == 0,
       "box inspect succeeds"
     );
-    expect(contains(inspect_output.str(), "format = 1"), "box inspect prints the manifest");
+    expect(contains(inspect_output.str(), "format = 2"), "box inspect prints the manifest");
     expect(contains(inspect_output.str(), "build = 6"), "box inspect prints the build number");
     expect(contains(inspect_output.str(), "sha256 = \""), "box inspect prints the artifact checksum");
 
@@ -1121,9 +1121,25 @@ namespace
   void test_run_with_local_box_dependency()
   {
     TemporaryDirectory directory;
+    const auto doubled = directory.path() / "doubled";
     const auto answer = directory.path() / "answer";
     const auto packages = directory.path() / "packages";
     const auto application = directory.path() / "app";
+    write_file(
+      doubled / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"doubled\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/doubled/doubled.h\"]\n"
+    );
+    write_file(
+      doubled / "include/doubled/doubled.h",
+      "inline int doubled(int value) { return value * 2; }\n"
+    );
     write_file(
       answer / "forge.recipe.toml",
       "[project]\n"
@@ -1133,13 +1149,16 @@ namespace
       "cpp_std = 20\n\n"
       "[sources]\n"
       "paths = [\"src/answer.cpp\"]\n"
-      "public_headers = [\"include/answer/answer.h\"]\n"
+      "public_headers = [\"include/answer/answer.h\"]\n\n"
+      "[dependencies]\n"
+      "doubled = { path = \"../doubled\" }\n"
     );
     write_file(answer / "include/answer/answer.h", "int answer();\n");
     write_file(
       answer / "src/answer.cpp",
       "#include <answer/answer.h>\n"
-      "int answer() { return 42; }\n"
+      "#include <doubled/doubled.h>\n"
+      "int answer() { return doubled(21); }\n"
     );
     constexpr std::array create_arguments {
       std::string_view { "box" },
@@ -1166,6 +1185,7 @@ namespace
     }
 
     std::filesystem::remove_all(answer);
+    std::filesystem::remove_all(doubled);
     write_file(
       application / "forge.recipe.toml",
       "[project]\n"
@@ -1198,6 +1218,10 @@ namespace
     expect(
       std::filesystem::exists(application / ".forge/deps/answer/lib"),
       "build installs the library from the local box"
+    );
+    expect(
+      std::filesystem::exists(application / ".forge/deps/doubled/include/doubled/doubled.h"),
+      "build installs the transitive dependency embedded in the local box"
     );
     expect(error.str().empty(), "successful local box dependency does not write an error");
 

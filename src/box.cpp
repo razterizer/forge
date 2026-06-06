@@ -30,6 +30,15 @@ namespace forge
       std::string sha256;
     };
 
+    struct BoxDependency
+    {
+      std::string name;
+      std::string version;
+      std::string type;
+      std::filesystem::path path;
+      std::string sha256;
+    };
+
     struct BoxManifest
     {
       int format = 0;
@@ -40,6 +49,7 @@ namespace forge
       std::string os;
       std::string arch;
       std::vector<BoxArtifact> artifacts;
+      std::vector<BoxDependency> dependencies;
     };
 
     std::string_view trim(std::string_view value)
@@ -202,6 +212,7 @@ namespace forge
     bool write_manifest(const std::filesystem::path& path,
                         const Recipe& recipe,
                         const std::vector<BoxArtifact>& artifacts,
+                        const std::vector<BoxDependency>& dependencies,
                         std::ostream& error)
     {
       std::ofstream manifest { path };
@@ -214,7 +225,7 @@ namespace forge
 
       manifest
         << "[cbox]\n"
-        << "format = 1\n\n"
+        << "format = 2\n\n"
         << "[package]\n"
         << "name = \"" << recipe.name << "\"\n"
         << "version = \"" << recipe.version << "\"\n";
@@ -237,6 +248,17 @@ namespace forge
           << "path = \"" << artifact.path.generic_string() << "\"\n"
           << "kind = \"" << artifact.kind << "\"\n"
           << "sha256 = \"" << artifact.sha256 << "\"\n";
+      }
+
+      for (const auto& dependency : dependencies)
+      {
+        manifest
+          << "\n[[dependency]]\n"
+          << "name = \"" << dependency.name << "\"\n"
+          << "version = \"" << dependency.version << "\"\n"
+          << "type = \"" << dependency.type << "\"\n"
+          << "path = \"" << dependency.path.generic_string() << "\"\n"
+          << "sha256 = \"" << dependency.sha256 << "\"\n";
       }
 
       return static_cast<bool>(manifest);
@@ -298,6 +320,7 @@ namespace forge
       std::set<std::string> seen;
       std::string section;
       std::optional<std::size_t> artifact_index;
+      std::optional<std::size_t> dependency_index;
       std::string line;
       std::size_t line_number = 0;
 
@@ -315,14 +338,25 @@ namespace forge
         {
           section = std::string { trim(trimmed.substr(2, trimmed.size() - 4)) };
 
-          if (section != "artifact")
+          if (section != "artifact" && section != "dependency")
           {
             error << "forge: unsupported box manifest section on line " << line_number << '\n';
             return false;
           }
 
-          manifest.artifacts.emplace_back();
-          artifact_index = manifest.artifacts.size() - 1;
+          if (section == "artifact")
+          {
+            manifest.artifacts.emplace_back();
+            artifact_index = manifest.artifacts.size() - 1;
+            dependency_index.reset();
+          }
+          else
+          {
+            manifest.dependencies.emplace_back();
+            dependency_index = manifest.dependencies.size() - 1;
+            artifact_index.reset();
+          }
+
           continue;
         }
 
@@ -330,7 +364,11 @@ namespace forge
         {
           section = std::string { trim(trimmed.substr(1, trimmed.size() - 2)) };
 
-          if (section != "cbox" && section != "package" && section != "target" && section != "artifact")
+          if (section != "cbox"
+              && section != "package"
+              && section != "target"
+              && section != "artifact"
+              && section != "dependency")
           {
             error << "forge: unsupported box manifest section on line " << line_number << '\n';
             return false;
@@ -346,10 +384,24 @@ namespace forge
 
             manifest.artifacts.emplace_back();
             artifact_index = 0;
+            dependency_index.reset();
+          }
+          else if (section == "dependency")
+          {
+            if (!manifest.dependencies.empty())
+            {
+              error << "forge: duplicate box manifest dependency section\n";
+              return false;
+            }
+
+            manifest.dependencies.emplace_back();
+            dependency_index = 0;
+            artifact_index.reset();
           }
           else
           {
             artifact_index.reset();
+            dependency_index.reset();
           }
 
           continue;
@@ -365,9 +417,16 @@ namespace forge
 
         const auto key = trim(trimmed.substr(0, equals));
         const auto value = trim(trimmed.substr(equals + 1));
-        const auto identity = section == "artifact" && artifact_index
-          ? section + "." + std::to_string(*artifact_index) + "." + std::string { key }
-          : section + "." + std::string { key };
+        auto identity = section + "." + std::string { key };
+
+        if (section == "artifact" && artifact_index)
+        {
+          identity = section + "." + std::to_string(*artifact_index) + "." + std::string { key };
+        }
+        else if (section == "dependency" && dependency_index)
+        {
+          identity = section + "." + std::to_string(*dependency_index) + "." + std::string { key };
+        }
 
         if (!seen.insert(identity).second)
         {
@@ -426,6 +485,29 @@ namespace forge
         {
           valid = parse_string(value, manifest.artifacts[*artifact_index].sha256);
         }
+        else if (section == "dependency" && dependency_index && key == "name")
+        {
+          valid = parse_string(value, manifest.dependencies[*dependency_index].name);
+        }
+        else if (section == "dependency" && dependency_index && key == "version")
+        {
+          valid = parse_string(value, manifest.dependencies[*dependency_index].version);
+        }
+        else if (section == "dependency" && dependency_index && key == "type")
+        {
+          valid = parse_string(value, manifest.dependencies[*dependency_index].type);
+        }
+        else if (section == "dependency" && dependency_index && key == "path")
+        {
+          std::string dependency_path;
+          valid = parse_string(value, dependency_path)
+            && dependency_path.find('\\') == std::string::npos;
+          manifest.dependencies[*dependency_index].path = dependency_path;
+        }
+        else if (section == "dependency" && dependency_index && key == "sha256")
+        {
+          valid = parse_string(value, manifest.dependencies[*dependency_index].sha256);
+        }
         else
         {
           valid = false;
@@ -456,7 +538,7 @@ namespace forge
         }
       }
 
-      if (manifest.format != 1)
+      if (manifest.format != 1 && manifest.format != 2)
       {
         error << "forge: unsupported box format " << manifest.format << '\n';
         return false;
@@ -475,6 +557,7 @@ namespace forge
       }
 
       std::set<std::filesystem::path> artifact_paths;
+      std::set<std::string> dependency_names;
       std::size_t executable_count = 0;
       std::size_t library_count = 0;
       std::size_t shared_library_count = 0;
@@ -517,6 +600,42 @@ namespace forge
         else
         {
           error << "forge: box manifest contains invalid package or artifact values\n";
+          return false;
+        }
+      }
+
+      if (manifest.format == 1 && !manifest.dependencies.empty())
+      {
+        error << "forge: format 1 boxes cannot declare dependencies\n";
+        return false;
+      }
+
+      for (std::size_t index = 0; index < manifest.dependencies.size(); ++index)
+      {
+        const auto& dependency = manifest.dependencies[index];
+        const auto prefix = dependency.path.empty() ? std::string {} : dependency.path.begin()->string();
+
+        if (!seen.contains("dependency." + std::to_string(index) + ".name")
+            || !seen.contains("dependency." + std::to_string(index) + ".version")
+            || !seen.contains("dependency." + std::to_string(index) + ".type")
+            || !seen.contains("dependency." + std::to_string(index) + ".path")
+            || !seen.contains("dependency." + std::to_string(index) + ".sha256")
+            || !is_safe_path_component(dependency.name)
+            || !is_safe_path_component(dependency.version)
+            || (dependency.type != "static_library"
+                && dependency.type != "shared_library"
+                && dependency.type != "header_only")
+            || !is_safe_archive_path(dependency.path)
+            || dependency.path.parent_path().empty()
+            || prefix != "dependencies"
+            || dependency.path.extension() != ".cbox"
+            || !artifact_paths.insert(dependency.path).second
+            || !dependency_names.insert(dependency.name).second
+            || dependency.name == manifest.name
+            || dependency.sha256.size() != 64
+            || dependency.sha256.find_first_not_of("0123456789abcdef") != std::string::npos)
+        {
+          error << "forge: box manifest contains invalid dependency values\n";
           return false;
         }
       }
@@ -573,11 +692,34 @@ namespace forge
         }
       }
 
+      for (const auto& dependency : manifest.dependencies)
+      {
+        if (!std::filesystem::is_regular_file(directory / dependency.path))
+        {
+          error << "forge: box dependency '" << dependency.path.string() << "' is missing\n";
+          return false;
+        }
+
+        expected_files.insert(dependency.path);
+        auto parent = dependency.path.parent_path();
+
+        while (!parent.empty())
+        {
+          expected_directories.insert(parent);
+          parent = parent.parent_path();
+        }
+      }
+
       std::set<std::string> expected_archive_entries { "cbox.toml" };
 
       for (const auto& artifact : manifest.artifacts)
       {
         expected_archive_entries.insert(artifact.path.generic_string());
+      }
+
+      for (const auto& dependency : manifest.dependencies)
+      {
+        expected_archive_entries.insert(dependency.path.generic_string());
       }
 
       for (const auto& directory_path : expected_directories)
@@ -644,6 +786,22 @@ namespace forge
         if (checksum != artifact.sha256)
         {
           error << "forge: box artifact checksum does not match cbox.toml\n";
+          return false;
+        }
+      }
+
+      for (const auto& dependency : manifest.dependencies)
+      {
+        std::string checksum;
+
+        if (!sha256_file(directory / dependency.path, checksum, error))
+        {
+          return false;
+        }
+
+        if (checksum != dependency.sha256)
+        {
+          error << "forge: box dependency checksum does not match cbox.toml\n";
           return false;
         }
       }
@@ -866,7 +1024,38 @@ namespace forge
       return 2;
     }
 
-    if (!write_manifest(staging_directory / "cbox.toml", recipe, artifacts, error))
+    std::vector<BoxDependency> dependencies;
+
+    for (const auto& dependency : recipe.dependencies)
+    {
+      const auto source = project_directory / ".forge" / "dependency-boxes" / (dependency.name + ".cbox");
+      const auto dependency_path = std::filesystem::path { "dependencies" } / (dependency.name + ".cbox");
+      const auto destination = staging_directory / dependency_path;
+      BoxMetadata metadata;
+      std::string checksum;
+      std::error_code dependency_error;
+      std::filesystem::create_directories(destination.parent_path(), dependency_error);
+
+      if (dependency_error
+          || !copy_file(source, destination, error)
+          || !sha256_file(destination, checksum, error)
+          || !read_box_metadata(source, project_directory, process_runner, metadata, error))
+      {
+        error << "forge: could not package dependency '" << dependency.name << "'\n";
+        return 2;
+      }
+
+      dependencies.push_back(BoxDependency
+        {
+          metadata.name,
+          metadata.version,
+          metadata.type,
+          dependency_path,
+          checksum
+        });
+    }
+
+    if (!write_manifest(staging_directory / "cbox.toml", recipe, artifacts, dependencies, error))
     {
       return 2;
     }
@@ -902,6 +1091,11 @@ namespace forge
     else
     {
       archive_arguments.push_back("include");
+    }
+
+    if (!dependencies.empty())
+    {
+      archive_arguments.push_back("dependencies");
     }
 
     if (process_runner(archive_arguments, staging_directory, error) != 0)
@@ -976,18 +1170,9 @@ namespace forge
       return 2;
     }
 
-    const auto validation_directory = working_directory / ".forge" / "cache" / "box-verify";
-    BoxManifest manifest;
-    std::string manifest_content;
+    BoxMetadata metadata;
 
-    if (!unpack_and_validate_box(
-      resolved_box,
-      validation_directory,
-      process_runner,
-      manifest,
-      manifest_content,
-      error
-    ))
+    if (!read_box_metadata(resolved_box, working_directory, process_runner, metadata, error))
     {
       return 2;
     }
@@ -1162,6 +1347,25 @@ namespace forge
       }
     }
 
+    for (const auto& dependency : manifest.dependencies)
+    {
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(
+        (destination / dependency.path).parent_path(),
+        filesystem_error
+      );
+
+      if (filesystem_error
+          || !copy_file(
+            validation_directory / dependency.path,
+            destination / dependency.path,
+            error
+          ))
+      {
+        return 2;
+      }
+    }
+
     output << "Extracted " << destination.string() << '\n';
     return 0;
   }
@@ -1179,7 +1383,18 @@ namespace forge
       return false;
     }
 
-    const auto validation_directory = working_directory / ".forge" / "cache" / "box-metadata";
+    std::string box_checksum;
+
+    if (!sha256_file(resolved_box, box_checksum, error))
+    {
+      return false;
+    }
+
+    const auto cache_root = std::filesystem::is_directory(working_directory)
+      ? working_directory
+      : working_directory.parent_path();
+    const auto validation_directory =
+      cache_root / ".forge" / "cache" / "box-metadata" / box_checksum;
     BoxManifest manifest;
     std::string manifest_content;
 
@@ -1203,12 +1418,50 @@ namespace forge
         manifest.type,
         manifest.os,
         manifest.arch,
+        {},
         {}
       };
 
     for (const auto& artifact : manifest.artifacts)
     {
       metadata.artifacts.push_back({ artifact.path, artifact.kind });
+    }
+
+    for (const auto& dependency : manifest.dependencies)
+    {
+      BoxMetadata child;
+
+      if (!read_box_metadata(
+        validation_directory / dependency.path,
+        validation_directory,
+        process_runner,
+        child,
+        error
+      ))
+      {
+        return false;
+      }
+
+      if (child.name != dependency.name
+          || child.version != dependency.version
+          || child.type != dependency.type
+          || child.os != manifest.os
+          || child.arch != manifest.arch)
+      {
+        error << "forge: embedded dependency '" << dependency.name
+              << "' does not match its declaration\n";
+        return false;
+      }
+
+      metadata.dependencies.push_back(
+        {
+          dependency.name,
+          dependency.version,
+          dependency.type,
+          validation_directory / dependency.path,
+          dependency.sha256
+        }
+      );
     }
 
     return true;

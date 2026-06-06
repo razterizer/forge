@@ -17,6 +17,15 @@ namespace forge
     std::string kind;
   };
 
+  struct BoxDependencyMetadata
+  {
+    std::string name;
+    std::string version;
+    std::string type;
+    std::filesystem::path path;
+    std::string sha256;
+  };
+
   struct BoxMetadata
   {
     std::string name;
@@ -26,6 +35,7 @@ namespace forge
     std::string os;
     std::string arch;
     std::vector<BoxArtifactMetadata> artifacts;
+    std::vector<BoxDependencyMetadata> dependencies;
   };
 
   int create_box(const std::filesystem::path& project_directory,
