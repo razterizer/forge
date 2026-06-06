@@ -211,6 +211,20 @@ declared artifacts under `.forge/deps/answer/`, and imports its headers and
 library. Format-1 boxes do not yet record dependency graphs, so direct boxes
 must currently be self-contained leaf dependencies.
 
+Boxes may also be downloaded from a URL with an explicit external checksum:
+
+```toml
+[dependencies]
+answer = {
+  url = "https://github.com/example/answer/releases/download/release-1.0.0/answer-1.0.0-macos-arm64.cbox",
+  sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+}
+```
+
+Forge downloads the box through CMake into `.forge/cache/downloads/`, verifies
+the expected SHA-256 before opening it, and then applies normal box validation
+and installation. The checksum is the immutable cache key.
+
 ### Local dependency example
 
 A workspace may contain a static library, a header-only library, and an

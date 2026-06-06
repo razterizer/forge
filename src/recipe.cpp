@@ -130,34 +130,90 @@ namespace forge
       }
 
       value = trim(value.substr(1, value.size() - 2));
-      const auto equals = value.find('=');
+      std::size_t fields = 0;
 
-      if (equals == std::string_view::npos)
+      while (!value.empty())
       {
-        return false;
+        const auto equals = value.find('=');
+
+        if (equals == std::string_view::npos)
+        {
+          return false;
+        }
+
+        const auto kind = trim(value.substr(0, equals));
+        value = trim(value.substr(equals + 1));
+
+        if (value.empty() || value.front() != '"')
+        {
+          return false;
+        }
+
+        std::size_t end = 1;
+
+        while (end < value.size() && value[end] != '"')
+        {
+          if (value[end] == '\\')
+          {
+            ++end;
+          }
+
+          ++end;
+        }
+
+        if (end >= value.size())
+        {
+          return false;
+        }
+
+        std::string parsed_value;
+
+        if (!parse_string(value.substr(0, end + 1), parsed_value))
+        {
+          return false;
+        }
+
+        if (kind == "path" && dependency.path.empty())
+        {
+          dependency.path = parsed_value;
+        }
+        else if (kind == "box" && dependency.box.empty())
+        {
+          dependency.box = parsed_value;
+        }
+        else if (kind == "url" && dependency.url.empty())
+        {
+          dependency.url = parsed_value;
+        }
+        else if (kind == "sha256" && dependency.sha256.empty())
+        {
+          dependency.sha256 = parsed_value;
+        }
+        else
+        {
+          return false;
+        }
+
+        ++fields;
+        value = trim(value.substr(end + 1));
+
+        if (value.empty())
+        {
+          break;
+        }
+
+        if (value.front() != ',')
+        {
+          return false;
+        }
+
+        value = trim(value.substr(1));
       }
 
-      const auto kind = trim(value.substr(0, equals));
-      std::string parsed_path;
-
-      if (!parse_string(value.substr(equals + 1), parsed_path))
-      {
-        return false;
-      }
-
-      if (kind == "path")
-      {
-        dependency.path = parsed_path;
-        return true;
-      }
-
-      if (kind == "box")
-      {
-        dependency.box = parsed_path;
-        return true;
-      }
-
-      return false;
+      const auto local_sources = !dependency.path.empty() + !dependency.box.empty();
+      return fields > 0
+        && ((local_sources == 1 && dependency.url.empty() && dependency.sha256.empty())
+            || (local_sources == 0 && !dependency.url.empty() && !dependency.sha256.empty()));
     }
 
   } // namespace

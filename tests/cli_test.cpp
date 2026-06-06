@@ -1,5 +1,6 @@
 #include "cli.h"
 #include "process.h"
+#include "sha256.h"
 
 #include <array>
 #include <chrono>
@@ -1067,6 +1068,128 @@ namespace
     expect(contains(mismatch_error.str(), "does not match box name"), "box name mismatch is explained");
   }
 
+  void test_run_with_downloadable_box_dependency()
+  {
+    TemporaryDirectory directory;
+    const auto answer = directory.path() / "answer";
+    const auto application = directory.path() / "app";
+    write_file(
+      answer / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"answer\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"static_library\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"src/answer.cpp\"]\n"
+      "public_headers = [\"include/answer/answer.h\"]\n"
+    );
+    write_file(answer / "include/answer/answer.h", "int answer();\n");
+    write_file(
+      answer / "src/answer.cpp",
+      "#include <answer/answer.h>\n"
+      "int answer() { return 42; }\n"
+    );
+    constexpr std::array create_arguments {
+      std::string_view { "box" },
+      std::string_view { "create" }
+    };
+    std::ostringstream create_output;
+    std::ostringstream create_error;
+
+    expect(
+      forge::cli::run(create_arguments, answer, create_output, create_error) == 0,
+      "downloadable box dependency fixture is created"
+    );
+
+    std::filesystem::path box_path;
+
+    for (const auto& entry : std::filesystem::directory_iterator { answer / ".forge/boxes" })
+    {
+      if (entry.path().extension() == ".cbox")
+      {
+        box_path = entry.path();
+      }
+    }
+
+    std::string checksum;
+    std::ostringstream checksum_error;
+    expect(
+      forge::sha256_file(box_path, checksum, checksum_error),
+      "downloadable box fixture checksum is calculated"
+    );
+    auto box_url = box_path.generic_string();
+
+#ifdef _WIN32
+    box_url = "file:///" + box_url;
+#else
+    box_url = "file://" + box_url;
+#endif
+
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[dependencies]\n"
+      "answer = { url = \"" + box_url + "\", sha256 = \"" + checksum + "\" }\n"
+    );
+    write_file(
+      application / "main.cpp",
+      "#include <answer/answer.h>\n"
+      "int main() { return answer() == 42 ? 0 : 1; }\n"
+    );
+    constexpr std::array run_arguments { std::string_view { "run" } };
+    std::ostringstream first_output;
+    std::ostringstream first_error;
+
+    expect(
+      forge::cli::run(run_arguments, application, first_output, first_error) == 0,
+      "run succeeds with a downloadable box dependency"
+    );
+    expect(contains(first_output.str(), "Downloading dependency answer"), "first build downloads the box");
+
+    std::ostringstream second_output;
+    std::ostringstream second_error;
+    expect(
+      forge::cli::run(run_arguments, application, second_output, second_error) == 0,
+      "cached downloadable box dependency succeeds"
+    );
+    expect(!contains(second_output.str(), "Downloading dependency answer"), "second build reuses the cached box");
+    expect(second_error.str().empty(), "cached downloadable box dependency does not write an error");
+
+    const std::string wrong_checksum(64, '0');
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[dependencies]\n"
+      "answer = { url = \"" + box_url + "\", sha256 = \"" + wrong_checksum + "\" }\n"
+    );
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    std::ostringstream mismatch_output;
+    std::ostringstream mismatch_error;
+
+    expect(
+      forge::cli::run(build_arguments, application, mismatch_output, mismatch_error) == 2,
+      "downloadable box dependency rejects a checksum mismatch"
+    );
+    expect(contains(mismatch_error.str(), "checksum does not match"), "checksum mismatch is explained");
+    expect(
+      !std::filesystem::exists(application / ".forge/cache/downloads" / (wrong_checksum + ".cbox")),
+      "checksum mismatch is removed from the download cache"
+    );
+  }
+
   void test_run_and_release_with_shared_dependency()
   {
 #ifndef _WIN32
@@ -1235,6 +1358,7 @@ int main()
   test_header_only_box_round_trip();
   test_run_with_local_dependencies();
   test_run_with_local_box_dependency();
+  test_run_with_downloadable_box_dependency();
   test_run_and_release_with_shared_dependency();
   test_unknown_command();
 

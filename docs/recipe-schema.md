@@ -25,6 +25,7 @@ rules:
 - Build numbers must be non-negative.
 - Projects may declare local static-library, shared-library, and header-only
   dependencies using name and either project-path or cbox-path inline tables.
+- Downloadable cbox dependencies require both `url` and lowercase `sha256`.
 
 ## Taplo and VS Code
 

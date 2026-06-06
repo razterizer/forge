@@ -3,6 +3,7 @@
 #include "box.h"
 #include "process.h"
 #include "recipe.h"
+#include "sha256.h"
 
 #include <algorithm>
 #include <fstream>
@@ -163,6 +164,87 @@ namespace forge
 #else
       return "unknown";
 #endif
+    }
+
+    bool is_sha256(std::string_view value)
+    {
+      return value.size() == 64
+        && value.find_first_not_of("0123456789abcdef") == std::string_view::npos;
+    }
+
+    bool download_dependency_box(const std::filesystem::path& parent_directory,
+                                 const Dependency& dependency,
+                                 const ProcessRunner& process_runner,
+                                 std::filesystem::path& box,
+                                 std::ostream& output,
+                                 std::ostream& error)
+    {
+      if (!is_sha256(dependency.sha256))
+      {
+        error << "forge: dependency '" << dependency.name << "' has an invalid SHA-256 checksum\n";
+        return false;
+      }
+
+      const auto cache_directory = parent_directory / ".forge" / "cache" / "downloads";
+      const auto script = cache_directory / "download.cmake";
+      box = cache_directory / (dependency.sha256 + ".cbox");
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(cache_directory, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not create the dependency download cache\n";
+        return false;
+      }
+
+      if (!std::filesystem::is_regular_file(box))
+      {
+        std::ofstream file { script };
+
+        if (!file)
+        {
+          error << "forge: could not create the dependency download script\n";
+          return false;
+        }
+
+        file
+          << "file(DOWNLOAD \"${URL}\" \"${DESTINATION}.tmp\" STATUS status TLS_VERIFY ON)\n"
+          << "list(GET status 0 code)\n"
+          << "if(NOT code EQUAL 0)\n"
+          << "  file(REMOVE \"${DESTINATION}.tmp\")\n"
+          << "  message(FATAL_ERROR \"download failed: ${status}\")\n"
+          << "endif()\n"
+          << "file(RENAME \"${DESTINATION}.tmp\" \"${DESTINATION}\")\n";
+        file.close();
+        output << "Downloading dependency " << dependency.name << '\n' << std::flush;
+
+        if (process_runner(
+          {
+            "cmake",
+            "-DURL=" + dependency.url,
+            "-DDESTINATION=" + box.generic_string(),
+            "-P",
+            script.string()
+          },
+          parent_directory,
+          error
+        ) != 0)
+        {
+          error << "forge: could not download dependency '" << dependency.name << "'\n";
+          return false;
+        }
+      }
+
+      std::string checksum;
+
+      if (!sha256_file(box, checksum, error) || checksum != dependency.sha256)
+      {
+        std::filesystem::remove(box, filesystem_error);
+        error << "forge: downloaded dependency '" << dependency.name << "' checksum does not match\n";
+        return false;
+      }
+
+      return true;
     }
 
     bool write_header_validation_sources(const std::filesystem::path& directory,
@@ -376,6 +458,7 @@ namespace forge
                               const Dependency& dependency,
                               const ProcessRunner& process_runner,
                               DependencyNode*& node,
+                              std::ostream& output,
                               std::ostream& error)
     {
       if (!is_safe_dependency_name(dependency.name))
@@ -385,19 +468,36 @@ namespace forge
       }
 
       std::error_code filesystem_error;
-      const auto dependency_location = dependency.box.empty() ? dependency.path : dependency.box;
+      std::filesystem::path downloaded_box;
+
+      if (!dependency.url.empty()
+          && !download_dependency_box(
+            parent_directory,
+            dependency,
+            process_runner,
+            downloaded_box,
+            output,
+            error
+          ))
+      {
+        return false;
+      }
+
+      const auto is_box = !dependency.box.empty() || !dependency.url.empty();
+      const auto dependency_location =
+        !downloaded_box.empty() ? downloaded_box : (dependency.box.empty() ? dependency.path : dependency.box);
       const auto directory =
         std::filesystem::weakly_canonical(parent_directory / dependency_location, filesystem_error);
 
       if (filesystem_error
-          || (dependency.box.empty() && !std::filesystem::is_directory(directory))
-          || (!dependency.box.empty() && !std::filesystem::is_regular_file(directory)))
+          || (!is_box && !std::filesystem::is_directory(directory))
+          || (is_box && !std::filesystem::is_regular_file(directory)))
       {
         error << "forge: dependency '" << dependency.name << "' location does not exist\n";
         return false;
       }
 
-      if (dependency.box.empty() && dependency_session->active_projects.contains(directory))
+      if (!is_box && dependency_session->active_projects.contains(directory))
       {
         error << "forge: dependency cycle detected at '" << dependency.name << "'\n";
         return false;
@@ -419,7 +519,7 @@ namespace forge
         Recipe dependency_recipe;
         std::optional<BoxMetadata> box_metadata;
 
-        if (!dependency.box.empty())
+        if (is_box)
         {
           BoxMetadata metadata;
 
@@ -477,7 +577,7 @@ namespace forge
             {
               directory,
               std::move(dependency_recipe),
-              dependency.box.empty() ? std::filesystem::path {} : directory,
+              is_box ? directory : std::filesystem::path {},
               std::move(box_metadata)
             }
         ).first;
@@ -524,7 +624,7 @@ namespace forge
     {
       DependencyNode* node = nullptr;
 
-      if (!read_dependency_node(parent_directory, dependency, process_runner, node, error)
+      if (!read_dependency_node(parent_directory, dependency, process_runner, node, output, error)
           || !ensure_dependency_box(*node, process_runner, output, error))
       {
         return false;

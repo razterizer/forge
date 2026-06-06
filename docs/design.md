@@ -50,6 +50,10 @@ Local `.cbox` dependencies are verified and installed directly without their
 source project. Format-1 boxes do not contain dependency graph metadata, so
 direct boxes are currently treated as self-contained leaf dependencies.
 
+Downloadable `.cbox` dependencies require an explicit SHA-256 checksum. Forge
+uses the checksum as an immutable local cache key before applying normal box
+verification and installation.
+
 ## Initial roadmap
 
 1. v0.1: `forge new`, `forge init`, `forge build`, `forge run`, and

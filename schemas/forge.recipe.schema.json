@@ -84,7 +84,7 @@
     },
     "dependencies": {
       "type": "object",
-      "description": "Local project or cbox static-library, shared-library, and header-only dependencies.",
+      "description": "Local project, local cbox, or downloadable cbox dependencies.",
       "propertyNames": {
         "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
       },
@@ -101,6 +101,17 @@
             "type": "string",
             "minLength": 1,
             "description": "Path to a local cbox file, relative to this recipe or absolute."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "minLength": 1,
+            "description": "URL of a downloadable cbox file."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "Expected SHA-256 checksum of the downloaded cbox file."
           }
         },
         "oneOf": [
@@ -109,6 +120,9 @@
           },
           {
             "required": ["box"]
+          },
+          {
+            "required": ["url", "sha256"]
           }
         ]
       }

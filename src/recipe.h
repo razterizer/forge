@@ -18,6 +18,8 @@ namespace forge
     std::string name;
     std::filesystem::path path;
     std::filesystem::path box;
+    std::string url;
+    std::string sha256;
   };
 
   struct Recipe
