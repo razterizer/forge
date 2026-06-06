@@ -281,8 +281,18 @@ namespace
       "new creates GitHub release workflows"
     );
     expect(
-      contains(read_file(directory.path() / "hello/.github/workflows/release-windows.yml"), "hello-*.zip"),
-      "new workflows use the project name"
+      contains(
+        read_file(directory.path() / "hello/.github/workflows/release-windows.yml"),
+        "forge.exe prepare-release"
+      ),
+      "new workflows prepare type-aware release assets"
+    );
+    expect(
+      contains(
+        read_file(directory.path() / "hello/.github/workflows/release-linux.yml"),
+        "boxes/*.cbox,boxes/*.sha256"
+      ),
+      "new workflows publish box assets"
     );
     expect(
       std::filesystem::exists(directory.path() / "hello/RELEASE_NOTES.md"),
@@ -452,6 +462,50 @@ namespace
     );
     expect(contains(release_output.str(), "Released"), "release reports the archive");
     expect(release_error.str().empty(), "successful release does not write an error");
+  }
+
+  void test_prepare_executable_release()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array new_arguments {
+      std::string_view { "new" },
+      std::string_view { "hello" }
+    };
+    constexpr std::array release_arguments { std::string_view { "prepare-release" } };
+    std::ostringstream new_output;
+    std::ostringstream new_error;
+    std::ostringstream release_output;
+    std::ostringstream release_error;
+
+    forge::cli::run(new_arguments, directory.path(), new_output, new_error);
+    const auto project_directory = directory.path() / "hello";
+
+    expect(
+      forge::cli::run(release_arguments, project_directory, release_output, release_error) == 0,
+      "hosted executable release assets succeed"
+    );
+
+    std::size_t archives = 0;
+
+    for (const auto& entry : std::filesystem::directory_iterator { project_directory / ".forge/release" })
+    {
+      if (entry.path().extension() == ".zip")
+      {
+        ++archives;
+        expect(
+          contains(entry.path().filename().string(), "hello-0.1.0-"),
+          "hosted executable archive includes its target"
+        );
+      }
+    }
+
+    expect(archives == 1, "hosted executable release creates one archive");
+    expect(
+      std::filesystem::exists(project_directory / ".forge/release/RELEASE_NOTES.md"),
+      "hosted executable release prepares focused notes"
+    );
+    expect(contains(release_output.str(), "Prepared release assets"), "hosted assets report success");
+    expect(release_error.str().empty(), "hosted executable release does not write an error");
   }
 
   void test_release_rejects_empty_tag_format()
@@ -675,6 +729,7 @@ namespace
       contains(read_file(published_checksum), box_path.filename().string()),
       "box checksum names the published box"
     );
+    expect(contains(publish_output.str(), "Published locally "), "box publish reports local publication");
     expect(contains(publish_output.str(), "Checksum "), "box publish reports the checksum");
 
     std::ostringstream republish_output;
@@ -794,6 +849,29 @@ namespace
       "static library box extracts its library"
     );
 #endif
+
+    constexpr std::array release_arguments { std::string_view { "prepare-release" } };
+    std::ostringstream release_output;
+    std::ostringstream release_error;
+    expect(
+      forge::cli::run(release_arguments, project_directory, release_output, release_error) == 0,
+      "hosted static-library release assets succeed"
+    );
+    expect(
+      std::filesystem::exists(project_directory / "boxes" / box_path.filename()),
+      "hosted library release publishes its box"
+    );
+    expect(
+      std::filesystem::exists(
+        project_directory / "boxes" / (box_path.filename().string() + ".sha256")
+      ),
+      "hosted library release publishes its checksum"
+    );
+    expect(
+      std::filesystem::exists(project_directory / ".forge/release/RELEASE_NOTES.md"),
+      "hosted library release prepares focused notes"
+    );
+    expect(release_error.str().empty(), "hosted static-library release does not write an error");
   }
 
   void test_header_only_box_round_trip()
@@ -1376,6 +1454,7 @@ int main()
   test_build_rejects_empty_project();
   test_run_new_project();
   test_release_new_project();
+  test_prepare_executable_release();
   test_release_rejects_empty_tag_format();
   test_release_github_rejects_empty_tag_format();
   test_release_git_force_rejects_empty_tag_format();

@@ -26,16 +26,15 @@ jobs:
       - name: Test
         run: ctest --preset dev
 
-      - name: Create release archive
+      - name: Prepare hosted release assets
         shell: pwsh
         run: |
-          ./build/dev/forge.exe release
-          Move-Item .forge/release/forge-*.zip ".forge/release/forge-${{ github.ref_name }}-windows.zip"
+          ./build/dev/forge.exe prepare-release
 
       - name: Publish GitHub release
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: .forge/release/forge-${{ github.ref_name }}-windows.zip
+          artifacts: .forge/release/*.zip,boxes/*.cbox,boxes/*.sha256
           bodyFile: .forge/release/RELEASE_NOTES.md
           tag: ${{ github.ref_name }}

@@ -1,5 +1,6 @@
 #include "release.h"
 
+#include "box.h"
 #include "build.h"
 #include "recipe.h"
 
@@ -606,6 +607,142 @@ namespace forge
     }
 
     output << "Released " << archive_path.string() << '\n';
+    return 0;
+  }
+
+  int prepare_release(const std::filesystem::path& project_directory,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    return prepare_release(project_directory, run_process, output, error);
+  }
+
+  int prepare_release(const std::filesystem::path& project_directory,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    Recipe recipe;
+
+    if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
+    {
+      return 2;
+    }
+
+    const auto release_directory = project_directory / ".forge" / "release";
+    std::error_code filesystem_error;
+    std::filesystem::create_directories(release_directory, filesystem_error);
+
+    if (filesystem_error)
+    {
+      error << "forge: could not create '" << release_directory.string() << "'\n";
+      return 2;
+    }
+
+    if (recipe.type == "executable")
+    {
+      if (release_project(project_directory, process_runner, output, error) != 0)
+      {
+        return 2;
+      }
+
+      const auto archive = release_directory / (recipe.name + "-" + recipe.version + ".zip");
+      const auto hosted_archive =
+        release_directory / (recipe.name + "-" + recipe.version + "-" + target() + ".zip");
+      std::filesystem::remove(hosted_archive, filesystem_error);
+      filesystem_error.clear();
+      std::filesystem::rename(archive, hosted_archive, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not prepare hosted release archive\n";
+        return 2;
+      }
+    }
+    else if (recipe.type == "static_library"
+             || recipe.type == "shared_library"
+             || recipe.type == "header_only")
+    {
+      if (create_box(project_directory, process_runner, output, error) != 0)
+      {
+        return 2;
+      }
+
+      const auto boxes_directory = project_directory / ".forge" / "boxes";
+      const auto prefix = recipe.name + "-" + recipe.version;
+      std::filesystem::path box;
+      std::filesystem::file_time_type modified;
+
+      for (const auto& entry : std::filesystem::directory_iterator { boxes_directory, filesystem_error })
+      {
+        if (filesystem_error)
+        {
+          break;
+        }
+
+        const auto filename = entry.path().filename().string();
+
+        if (!entry.is_regular_file()
+            || entry.path().extension() != ".cbox"
+            || !filename.starts_with(prefix))
+        {
+          continue;
+        }
+
+        const auto entry_modified = entry.last_write_time(filesystem_error);
+
+        if (filesystem_error)
+        {
+          break;
+        }
+
+        if (box.empty() || entry_modified > modified)
+        {
+          box = entry.path();
+          modified = entry_modified;
+        }
+      }
+
+      if (filesystem_error || box.empty())
+      {
+        error << "forge: could not locate the created box\n";
+        return 2;
+      }
+
+      if (publish_box(box, project_directory, process_runner, output, error) != 0)
+      {
+        return 2;
+      }
+    }
+    else
+    {
+      error << "forge: unsupported project type '" << recipe.type << "'\n";
+      return 2;
+    }
+
+    const auto notes_path = release_directory / "RELEASE_NOTES.md";
+    std::optional<std::string> release_notes;
+
+    if (!extract_release_notes(
+      project_directory / "RELEASE_NOTES.md",
+      recipe.version,
+      release_notes,
+      error
+    ))
+    {
+      return 2;
+    }
+
+    if (!write_release_notes(
+      notes_path,
+      release_notes.value_or("Release " + recipe.version + "\n"),
+      error
+    ))
+    {
+      return 2;
+    }
+
+    output << "Prepared release assets\n";
     return 0;
   }
 

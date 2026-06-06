@@ -38,11 +38,9 @@ namespace forge
       return true;
     }
 
-    std::string release_workflow(std::string_view project_name,
-                                 std::string_view platform,
+    std::string release_workflow(std::string_view platform,
                                  std::string_view runner,
                                  std::string_view forge_executable,
-                                 std::string_view move_command,
                                  std::string_view shell = {})
     {
       std::string workflow =
@@ -77,7 +75,7 @@ namespace forge
         "          -DCMAKE_BUILD_TYPE=Release -DFORGE_BUILD_TESTS=OFF\n"
         "          && cmake --build .forge-bootstrap/build\n"
         "\n"
-        "      - name: Create release archive\n";
+        "      - name: Prepare hosted release assets\n";
 
       if (!shell.empty())
       {
@@ -86,15 +84,13 @@ namespace forge
 
       workflow +=
         "        run: |\n"
-        "          " + std::string { forge_executable } + " release\n"
-        "          " + std::string { move_command } + "\n"
+        "          " + std::string { forge_executable } + " prepare-release\n"
         "\n"
         "      - name: Publish GitHub release\n"
         "        uses: ncipollo/release-action@v1\n"
         "        with:\n"
         "          allowUpdates: true\n"
-        "          artifacts: .forge/release/" + std::string { project_name }
-          + "-${{ github.ref_name }}-" + std::string { platform } + ".zip\n"
+        "          artifacts: .forge/release/*.zip,boxes/*.cbox,boxes/*.sha256\n"
         "          bodyFile: .forge/release/RELEASE_NOTES.md\n"
         "          tag: ${{ github.ref_name }}\n";
 
@@ -104,7 +100,6 @@ namespace forge
   } // namespace
 
   bool generate_github_release_support(const std::filesystem::path& project_directory,
-                                       std::string_view project_name,
                                        std::ostream& error)
   {
     const auto workflows_directory = project_directory / ".github" / "workflows";
@@ -117,42 +112,29 @@ namespace forge
       return false;
     }
 
-    const std::string archive = std::string { project_name } + "-*.zip";
     const std::array workflows {
       std::pair {
         "release-linux.yml",
         release_workflow(
-          project_name,
           "linux",
           "ubuntu-latest",
-          "./.forge-bootstrap/build/forge",
-          "mv .forge/release/" + archive
-            + " \".forge/release/" + std::string { project_name }
-            + "-${{ github.ref_name }}-linux.zip\""
+          "./.forge-bootstrap/build/forge"
         )
       },
       std::pair {
         "release-macos.yml",
         release_workflow(
-          project_name,
           "macos",
           "macos-latest",
-          "./.forge-bootstrap/build/forge",
-          "mv .forge/release/" + archive
-            + " \".forge/release/" + std::string { project_name }
-            + "-${{ github.ref_name }}-macos.zip\""
+          "./.forge-bootstrap/build/forge"
         )
       },
       std::pair {
         "release-windows.yml",
         release_workflow(
-          project_name,
           "windows",
           "windows-latest",
           "./.forge-bootstrap/build/forge.exe",
-          "Move-Item .forge/release/" + archive
-            + " \".forge/release/" + std::string { project_name }
-            + "-${{ github.ref_name }}-windows.zip\"",
           "pwsh"
         )
       }

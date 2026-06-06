@@ -40,19 +40,26 @@ notes file without a matching version section causes release to fail.
 - `.github/workflows/release-windows.yml`
 
 Each workflow reacts to `release-*` and `v*` tags, bootstraps Forge, runs
-`forge release`, gives the archive a platform-specific name, and publishes it
-to the matching GitHub Release. Existing workflow and release-note files are
-left unchanged. Tag creation remains an explicit opt-in action.
+`forge prepare-release`, and publishes its output to the matching GitHub
+Release. Executable projects produce a target-qualified ZIP archive.
+Static-library, shared-library, and header-only projects produce a
+target-qualified `.cbox` and its `.sha256` checksum under `boxes/`. Existing
+workflow and release-note files are left unchanged. Tag creation remains an
+explicit opt-in action.
 
 GitHub releases are explicit and separate from local releases:
 
 ```sh
 forge release
+forge prepare-release
 forge release-git
 forge release-git --tag="release-<version>-<curr-date>"
 ```
 
 `forge release` builds and packages only on the local machine.
+`forge prepare-release` prepares the type-appropriate artifacts and focused
+release notes expected by hosted release workflows. It performs the necessary
+build, box creation, verification, and local publication steps automatically.
 `forge release-git` does not build locally; it creates and pushes the tag
 that triggers the generated platform workflows. The default tag is
 `release-<version>`. Formats may use `<name>`, `<version>`, `<build-nr>`,
@@ -61,6 +68,12 @@ tag and clean tracked Git state, then creates an annotated tag from the
 matching release notes and pushes it to `origin`. Custom formats must match
 `release-*` or `v*`, or the generated workflow triggers must be customized, to
 publish hosted artifacts.
+
+For a normal hosted release, only `forge release-git` is required. The
+generated workflows invoke `forge prepare-release` on each platform. Running
+`forge prepare-release` locally is useful for inspecting the artifacts before
+tagging, while the individual box commands remain useful for diagnostics and
+manual local publication.
 
 `forge release-git --tag-force` deliberately replaces the existing local and
 remote release tag. Use it only when repairing a broken published release.
@@ -71,7 +84,7 @@ The next workflow slices should be:
 
 1. Named build and test profiles.
 2. Release variants and platform-specific release contents.
-3. Generated release manifests and checksums.
+3. Generated release manifests.
 4. Dry-run support for Git tagging.
 5. Generated version headers.
 

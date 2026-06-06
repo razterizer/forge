@@ -1087,7 +1087,7 @@ namespace forge
     }
 
     output
-      << "Published " << published_box.string() << '\n'
+      << "Published locally " << published_box.string() << '\n'
       << "Checksum " << source_checksum << '\n';
     return 0;
   }

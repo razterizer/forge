@@ -196,7 +196,7 @@ namespace forge
       return 2;
     }
 
-    if (!generate_github_release_support(project_directory, project_name, error))
+    if (!generate_github_release_support(project_directory, error))
     {
       return 2;
     }

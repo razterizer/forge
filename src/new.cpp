@@ -122,7 +122,7 @@ namespace forge
 
     if (!write_file(recipe_path, recipe, error)
         || !write_file(main_path, main_source, error)
-        || !generate_github_release_support(project_directory, project_name, error))
+        || !generate_github_release_support(project_directory, error))
     {
       std::filesystem::remove_all(project_directory, filesystem_error);
       return 2;

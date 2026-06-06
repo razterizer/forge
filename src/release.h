@@ -25,6 +25,15 @@ namespace forge
                       std::ostream& output,
                       std::ostream& error);
 
+  int prepare_release(const std::filesystem::path& project_directory,
+                      std::ostream& output,
+                      std::ostream& error);
+
+  int prepare_release(const std::filesystem::path& project_directory,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error);
+
   int release_git(const std::filesystem::path& project_directory,
                   const GitReleaseOptions& options,
                   std::ostream& output,

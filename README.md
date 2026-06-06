@@ -370,10 +370,24 @@ links are rejected.
 
 `forge new` and `forge init` create `RELEASE_NOTES.md` and Linux, macOS, and
 Windows release workflows under `.github/workflows`. Pushing a `release-*` or
-`v*` tag builds Forge, creates a platform archive, and publishes it to the
-matching GitHub Release. Existing workflow files and release notes are never
-overwritten by `forge init`. Generated `.gitignore` files exclude Forge build
-state. Tag creation remains an explicit opt-in action.
+`v*` tag builds Forge, runs `forge prepare-release`, and publishes the resulting
+artifacts to the matching GitHub Release. Executable projects produce a
+target-qualified ZIP archive. Static-library, shared-library, and header-only
+projects produce a target-qualified `.cbox` and its `.sha256` checksum under
+`boxes/`. Existing workflow files and release notes are never overwritten by
+`forge init`. Generated `.gitignore` files exclude Forge build state. Tag
+creation remains an explicit opt-in action.
+
+Prepare the same hosted release assets locally:
+
+```sh
+forge prepare-release
+```
+
+The command also writes the focused release notes used by GitHub Actions to
+`.forge/release/RELEASE_NOTES.md`. It performs the necessary build, box
+creation, verification, and local publication steps automatically. You do not
+need to run those commands individually before a release.
 
 Trigger the generated GitHub release workflows by creating and pushing an
 annotated Git release tag:
@@ -384,8 +398,8 @@ forge release-git --tag="<name>-<version>+build.<build-nr>"
 ```
 
 `forge release` remains a local-only build and packaging command.
-`forge release-git` does not build locally; it pushes a tag that causes
-GitHub Actions to build the platform releases. Its default tag is
+`forge release-git` does not build locally; it pushes a tag that causes GitHub
+Actions to prepare and publish the platform assets. Its default tag is
 `release-<version>`. Custom formats support `<name>`,
 `<version>`, `<build-nr>`, `<curr-date>`, `<target>`, and `<configuration>`.
 `<build-nr>` requires `[build].number`; `<curr-date>` uses the current UTC
@@ -405,8 +419,8 @@ Generated GitHub workflows react to `release-*` and `v*`. A custom tag format
 must match one of those patterns, or the generated workflow triggers must be
 customized, to publish hosted artifacts.
 
-Create, inspect, verify, and extract an executable, static-library,
-shared-library, or header-only box:
+Create, inspect, verify, publish locally, and extract an executable,
+static-library, shared-library, or header-only box:
 
 ```sh
 /path/to/forge/build/dev/forge box create
@@ -416,11 +430,12 @@ shared-library, or header-only box:
 /path/to/forge/build/dev/forge box extract .forge/boxes/hello-0.1.0-macos-arm64.cbox
 ```
 
-`forge box publish <box>` verifies the box, copies it into the project-root
-`boxes/` directory, and writes a sibling `.sha256` file suitable for publishing
-alongside the box or copying into a dependency recipe. Republishing identical
-contents is safe; Forge refuses to overwrite a same-named box with different
-contents. Publishing must run from a directory containing `forge.recipe.toml`.
+`forge box publish <box>` verifies and publishes the box locally by copying it
+into the project-root `boxes/` directory and writing a sibling `.sha256` file
+suitable for a later hosted release or copying into a dependency recipe.
+Republishing identical contents is safe; Forge refuses to overwrite a
+same-named box with different contents. Publishing must run from a directory
+containing `forge.recipe.toml`.
 
 Projects may specify an optional build number without changing their dependency
 version:

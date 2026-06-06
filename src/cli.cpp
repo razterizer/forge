@@ -24,6 +24,7 @@ namespace forge::cli
       std::string_view { "clean" },
       std::string_view { "run" },
       std::string_view { "release" },
+      std::string_view { "prepare-release" },
       std::string_view { "release-git" },
       std::string_view { "release-github" },
     };
@@ -41,14 +42,15 @@ namespace forge::cli
         << "  forge --help\n"
         << "  forge --version\n\n"
         << "Commands:\n"
-        << "  box       Create, inspect, verify, publish, or extract boxes\n"
-        << "  init      Adopt the current project\n"
-        << "  new       Create a new project\n"
-        << "  build     Build the current project\n"
-        << "  clean     Remove generated project state\n"
-        << "  run       Run the current project\n"
-        << "  release   Create a local release artifact\n"
-        << "  release-git  Create and push a release tag\n";
+        << "  box             Create, inspect, verify, publish locally, or extract boxes\n"
+        << "  init            Adopt the current project\n"
+        << "  new             Create a new project\n"
+        << "  build           Build the current project\n"
+        << "  clean           Remove generated project state\n"
+        << "  run             Run the current project\n"
+        << "  release         Create a local release artifact\n"
+        << "  prepare-release Prepare hosted release assets\n"
+        << "  release-git     Create and push a release tag\n";
     }
 
     bool is_command(std::string_view candidate)
@@ -221,6 +223,11 @@ namespace forge::cli
     if (arguments.front() == "release")
     {
       return release_project(working_directory, output, error);
+    }
+
+    if (arguments.front() == "prepare-release")
+    {
+      return prepare_release(working_directory, output, error);
     }
 
     error << "forge: '" << arguments.front() << "' is not implemented yet\n";
