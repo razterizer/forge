@@ -153,6 +153,92 @@ Forge builds each dependency into a verified box, installs it under
 `.forge/deps/<name>/`, adds its public include directory, and links static
 libraries when present. Transitive dependencies are not supported yet.
 
+### Local dependency example
+
+A workspace may contain a static library, a header-only library, and an
+executable that uses both:
+
+```text
+workspace/
+├── answer/
+│   ├── forge.recipe.toml
+│   ├── include/answer/answer.h
+│   └── src/answer.cpp
+├── doubled/
+│   ├── forge.recipe.toml
+│   └── include/doubled/doubled.h
+└── calculator/
+    ├── forge.recipe.toml
+    └── main.cpp
+```
+
+The `answer` static-library recipe is:
+
+```toml
+[project]
+name = "answer"
+version = "1.0.0"
+type = "static_library"
+cpp_std = 20
+
+[sources]
+paths = ["src/answer.cpp"]
+public_headers = ["include/answer/answer.h"]
+```
+
+The `doubled` header-only recipe is:
+
+```toml
+[project]
+name = "doubled"
+version = "1.0.0"
+type = "header_only"
+cpp_std = 20
+
+[sources]
+paths = []
+public_headers = ["include/doubled/doubled.h"]
+```
+
+The `calculator` executable declares both dependencies:
+
+```toml
+[project]
+name = "calculator"
+version = "1.0.0"
+type = "executable"
+cpp_std = 20
+
+[sources]
+paths = ["main.cpp"]
+
+[dependencies]
+answer = { path = "../answer" }
+doubled = { path = "../doubled" }
+```
+
+Dependency keys must match the dependency recipes' project names. The
+application may then include both libraries normally:
+
+```cpp
+#include <answer/answer.h>
+#include <doubled/doubled.h>
+
+#include <iostream>
+
+int main()
+{
+  std::cout << doubled(answer()) << '\n';
+}
+```
+
+Run the application from its project directory:
+
+```sh
+cd workspace/calculator
+/path/to/forge run
+```
+
 Build and run a Forge project:
 
 ```sh
