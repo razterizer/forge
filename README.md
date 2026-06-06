@@ -122,6 +122,24 @@ public_headers = ["include/hello/hello.h"]
 Forge generates CMake infrastructure under `.forge/generated/` and builds into
 `.forge/build/`.
 
+Header-only projects declare no source files:
+
+```toml
+[project]
+name = "hello"
+version = "1.0.0"
+type = "header_only"
+cpp_std = 20
+
+[sources]
+paths = []
+public_headers = ["include/hello/hello.h"]
+```
+
+Forge generates and compiles one private validation translation unit per public
+header. These temporary sources remain under `.forge/generated/`; header-only
+boxes contain only the declared headers.
+
 Build and run a Forge project:
 
 ```sh
@@ -142,7 +160,8 @@ Create a release archive:
 `README.md` and `LICENSE` files when present, and creates
 `.forge/release/<name>-<version>.zip`.
 
-Create, inspect, verify, and extract an executable or static-library box:
+Create, inspect, verify, and extract an executable, static-library, or
+header-only box:
 
 ```sh
 /path/to/forge/build/dev/forge box create

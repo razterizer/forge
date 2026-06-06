@@ -561,6 +561,88 @@ namespace
 #endif
   }
 
+  void test_header_only_box_round_trip()
+  {
+    TemporaryDirectory directory;
+    const auto project_directory = directory.path() / "hello-headers";
+    write_file(
+      project_directory / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"hello\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/hello/hello.h\"]\n"
+    );
+    write_file(
+      project_directory / "include/hello/hello.h",
+      "#pragma once\n"
+      "inline int hello() { return 42; }\n"
+    );
+    constexpr std::array create_arguments {
+      std::string_view { "box" },
+      std::string_view { "create" }
+    };
+    std::ostringstream create_output;
+    std::ostringstream create_error;
+
+    expect(
+      forge::cli::run(create_arguments, project_directory, create_output, create_error) == 0,
+      "box create succeeds for a header-only project"
+    );
+
+    std::filesystem::path box_path;
+
+    for (const auto& entry : std::filesystem::directory_iterator { project_directory / ".forge/boxes" })
+    {
+      if (entry.path().extension() == ".cbox")
+      {
+        box_path = entry.path();
+      }
+    }
+
+    expect(!box_path.empty(), "header-only box create produces a cbox archive");
+    const auto box_path_string = box_path.string();
+    const std::array inspect_arguments {
+      std::string_view { "box" },
+      std::string_view { "inspect" },
+      std::string_view { box_path_string }
+    };
+    std::ostringstream inspect_output;
+    std::ostringstream inspect_error;
+
+    expect(
+      forge::cli::run(inspect_arguments, project_directory, inspect_output, inspect_error) == 0,
+      "header-only box inspect succeeds"
+    );
+    expect(contains(inspect_output.str(), "type = \"header_only\""), "manifest identifies header-only package");
+    expect(contains(inspect_output.str(), "kind = \"public_header\""), "manifest declares a public header");
+    expect(!contains(inspect_output.str(), "static_library"), "header-only box does not declare a library");
+
+    const std::array extract_arguments {
+      std::string_view { "box" },
+      std::string_view { "extract" },
+      std::string_view { box_path_string }
+    };
+    std::ostringstream extract_output;
+    std::ostringstream extract_error;
+
+    expect(
+      forge::cli::run(extract_arguments, directory.path(), extract_output, extract_error) == 0,
+      "header-only box extract succeeds"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / box_path.stem() / "include/hello/hello.h"),
+      "header-only box extracts its public header"
+    );
+    expect(
+      !std::filesystem::exists(directory.path() / box_path.stem() / "lib"),
+      "header-only box does not extract a library directory"
+    );
+  }
+
   void test_unknown_command()
   {
     constexpr std::array arguments { std::string_view { "confuse" } };
@@ -591,6 +673,7 @@ int main()
   test_release_new_project();
   test_box_round_trip();
   test_static_library_box_round_trip();
+  test_header_only_box_round_trip();
   test_unknown_command();
 
   return failures == 0 ? 0 : 1;

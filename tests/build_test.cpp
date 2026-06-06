@@ -98,6 +98,23 @@ namespace
     std::ofstream { directory / "src/hello.cpp" } << "#include <hello/hello.h>\nint hello() { return 42; }\n";
   }
 
+  void write_header_only_project(const std::filesystem::path& directory)
+  {
+    std::filesystem::create_directories(directory / "include/hello");
+    std::ofstream recipe { directory / "forge.recipe.toml" };
+    recipe
+      << "[project]\n"
+      << "name = \"hello\"\n"
+      << "version = \"0.1.0\"\n"
+      << "type = \"header_only\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = []\n"
+      << "public_headers = [\"include/hello/hello.h\"]\n";
+
+    std::ofstream { directory / "include/hello/hello.h" } << "inline int hello() { return 42; }\n";
+  }
+
   void test_build_generates_cmake_and_commands()
   {
     TemporaryDirectory directory;
@@ -182,6 +199,36 @@ namespace
     expect(contains(output.str(), "libhello.a"), "build reports the static library artifact");
   }
 
+  void test_build_validates_header_only_project()
+  {
+    TemporaryDirectory directory;
+    write_header_only_project(directory.path());
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&commands](const std::vector<std::string>& arguments,
+                  const std::filesystem::path&,
+                  std::ostream&)
+      {
+        commands.push_back(arguments);
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 0,
+      "header-only build succeeds"
+    );
+    expect(commands.size() == 2, "header-only build configures and compiles validation sources");
+
+    const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
+    const auto validation = read_file(directory.path() / ".forge/generated/header-validation/header-0.cpp");
+    expect(contains(generated, "add_library(forge_project OBJECT"), "header-only build generates validation target");
+    expect(contains(validation, "#include <hello/hello.h>"), "header-only build generates a header include");
+    expect(contains(output.str(), "Validated 1 public header"), "header-only build reports validation");
+  }
+
   void test_build_rejects_missing_source_without_running_process()
   {
     TemporaryDirectory directory;
@@ -214,6 +261,7 @@ int main()
 {
   test_build_generates_cmake_and_commands();
   test_build_generates_static_library();
+  test_build_validates_header_only_project();
   test_build_stops_after_configuration_failure();
   test_build_rejects_missing_source_without_running_process();
 

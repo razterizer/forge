@@ -30,6 +30,39 @@ namespace forge
       return escaped;
     }
 
+    bool write_header_validation_sources(const std::filesystem::path& directory,
+                                         const Recipe& recipe,
+                                         std::ostream& error)
+    {
+      std::error_code filesystem_error;
+      std::filesystem::remove_all(directory, filesystem_error);
+      filesystem_error.clear();
+      std::filesystem::create_directories(directory, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not create '" << directory.string() << "'\n";
+        return false;
+      }
+
+      for (std::size_t index = 0; index < recipe.public_headers.size(); ++index)
+      {
+        auto include_path = recipe.public_headers[index];
+        include_path = include_path.lexically_relative("include");
+        std::ofstream source { directory / ("header-" + std::to_string(index) + ".cpp") };
+
+        if (!source)
+        {
+          error << "forge: could not create header validation source\n";
+          return false;
+        }
+
+        source << "#include <" << include_path.generic_string() << ">\n";
+      }
+
+      return true;
+    }
+
     bool write_generated_cmake(const std::filesystem::path& path,
                                const Recipe& recipe,
                                std::ostream& error)
@@ -49,6 +82,16 @@ namespace forge
       if (recipe.type == "static_library")
       {
         file << "add_library(forge_project STATIC\n";
+      }
+      else if (recipe.type == "header_only")
+      {
+        file << "add_library(forge_project OBJECT\n";
+
+        for (std::size_t index = 0; index < recipe.public_headers.size(); ++index)
+        {
+          file << "  \"${CMAKE_CURRENT_SOURCE_DIR}/header-validation/header-"
+               << index << ".cpp\"\n";
+        }
       }
       else
       {
@@ -109,13 +152,15 @@ namespace forge
       return 2;
     }
 
-    if (recipe.type != "executable" && recipe.type != "static_library")
+    if (recipe.type != "executable"
+        && recipe.type != "static_library"
+        && recipe.type != "header_only")
     {
       error << "forge: unsupported project type '" << recipe.type << "'\n";
       return 2;
     }
 
-    if (recipe.sources.empty())
+    if (recipe.sources.empty() && recipe.type != "header_only")
     {
       error << "forge: recipe contains no source files\n";
       return 2;
@@ -136,9 +181,16 @@ namespace forge
       }
     }
 
-    if (recipe.type == "static_library" && recipe.public_headers.empty())
+    if ((recipe.type == "static_library" || recipe.type == "header_only")
+        && recipe.public_headers.empty())
     {
-      error << "forge: static libraries require public headers\n";
+      error << "forge: library projects require public headers\n";
+      return 2;
+    }
+
+    if (recipe.type == "header_only" && !recipe.sources.empty())
+    {
+      error << "forge: header-only projects cannot declare source files\n";
       return 2;
     }
 
@@ -172,7 +224,13 @@ namespace forge
       return 2;
     }
 
-    if (!write_generated_cmake(generated_directory / "CMakeLists.txt", recipe, error))
+    if ((recipe.type == "header_only"
+         && !write_header_validation_sources(
+           generated_directory / "header-validation",
+           recipe,
+           error
+         ))
+        || !write_generated_cmake(generated_directory / "CMakeLists.txt", recipe, error))
     {
       return 2;
     }
@@ -209,6 +267,19 @@ namespace forge
     {
       error << "forge: build failed\n";
       return 2;
+    }
+
+    if (recipe.type == "header_only")
+    {
+      output << "Validated " << recipe.public_headers.size() << " public header";
+
+      if (recipe.public_headers.size() != 1)
+      {
+        output << 's';
+      }
+
+      output << '\n';
+      return 0;
     }
 
     auto artifact = build_directory / recipe.name;

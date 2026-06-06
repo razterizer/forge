@@ -450,7 +450,9 @@ namespace forge
 
       if (!is_safe_path_component(manifest.name)
           || !is_safe_path_component(manifest.version)
-          || (manifest.type != "executable" && manifest.type != "static_library")
+          || (manifest.type != "executable"
+              && manifest.type != "static_library"
+              && manifest.type != "header_only")
           || manifest.artifacts.empty())
       {
         error << "forge: box manifest contains invalid package or artifact values\n";
@@ -504,7 +506,9 @@ namespace forge
           || (manifest.type == "static_library"
               && (library_count != 1
                   || header_count == 0
-                  || library_count + header_count != manifest.artifacts.size())))
+                  || library_count + header_count != manifest.artifacts.size()))
+          || (manifest.type == "header_only"
+              && (header_count == 0 || header_count != manifest.artifacts.size())))
       {
         error << "forge: box manifest artifacts do not match package type\n";
         return false;
@@ -720,7 +724,7 @@ namespace forge
     }
 #endif
 
-    if (!std::filesystem::is_regular_file(built_artifact))
+    if (recipe.type != "header_only" && !std::filesystem::is_regular_file(built_artifact))
     {
       error << "forge: built artifact '" << built_artifact.string() << "' does not exist\n";
       return 2;
@@ -782,6 +786,23 @@ namespace forge
         }
       }
     }
+    else if (recipe.type == "header_only")
+    {
+      for (const auto& header : recipe.public_headers)
+      {
+        if (!stage_artifact(
+          project_directory / header,
+          header,
+          "public_header",
+          staging_directory,
+          artifacts,
+          error
+        ))
+        {
+          return 2;
+        }
+      }
+    }
     else
     {
       error << "forge: unsupported project type '" << recipe.type << "'\n";
@@ -811,10 +832,14 @@ namespace forge
     {
       archive_arguments.push_back("bin");
     }
-    else
+    else if (recipe.type == "static_library")
     {
       archive_arguments.push_back("include");
       archive_arguments.push_back("lib");
+    }
+    else
+    {
+      archive_arguments.push_back("include");
     }
 
     if (process_runner(archive_arguments, staging_directory, error) != 0)
