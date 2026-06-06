@@ -341,6 +341,7 @@ namespace forge
 
     bool preflight_tag(const std::filesystem::path& project_directory,
                        std::string_view tag,
+                       bool force_tag,
                        const ProcessRunner& process_runner,
                        std::ostream& error)
     {
@@ -378,11 +379,15 @@ namespace forge
 
       if (existing == 0)
       {
-        error << "forge: tag '" << tag << "' already exists locally\n";
-        return false;
+        if (!force_tag)
+        {
+          error
+            << "forge: tag '" << tag << "' already exists locally\n"
+            << "forge: bump the recipe version before publishing another release\n";
+          return false;
+        }
       }
-
-      if (existing != 1)
+      else if (existing != 1)
       {
         error << "forge: could not inspect existing Git tags\n";
         return false;
@@ -395,11 +400,19 @@ namespace forge
                              std::string_view version,
                              const std::optional<std::string>& release_notes,
                              std::string_view tag,
+                             bool force_tag,
                              const ProcessRunner& process_runner,
                              std::ostream& output,
                              std::ostream& error)
     {
-      std::vector<std::string> tag_arguments { "git", "tag", "-a", std::string { tag } };
+      std::vector<std::string> tag_arguments { "git", "tag" };
+
+      if (force_tag)
+      {
+        tag_arguments.push_back("--force");
+      }
+
+      tag_arguments.insert(tag_arguments.end(), { "-a", std::string { tag } });
 
       if (release_notes)
       {
@@ -416,17 +429,28 @@ namespace forge
         return false;
       }
 
-      if (process_runner(
-        { "git", "push", "origin", "refs/tags/" + std::string { tag } },
-        project_directory,
-        error
-      ) != 0)
+      std::vector<std::string> push_arguments { "git", "push" };
+
+      if (force_tag)
+      {
+        push_arguments.push_back("--force");
+      }
+
+      push_arguments.insert(
+        push_arguments.end(),
+        { "origin", "refs/tags/" + std::string { tag } }
+      );
+
+      if (process_runner(push_arguments, project_directory, error) != 0)
       {
         error << "forge: could not push tag '" << tag << "'; the local tag remains\n";
         return false;
       }
 
-      output << "Tagged and pushed " << tag << '\n';
+      output
+        << (force_tag ? "Force-tagged and pushed " : "Tagged and pushed ")
+        << tag
+        << '\n';
       return true;
     }
 
@@ -585,19 +609,19 @@ namespace forge
     return 0;
   }
 
-  int release_github(const std::filesystem::path& project_directory,
-                     const GitHubReleaseOptions& options,
-                     std::ostream& output,
-                     std::ostream& error)
+  int release_git(const std::filesystem::path& project_directory,
+                  const GitReleaseOptions& options,
+                  std::ostream& output,
+                  std::ostream& error)
   {
-    return release_github(project_directory, options, run_process, output, error);
+    return release_git(project_directory, options, run_process, output, error);
   }
 
-  int release_github(const std::filesystem::path& project_directory,
-                     const GitHubReleaseOptions& options,
-                     const ProcessRunner& process_runner,
-                     std::ostream& output,
-                     std::ostream& error)
+  int release_git(const std::filesystem::path& project_directory,
+                  const GitReleaseOptions& options,
+                  const ProcessRunner& process_runner,
+                  std::ostream& output,
+                  std::ostream& error)
   {
     Recipe recipe;
 
@@ -609,7 +633,7 @@ namespace forge
     std::string tag;
 
     if (!expand_tag_format(options.tag_format.value_or("release-<version>"), recipe, tag, error)
-        || !preflight_tag(project_directory, tag, process_runner, error))
+        || !preflight_tag(project_directory, tag, options.force_tag, process_runner, error))
     {
       return 2;
     }
@@ -631,6 +655,7 @@ namespace forge
       recipe.version,
       release_notes,
       tag,
+      options.force_tag,
       process_runner,
       output,
       error

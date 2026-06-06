@@ -487,6 +487,23 @@ namespace
     expect(contains(error.str(), "cannot be empty"), "GitHub release explains an empty tag format");
   }
 
+  void test_release_git_force_rejects_empty_tag_format()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments {
+      std::string_view { "release-git" },
+      std::string_view { "--tag-force=" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "forced Git release rejects an empty tag format"
+    );
+    expect(contains(error.str(), "cannot be empty"), "forced Git release explains an empty tag format");
+  }
+
   void test_box_round_trip()
   {
     TemporaryDirectory directory;
@@ -1026,6 +1043,7 @@ int main()
   test_release_new_project();
   test_release_rejects_empty_tag_format();
   test_release_github_rejects_empty_tag_format();
+  test_release_git_force_rejects_empty_tag_format();
   test_box_round_trip();
   test_static_library_box_round_trip();
   test_header_only_box_round_trip();

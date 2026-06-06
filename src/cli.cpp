@@ -22,6 +22,7 @@ namespace forge::cli
       std::string_view { "build" },
       std::string_view { "run" },
       std::string_view { "release" },
+      std::string_view { "release-git" },
       std::string_view { "release-github" },
     };
 
@@ -33,7 +34,7 @@ namespace forge::cli
         << "  forge <command>\n"
         << "  forge new <name>\n"
         << "  forge box <create|inspect|verify|extract> [path]\n"
-        << "  forge release-github [--tag[=<format>]]\n"
+        << "  forge release-git [--tag[=<format>] | --tag-force[=<format>]]\n"
         << "  forge run [arguments...]\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
@@ -44,7 +45,7 @@ namespace forge::cli
         << "  build     Build the current project\n"
         << "  run       Run the current project\n"
         << "  release   Create a local release artifact\n"
-        << "  release-github  Trigger GitHub release workflows\n";
+        << "  release-git  Create and push a release tag\n";
     }
 
     bool is_command(std::string_view candidate)
@@ -143,13 +144,17 @@ namespace forge::cli
       return run_project(working_directory, arguments.subspan(1), output, error);
     }
 
-    if (arguments.front() == "release-github")
+    if (arguments.front() == "release-git" || arguments.front() == "release-github")
     {
-      GitHubReleaseOptions options;
+      GitReleaseOptions options;
       options.tag_format = "release-<version>";
 
       if (arguments.size() == 2 && arguments[1] == "--tag")
       {
+      }
+      else if (arguments.size() == 2 && arguments[1] == "--tag-force")
+      {
+        options.force_tag = true;
       }
       else if (arguments.size() == 2 && arguments[1].starts_with("--tag="))
       {
@@ -163,13 +168,28 @@ namespace forge::cli
           return 2;
         }
       }
+      else if (arguments.size() == 2 && arguments[1].starts_with("--tag-force="))
+      {
+        options.tag_format = std::string {
+          arguments[1].substr(std::string_view { "--tag-force=" }.size())
+        };
+        options.force_tag = true;
+
+        if (options.tag_format->empty())
+        {
+          error << "forge: tag format cannot be empty\n";
+          return 2;
+        }
+      }
       else if (arguments.size() != 1)
       {
-        error << "forge: usage: forge release-github [--tag[=<format>]]\n";
+        error
+          << "forge: usage: forge release-git "
+          << "[--tag[=<format>] | --tag-force[=<format>]]\n";
         return 2;
       }
 
-      return release_github(working_directory, options, output, error);
+      return release_git(working_directory, options, output, error);
     }
 
     if (arguments.size() != 1)

@@ -340,15 +340,15 @@ overwritten by `forge init`. Generated `.gitignore` files exclude Forge build
 state. Tag creation remains an explicit opt-in action.
 
 Trigger the generated GitHub release workflows by creating and pushing an
-annotated release tag:
+annotated Git release tag:
 
 ```sh
-forge release-github
-forge release-github --tag="<name>-<version>+build.<build-nr>"
+forge release-git
+forge release-git --tag="<name>-<version>+build.<build-nr>"
 ```
 
 `forge release` remains a local-only build and packaging command.
-`forge release-github` does not build locally; it pushes a tag that causes
+`forge release-git` does not build locally; it pushes a tag that causes
 GitHub Actions to build the platform releases. Its default tag is
 `release-<version>`. Custom formats support `<name>`,
 `<version>`, `<build-nr>`, `<curr-date>`, `<target>`, and `<configuration>`.
@@ -360,6 +360,10 @@ GitHub releases require a Git repository with clean tracked and staged state
 and reject invalid or existing local tags. Forge creates an annotated tag from
 the matching release notes and pushes it to `origin`. If pushing fails, the
 local tag remains for inspection or a manual retry.
+
+To deliberately replace an existing local and remote tag, use
+`forge release-git --tag-force`. This rewrites published Git history and should
+normally only be used to repair a broken release.
 
 Generated GitHub workflows react to `release-*` and `v*`. A custom tag format
 must match one of those patterns, or the generated workflow triggers must be

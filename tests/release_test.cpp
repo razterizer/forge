@@ -301,7 +301,7 @@ namespace
     std::vector<std::vector<std::string>> commands;
     std::ostringstream output;
     std::ostringstream error;
-    forge::GitHubReleaseOptions options;
+    forge::GitReleaseOptions options;
     options.tag_format = "<name>-<version>+build.<build-nr>-<configuration>";
 
     const forge::ProcessRunner runner =
@@ -330,7 +330,7 @@ namespace
       };
 
     expect(
-      forge::release_github(directory.path(), options, runner, output, error) == 0,
+      forge::release_git(directory.path(), options, runner, output, error) == 0,
       "GitHub release succeeds"
     );
     expect(commands.size() == 6, "GitHub release preflights, tags, and pushes");
@@ -357,7 +357,7 @@ namespace
     int invocations = 0;
     std::ostringstream output;
     std::ostringstream error;
-    forge::GitHubReleaseOptions options;
+    forge::GitReleaseOptions options;
     options.tag_format = "release-<version>";
 
     const forge::ProcessRunner runner =
@@ -370,7 +370,7 @@ namespace
       };
 
     expect(
-      forge::release_github(directory.path(), options, runner, output, error) == 2,
+      forge::release_git(directory.path(), options, runner, output, error) == 2,
       "GitHub release rejects a dirty tree"
     );
     expect(invocations == 3, "dirty tree is rejected before building");
@@ -384,7 +384,7 @@ namespace
     int invocations = 0;
     std::ostringstream output;
     std::ostringstream error;
-    forge::GitHubReleaseOptions options;
+    forge::GitReleaseOptions options;
     options.tag_format = "release-<version>-<build-nr>";
 
     const forge::ProcessRunner runner =
@@ -397,11 +397,66 @@ namespace
       };
 
     expect(
-      forge::release_github(directory.path(), options, runner, output, error) == 2,
+      forge::release_git(directory.path(), options, runner, output, error) == 2,
       "GitHub release requires a declared build number"
     );
     expect(invocations == 0, "invalid tag format runs no processes");
     expect(contains(error.str(), "no build number"), "tagged release explains missing build number");
+  }
+
+  void test_release_tag_explains_existing_release()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ostringstream output;
+    std::ostringstream error;
+    forge::GitReleaseOptions options;
+    options.tag_format = "release-<version>";
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::release_git(directory.path(), options, runner, output, error) == 2,
+      "GitHub release rejects an existing local tag"
+    );
+    expect(contains(error.str(), "already exists locally"), "GitHub release explains existing tag");
+    expect(contains(error.str(), "bump the recipe version"), "GitHub release suggests a new version");
+  }
+
+  void test_release_tag_force_replaces_existing_release()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+    forge::GitReleaseOptions options;
+    options.tag_format = "release-<version>";
+    options.force_tag = true;
+
+    const forge::ProcessRunner runner =
+      [&commands](const std::vector<std::string>& command,
+                  const std::filesystem::path&,
+                  std::ostream&)
+      {
+        commands.push_back(command);
+        return 0;
+      };
+
+    expect(
+      forge::release_git(directory.path(), options, runner, output, error) == 0,
+      "forced Git release replaces an existing tag"
+    );
+    expect(command_contains(commands[4], "--force"), "forced Git release replaces the local tag");
+    expect(command_contains(commands[5], "--force"), "forced Git release replaces the remote tag");
+    expect(contains(output.str(), "Force-tagged and pushed"), "forced Git release reports replacement");
+    expect(error.str().empty(), "successful forced Git release does not write an error");
   }
 
 } // namespace
@@ -415,6 +470,8 @@ int main()
   test_release_creates_and_pushes_custom_tag();
   test_release_tag_rejects_dirty_tree_before_build();
   test_release_tag_requires_declared_build_number();
+  test_release_tag_explains_existing_release();
+  test_release_tag_force_replaces_existing_release();
 
   return failures == 0 ? 0 : 1;
 }
