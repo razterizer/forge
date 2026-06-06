@@ -1497,6 +1497,147 @@ namespace
 #endif
   }
 
+  void test_bump_updates_recipe_and_release_notes()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"hello\"\n"
+      "version = \"1.3.5\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[build]\n"
+      "number = 21\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n"
+    );
+    write_file(
+      directory.path() / "RELEASE_NOTES.md",
+      "# Release notes\n\n"
+      "## 1.3.5\n\n"
+      "- Previous release.\n"
+    );
+    constexpr std::array arguments {
+      std::string_view { "bump" },
+      std::string_view { "major" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "major bump succeeds"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    const auto notes = read_file(directory.path() / "RELEASE_NOTES.md");
+    expect(contains(recipe, "version = \"2.0.0\""), "major bump resets minor and patch versions");
+    expect(contains(recipe, "number = 22"), "bump increments an existing build number");
+    expect(contains(notes, "## 2.0.0\n\n- Describe changes."), "bump prepares release notes");
+    expect(notes.find("## 2.0.0") < notes.find("## 1.3.5"), "new release notes appear first");
+    expect(contains(output.str(), "Bumped 1.3.5 to 2.0.0"), "bump reports the version change");
+    expect(error.str().empty(), "successful bump does not write an error");
+  }
+
+  void test_bump_creates_release_notes()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"hello\"\n"
+      "version = \"1.3.5\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n"
+    );
+    constexpr std::array arguments {
+      std::string_view { "bump" },
+      std::string_view { "patch" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "patch bump succeeds without existing release notes"
+    );
+    expect(
+      contains(read_file(directory.path() / "forge.recipe.toml"), "version = \"1.3.6\""),
+      "patch bump increments only the patch version"
+    );
+    expect(
+      contains(read_file(directory.path() / "RELEASE_NOTES.md"), "## 1.3.6"),
+      "bump creates missing release notes"
+    );
+  }
+
+  void test_bump_rejects_invalid_or_duplicate_version()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"hello\"\n"
+      "version = \"1.3\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n"
+    );
+    constexpr std::array minor_arguments {
+      std::string_view { "bump" },
+      std::string_view { "minor" }
+    };
+    std::ostringstream invalid_output;
+    std::ostringstream invalid_error;
+
+    expect(
+      forge::cli::run(minor_arguments, directory.path(), invalid_output, invalid_error) == 2,
+      "bump rejects a non-SemVer project version"
+    );
+    expect(contains(invalid_error.str(), "<major>.<minor>.<patch>"), "invalid version is explained");
+
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"hello\"\n"
+      "version = \"1.3.5\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n"
+    );
+    write_file(directory.path() / "RELEASE_NOTES.md", "# Release notes\n\n## 1.4.0\n");
+    const auto original_recipe = read_file(directory.path() / "forge.recipe.toml");
+    std::ostringstream duplicate_output;
+    std::ostringstream duplicate_error;
+
+    expect(
+      forge::cli::run(minor_arguments, directory.path(), duplicate_output, duplicate_error) == 2,
+      "bump rejects duplicate release notes"
+    );
+    expect(
+      read_file(directory.path() / "forge.recipe.toml") == original_recipe,
+      "duplicate release notes leave the recipe unchanged"
+    );
+    expect(contains(duplicate_error.str(), "already exist"), "duplicate release notes are explained");
+  }
+
+  void test_bump_rejects_invalid_component()
+  {
+    constexpr std::array arguments {
+      std::string_view { "bump" },
+      std::string_view { "build" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(forge::cli::run(arguments, output, error) == 2, "bump rejects an invalid component");
+    expect(contains(error.str(), "forge bump <major|minor|patch>"), "bump prints its usage");
+  }
+
   void test_unknown_command()
   {
     constexpr std::array arguments { std::string_view { "confuse" } };
@@ -1542,6 +1683,10 @@ int main()
   test_run_with_local_box_dependency();
   test_run_with_downloadable_box_dependency();
   test_run_and_release_with_shared_dependency();
+  test_bump_updates_recipe_and_release_notes();
+  test_bump_creates_release_notes();
+  test_bump_rejects_invalid_or_duplicate_version();
+  test_bump_rejects_invalid_component();
   test_unknown_command();
 
   return failures == 0 ? 0 : 1;

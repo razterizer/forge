@@ -28,6 +28,11 @@ files = ["RELEASE_NOTES.md", "assets", "examples"]
 Forge preserves project-relative paths and rejects paths outside the project
 and symbolic links.
 
+`forge bump major|minor|patch` prepares the next release by updating the
+recipe's semantic version and adding a matching topmost section to
+`RELEASE_NOTES.md`. Existing build numbers are incremented. Bumping does not
+build, tag, or publish anything.
+
 `forge release` extracts the recipe version's `## <version>` section from
 `RELEASE_NOTES.md`. The focused notes are included in the archive and written
 to `.forge/release/RELEASE_NOTES.md` for GitHub release publication. A present

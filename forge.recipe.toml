@@ -7,7 +7,7 @@ type = "executable"
 cpp_std = 20
 
 [sources]
-paths = ["src/box.cpp", "src/build.cpp", "src/clean.cpp", "src/cli.cpp", "src/github.cpp", "src/init.cpp", "src/main.cpp", "src/new.cpp", "src/process.cpp", "src/recipe.cpp", "src/release.cpp", "src/run.cpp", "src/sha256.cpp", "src/zip.cpp"]
+paths = ["src/box.cpp", "src/bump.cpp", "src/build.cpp", "src/clean.cpp", "src/cli.cpp", "src/github.cpp", "src/init.cpp", "src/main.cpp", "src/new.cpp", "src/process.cpp", "src/recipe.cpp", "src/release.cpp", "src/run.cpp", "src/sha256.cpp", "src/zip.cpp"]
 
 [release]
 files = ["examples"]

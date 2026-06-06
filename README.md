@@ -398,6 +398,19 @@ the recipe version. It packages only that section and writes a copy to
 - Initial release.
 ```
 
+Prepare the next version and its release-notes section:
+
+```sh
+forge bump major
+forge bump minor
+forge bump patch
+```
+
+`forge bump` updates the recipe's `major.minor.patch` version, resets lower
+components as appropriate, and adds a new topmost release-notes section. When
+the recipe has `[build].number`, Forge increments it too. The command only
+prepares project files; it does not build, tag, or publish the release.
+
 Additional release files and directories can be declared in the recipe:
 
 ```toml

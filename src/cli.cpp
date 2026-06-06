@@ -1,5 +1,6 @@
 #include "cli.h"
 #include "box.h"
+#include "bump.h"
 #include "build.h"
 #include "clean.h"
 #include "init.h"
@@ -21,6 +22,7 @@ namespace forge::cli
       std::string_view { "init" },
       std::string_view { "new" },
       std::string_view { "build" },
+      std::string_view { "bump" },
       std::string_view { "clean" },
       std::string_view { "run" },
       std::string_view { "update" },
@@ -39,6 +41,7 @@ namespace forge::cli
         << "  forge new <name>\n"
         << "  forge box <create|inspect|verify|extract|publish> [path]\n"
         << "  forge update [dependency]\n"
+        << "  forge bump <major|minor|patch>\n"
         << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n"
         << "  forge run [arguments...]\n"
         << "  forge --help\n"
@@ -48,6 +51,7 @@ namespace forge::cli
         << "  init            Adopt the current project\n"
         << "  new             Create a new project\n"
         << "  build           Build the current project\n"
+        << "  bump            Bump the project version and prepare release notes\n"
         << "  clean           Remove generated project state\n"
         << "  run             Run the current project\n"
         << "  update          Refresh locked GitHub dependencies\n"
@@ -155,6 +159,18 @@ namespace forge::cli
     if (arguments.front() == "run")
     {
       return run_project(working_directory, arguments.subspan(1), output, error);
+    }
+
+    if (arguments.front() == "bump")
+    {
+      if (arguments.size() != 2
+          || (arguments[1] != "major" && arguments[1] != "minor" && arguments[1] != "patch"))
+      {
+        error << "forge: usage: forge bump <major|minor|patch>\n";
+        return 2;
+      }
+
+      return bump_project(working_directory, arguments[1], output, error);
     }
 
     if (arguments.front() == "update")
