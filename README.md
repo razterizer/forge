@@ -140,8 +140,7 @@ Forge generates and compiles one private validation translation unit per public
 header. These temporary sources remain under `.forge/generated/`; header-only
 boxes contain only the declared headers.
 
-Executable projects may use direct local static-library and header-only
-dependencies:
+Projects may use local static-library and header-only dependencies:
 
 ```toml
 [dependencies]
@@ -151,7 +150,8 @@ format = { path = "../format" }
 
 Forge builds each dependency into a verified box, installs it under
 `.forge/deps/<name>/`, adds its public include directory, and links static
-libraries when present. Transitive dependencies are not supported yet.
+libraries when present. Dependencies are resolved recursively, shared
+dependencies are built once per command, and dependency cycles are rejected.
 
 ### Local dependency example
 
@@ -237,6 +237,16 @@ Run the application from its project directory:
 ```sh
 cd workspace/calculator
 /path/to/forge run
+```
+
+Libraries declare their own dependencies using the same syntax. Dependency
+paths are relative to the project that declares them, and Forge recursively
+installs the complete dependency closure for the final application:
+
+```toml
+# answer/forge.recipe.toml
+[dependencies]
+doubled = { path = "../doubled" }
 ```
 
 Build and run a Forge project:

@@ -308,6 +308,77 @@ namespace
     expect(contains(error.str(), "does not match"), "build explains dependency name mismatch");
   }
 
+  void test_build_rejects_dependency_cycle()
+  {
+    TemporaryDirectory directory;
+    const auto application = directory.path() / "application";
+    const auto first = directory.path() / "first";
+    const auto second = directory.path() / "second";
+    std::filesystem::create_directories(application);
+    std::filesystem::create_directories(first / "include/first");
+    std::filesystem::create_directories(second / "include/second");
+    std::ofstream application_recipe { application / "forge.recipe.toml" };
+    application_recipe
+      << "[project]\n"
+      << "name = \"application\"\n"
+      << "version = \"1.0.0\"\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = [\"main.cpp\"]\n\n"
+      << "[dependencies]\n"
+      << "first = { path = \"../first\" }\n";
+    application_recipe.close();
+    std::ofstream { application / "main.cpp" } << "int main() {}\n";
+    std::ofstream first_recipe { first / "forge.recipe.toml" };
+    first_recipe
+      << "[project]\n"
+      << "name = \"first\"\n"
+      << "version = \"1.0.0\"\n"
+      << "type = \"header_only\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = []\n"
+      << "public_headers = [\"include/first/first.h\"]\n\n"
+      << "[dependencies]\n"
+      << "second = { path = \"../second\" }\n";
+    first_recipe.close();
+    std::ofstream { first / "include/first/first.h" } << "#pragma once\n";
+    std::ofstream second_recipe { second / "forge.recipe.toml" };
+    second_recipe
+      << "[project]\n"
+      << "name = \"second\"\n"
+      << "version = \"1.0.0\"\n"
+      << "type = \"header_only\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = []\n"
+      << "public_headers = [\"include/second/second.h\"]\n\n"
+      << "[dependencies]\n"
+      << "first = { path = \"../first\" }\n";
+    second_recipe.close();
+    std::ofstream { second / "include/second/second.h" } << "#pragma once\n";
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::build_project(application, runner, output, error) == 2,
+      "build rejects a dependency cycle"
+    );
+    expect(invocations == 0, "dependency cycles do not invoke external tools");
+    expect(contains(error.str(), "cycle detected"), "build explains the dependency cycle");
+  }
+
 } // namespace
 
 int main()
@@ -318,6 +389,7 @@ int main()
   test_build_stops_after_configuration_failure();
   test_build_rejects_missing_source_without_running_process();
   test_build_rejects_dependency_name_mismatch();
+  test_build_rejects_dependency_cycle();
 
   return failures == 0 ? 0 : 1;
 }

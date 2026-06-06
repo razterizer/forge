@@ -83,7 +83,7 @@
     },
     "dependencies": {
       "type": "object",
-      "description": "Direct local static-library and header-only dependencies.",
+      "description": "Local static-library and header-only dependencies.",
       "propertyNames": {
         "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
       },
@@ -152,7 +152,6 @@
       },
       "then": {
         "properties": {
-          "dependencies": false,
           "sources": {
             "type": "object",
             "required": [
@@ -190,7 +189,6 @@
       },
       "then": {
         "properties": {
-          "dependencies": false,
           "sources": {
             "type": "object",
             "required": [

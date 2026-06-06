@@ -40,9 +40,10 @@ Dependency resolution should prefer a compatible cached box. When no matching
 box exists, Forge fetches or uses source, builds it, creates a box, and caches
 that box.
 
-The first dependency-resolution slice supports direct local path dependencies
-for executable projects. Dependencies must currently be static-library or
-header-only projects without dependencies of their own.
+Local path dependencies may be declared by executable, static-library, and
+header-only projects. Forge recursively builds static-library and header-only
+dependencies, rejects cycles and conflicting project names, and links the
+transitive static-library closure in dependency order.
 
 ## Initial roadmap
 

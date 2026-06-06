@@ -54,6 +54,20 @@ namespace
     return text.find(fragment) != std::string::npos;
   }
 
+  std::size_t count_occurrences(const std::string& text, std::string_view fragment)
+  {
+    std::size_t count = 0;
+    std::size_t position = 0;
+
+    while ((position = text.find(fragment, position)) != std::string::npos)
+    {
+      ++count;
+      position += fragment.size();
+    }
+
+    return count;
+  }
+
   std::string read_file(const std::filesystem::path& path)
   {
     std::ifstream file { path };
@@ -654,11 +668,12 @@ namespace
   void test_run_with_local_dependencies()
   {
     TemporaryDirectory directory;
-    const auto static_library = directory.path() / "answer";
+    const auto answer = directory.path() / "answer";
     const auto header_only = directory.path() / "doubled";
+    const auto calculator = directory.path() / "calculator";
     const auto application = directory.path() / "app";
     write_file(
-      static_library / "forge.recipe.toml",
+      answer / "forge.recipe.toml",
       "[project]\n"
       "name = \"answer\"\n"
       "version = \"1.0.0\"\n"
@@ -668,9 +683,9 @@ namespace
       "paths = [\"src/answer.cpp\"]\n"
       "public_headers = [\"include/answer/answer.h\"]\n"
     );
-    write_file(static_library / "include/answer/answer.h", "int answer();\n");
+    write_file(answer / "include/answer/answer.h", "int answer();\n");
     write_file(
-      static_library / "src/answer.cpp",
+      answer / "src/answer.cpp",
       "#include <answer/answer.h>\n"
       "int answer() { return 42; }\n"
     );
@@ -690,6 +705,28 @@ namespace
       "inline int doubled(int value) { return value * 2; }\n"
     );
     write_file(
+      calculator / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"calculator\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"static_library\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"src/calculator.cpp\"]\n"
+      "public_headers = [\"include/calculator/calculator.h\"]\n\n"
+      "[dependencies]\n"
+      "answer = { path = \"../answer\" }\n"
+      "doubled = { path = \"../doubled\" }\n"
+    );
+    write_file(calculator / "include/calculator/calculator.h", "int calculate();\n");
+    write_file(
+      calculator / "src/calculator.cpp",
+      "#include <answer/answer.h>\n"
+      "#include <calculator/calculator.h>\n"
+      "#include <doubled/doubled.h>\n"
+      "int calculate() { return doubled(answer()); }\n"
+    );
+    write_file(
       application / "forge.recipe.toml",
       "[project]\n"
       "name = \"app\"\n"
@@ -700,13 +737,12 @@ namespace
       "paths = [\"main.cpp\"]\n\n"
       "[dependencies]\n"
       "answer = { path = \"../answer\" }\n"
-      "doubled = { path = \"../doubled\" }\n"
+      "calculator = { path = \"../calculator\" }\n"
     );
     write_file(
       application / "main.cpp",
-      "#include <answer/answer.h>\n"
-      "#include <doubled/doubled.h>\n"
-      "int main() { return doubled(answer()) == 84 ? 0 : 1; }\n"
+      "#include <calculator/calculator.h>\n"
+      "int main() { return calculate() == 84 ? 0 : 1; }\n"
     );
     constexpr std::array run_arguments { std::string_view { "run" } };
     std::ostringstream output;
@@ -718,15 +754,27 @@ namespace
     );
     expect(
       std::filesystem::exists(application / ".forge/deps/answer/lib"),
-      "build installs a static-library dependency box"
+      "build installs a shared transitive static-library dependency box"
     );
     expect(
       std::filesystem::exists(application / ".forge/deps/doubled/include/doubled/doubled.h"),
-      "build installs a header-only dependency box"
+      "build installs a transitive header-only dependency box"
+    );
+    expect(
+      std::filesystem::exists(application / ".forge/deps/calculator/lib"),
+      "build installs a direct static-library dependency box"
     );
     const auto generated = read_file(application / ".forge/generated/CMakeLists.txt");
     expect(contains(generated, "forge_dependency_0"), "build imports a static-library dependency");
     expect(contains(generated, ".forge/deps/doubled/include"), "build adds dependency include paths");
+    expect(
+      generated.find(".forge/deps/calculator/lib") < generated.find(".forge/deps/answer/lib"),
+      "build links a static library before its transitive dependency"
+    );
+    expect(
+      count_occurrences(output.str(), "Resolving dependency answer") == 1,
+      "build resolves a shared dependency once"
+    );
     expect(contains(output.str(), "Running app"), "run launches the linked executable");
     expect(error.str().empty(), "successful dependency build does not write an error");
   }

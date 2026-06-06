@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -22,6 +23,74 @@ namespace forge
       std::string name;
       std::filesystem::path root;
       std::optional<std::filesystem::path> library;
+    };
+
+    struct DependencyNode
+    {
+      std::filesystem::path directory;
+      Recipe recipe;
+      std::filesystem::path box;
+    };
+
+    struct DependencySession
+    {
+      std::map<std::filesystem::path, DependencyNode> nodes;
+      std::map<std::string, std::filesystem::path> names;
+      std::set<std::filesystem::path> active_projects;
+    };
+
+    thread_local DependencySession* dependency_session = nullptr;
+
+    class DependencySessionScope
+    {
+    public:
+      DependencySessionScope()
+      {
+        if (dependency_session == nullptr)
+        {
+          dependency_session = &owned_session_;
+          owns_session_ = true;
+        }
+      }
+
+      ~DependencySessionScope()
+      {
+        if (owns_session_)
+        {
+          dependency_session = nullptr;
+        }
+      }
+
+    private:
+      DependencySession owned_session_;
+      bool owns_session_ = false;
+    };
+
+    class ActiveProjectScope
+    {
+    public:
+      explicit ActiveProjectScope(std::filesystem::path project)
+        : project_ { std::move(project) }
+      {
+        inserted_ = dependency_session->active_projects.insert(project_).second;
+      }
+
+      ~ActiveProjectScope()
+      {
+        if (inserted_)
+        {
+          dependency_session->active_projects.erase(project_);
+        }
+      }
+
+      bool inserted() const
+      {
+        return inserted_;
+      }
+
+    private:
+      std::filesystem::path project_;
+      bool inserted_ = false;
     };
 
     std::string escape_cmake(std::string_view value)
@@ -222,57 +291,49 @@ namespace forge
       return result;
     }
 
-    bool resolve_dependencies(const std::filesystem::path& project_directory,
-                              const Recipe& recipe,
-                              const ProcessRunner& process_runner,
-                              std::vector<ResolvedDependency>& resolved,
-                              std::ostream& output,
+    bool read_dependency_node(const std::filesystem::path& parent_directory,
+                              const Dependency& dependency,
+                              DependencyNode*& node,
                               std::ostream& error)
     {
-      const auto dependencies_directory = project_directory / ".forge" / "deps";
-      std::set<std::filesystem::path> dependency_paths;
-      std::set<std::string> dependency_names;
-
-      for (const auto& dependency : recipe.dependencies)
+      if (!is_safe_dependency_name(dependency.name))
       {
-        if (!is_safe_dependency_name(dependency.name))
-        {
-          error << "forge: dependency names must be safe path components\n";
-          return false;
-        }
+        error << "forge: dependency names must be safe path components\n";
+        return false;
+      }
 
-        if (!dependency_names.insert(dependency.name).second)
-        {
-          error << "forge: duplicate dependency name '" << dependency.name << "'\n";
-          return false;
-        }
+      std::error_code filesystem_error;
+      const auto directory =
+        std::filesystem::weakly_canonical(parent_directory / dependency.path, filesystem_error);
 
-        std::error_code filesystem_error;
-        const auto dependency_directory =
-          std::filesystem::weakly_canonical(project_directory / dependency.path, filesystem_error);
+      if (filesystem_error || !std::filesystem::is_directory(directory))
+      {
+        error << "forge: dependency '" << dependency.name << "' path does not exist\n";
+        return false;
+      }
 
-        if (filesystem_error || !std::filesystem::is_directory(dependency_directory))
-        {
-          error << "forge: dependency '" << dependency.name << "' path does not exist\n";
-          return false;
-        }
+      if (dependency_session->active_projects.contains(directory))
+      {
+        error << "forge: dependency cycle detected at '" << dependency.name << "'\n";
+        return false;
+      }
 
-        const auto canonical_project = std::filesystem::weakly_canonical(
-          project_directory,
-          filesystem_error
-        );
+      const auto existing_name = dependency_session->names.find(dependency.name);
 
-        if (filesystem_error
-            || dependency_directory == canonical_project
-            || !dependency_paths.insert(dependency_directory).second)
-        {
-          error << "forge: dependency paths must be unique and cannot reference the project itself\n";
-          return false;
-        }
+      if (existing_name != dependency_session->names.end() && existing_name->second != directory)
+      {
+        error << "forge: dependency name '" << dependency.name
+              << "' refers to multiple project paths\n";
+        return false;
+      }
 
+      auto existing_node = dependency_session->nodes.find(directory);
+
+      if (existing_node == dependency_session->nodes.end())
+      {
         Recipe dependency_recipe;
 
-        if (!read_recipe(dependency_directory / "forge.recipe.toml", dependency_recipe, error))
+        if (!read_recipe(directory / "forge.recipe.toml", dependency_recipe, error))
         {
           return false;
         }
@@ -291,68 +352,195 @@ namespace forge
           return false;
         }
 
-        if (!dependency_recipe.dependencies.empty())
+        dependency_session->names.emplace(dependency.name, directory);
+        existing_node = dependency_session->nodes.emplace(
+          directory,
+          DependencyNode
+            {
+              directory,
+              std::move(dependency_recipe),
+              {}
+            }
+        ).first;
+      }
+      else if (existing_node->second.recipe.name != dependency.name)
+      {
+        error << "forge: dependency name '" << dependency.name << "' does not match recipe name '"
+              << existing_node->second.recipe.name << "'\n";
+        return false;
+      }
+
+      node = &existing_node->second;
+      return true;
+    }
+
+    bool ensure_dependency_box(DependencyNode& node,
+                               const ProcessRunner& process_runner,
+                               std::ostream& output,
+                               std::ostream& error)
+    {
+      if (!node.box.empty())
+      {
+        return true;
+      }
+
+      output << "Resolving dependency " << node.recipe.name << '\n';
+
+      if (create_box(node.directory, process_runner, output, error) != 0)
+      {
+        return false;
+      }
+
+      node.box = find_dependency_box(node.directory, node.recipe, error);
+      return !node.box.empty();
+    }
+
+    bool collect_dependency(const std::filesystem::path& parent_directory,
+                            const Dependency& dependency,
+                            const ProcessRunner& process_runner,
+                            std::set<std::filesystem::path>& collected,
+                            std::vector<DependencyNode*>& ordered,
+                            std::ostream& output,
+                            std::ostream& error)
+    {
+      DependencyNode* node = nullptr;
+
+      if (!read_dependency_node(parent_directory, dependency, node, error)
+          || !ensure_dependency_box(*node, process_runner, output, error))
+      {
+        return false;
+      }
+
+      if (!collected.insert(node->directory).second)
+      {
+        return true;
+      }
+
+      for (const auto& child : node->recipe.dependencies)
+      {
+        if (!collect_dependency(
+          node->directory,
+          child,
+          process_runner,
+          collected,
+          ordered,
+          output,
+          error
+        ))
         {
-          error << "forge: transitive dependencies are not supported yet\n";
           return false;
         }
+      }
 
-        output << "Resolving dependency " << dependency.name << '\n';
+      ordered.push_back(node);
+      return true;
+    }
 
-        if (create_box(dependency_directory, process_runner, output, error) != 0)
+    bool install_dependency(const std::filesystem::path& dependencies_directory,
+                            const DependencyNode& node,
+                            const ProcessRunner& process_runner,
+                            ResolvedDependency& resolved,
+                            std::ostream& output,
+                            std::ostream& error)
+    {
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(dependencies_directory, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not create dependency directory\n";
+        return false;
+      }
+
+      const auto extracted = dependencies_directory / node.box.stem();
+      const auto destination = dependencies_directory / node.recipe.name;
+      std::filesystem::remove_all(extracted, filesystem_error);
+      filesystem_error.clear();
+      std::filesystem::remove_all(destination, filesystem_error);
+      filesystem_error.clear();
+
+      if (extract_box(node.box, dependencies_directory, process_runner, output, error) != 0)
+      {
+        return false;
+      }
+
+      std::filesystem::rename(extracted, destination, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not install dependency '" << node.recipe.name << "'\n";
+        return false;
+      }
+
+      resolved =
         {
-          return false;
-        }
+          node.recipe.name,
+          destination,
+          std::nullopt
+        };
 
-        const auto box = find_dependency_box(dependency_directory, dependency_recipe, error);
-
-        if (box.empty())
-        {
-          return false;
-        }
-
-        std::filesystem::create_directories(dependencies_directory, filesystem_error);
-
-        if (filesystem_error)
-        {
-          error << "forge: could not create dependency directory\n";
-          return false;
-        }
-
-        const auto extracted = dependencies_directory / box.stem();
-        const auto destination = dependencies_directory / dependency.name;
-        std::filesystem::remove_all(extracted, filesystem_error);
-        filesystem_error.clear();
-        std::filesystem::remove_all(destination, filesystem_error);
-        filesystem_error.clear();
-
-        if (extract_box(box, dependencies_directory, process_runner, output, error) != 0)
-        {
-          return false;
-        }
-
-        std::filesystem::rename(extracted, destination, filesystem_error);
-
-        if (filesystem_error)
-        {
-          error << "forge: could not install dependency '" << dependency.name << "'\n";
-          return false;
-        }
-
-        ResolvedDependency resolved_dependency
-          {
-            dependency.name,
-            destination,
-            std::nullopt
-          };
-
-        if (dependency_recipe.type == "static_library")
-        {
+      if (node.recipe.type == "static_library")
+      {
 #ifdef _WIN32
-          resolved_dependency.library = destination / "lib" / (dependency.name + ".lib");
+        resolved.library = destination / "lib" / (node.recipe.name + ".lib");
 #else
-          resolved_dependency.library = destination / "lib" / ("lib" + dependency.name + ".a");
+        resolved.library = destination / "lib" / ("lib" + node.recipe.name + ".a");
 #endif
+      }
+
+      return true;
+    }
+
+    bool resolve_dependencies(const std::filesystem::path& project_directory,
+                              const Recipe& recipe,
+                              const ProcessRunner& process_runner,
+                              std::vector<ResolvedDependency>& resolved,
+                              std::ostream& output,
+                              std::ostream& error)
+    {
+      const auto dependencies_directory = project_directory / ".forge" / "deps";
+      std::set<std::string> direct_names;
+      std::set<std::filesystem::path> collected;
+      std::vector<DependencyNode*> ordered;
+
+      for (const auto& dependency : recipe.dependencies)
+      {
+        if (!direct_names.insert(dependency.name).second)
+        {
+          error << "forge: duplicate dependency name '" << dependency.name << "'\n";
+          return false;
+        }
+
+        if (!collect_dependency(
+          project_directory,
+          dependency,
+          process_runner,
+          collected,
+          ordered,
+          output,
+          error
+        ))
+        {
+          return false;
+        }
+      }
+
+      std::reverse(ordered.begin(), ordered.end());
+
+      for (const auto* node : ordered)
+      {
+        ResolvedDependency resolved_dependency;
+
+        if (!install_dependency(
+          dependencies_directory,
+          *node,
+          process_runner,
+          resolved_dependency,
+          output,
+          error
+        ))
+        {
+          return false;
         }
 
         resolved.push_back(std::move(resolved_dependency));
@@ -375,6 +563,25 @@ namespace forge
                     std::ostream& output,
                     std::ostream& error)
   {
+    DependencySessionScope session_scope;
+    std::error_code canonical_error;
+    const auto canonical_project =
+      std::filesystem::weakly_canonical(project_directory, canonical_error);
+
+    if (canonical_error)
+    {
+      error << "forge: could not resolve project directory\n";
+      return 2;
+    }
+
+    ActiveProjectScope active_project { canonical_project };
+
+    if (!active_project.inserted())
+    {
+      error << "forge: dependency cycle detected\n";
+      return 2;
+    }
+
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
@@ -421,13 +628,6 @@ namespace forge
     if (recipe.type == "header_only" && !recipe.sources.empty())
     {
       error << "forge: header-only projects cannot declare source files\n";
-      return 2;
-    }
-
-    if (recipe.type != "executable" && !recipe.dependencies.empty())
-    {
-      error << "forge: only executable projects can declare dependencies until transitive "
-               "dependencies are supported\n";
       return 2;
     }
 

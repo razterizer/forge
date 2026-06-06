@@ -22,8 +22,8 @@ rules:
 - Header-only projects require public headers and an empty source-path array.
 - Public headers must remain under `include/`.
 - Build numbers must be non-negative.
-- Executables may declare direct local dependencies using name and path inline
-  tables.
+- Projects may declare local static-library and header-only dependencies using
+  name and path inline tables.
 
 ## Taplo and VS Code
 
