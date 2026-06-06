@@ -5,6 +5,7 @@
 #include "sha256.h"
 #include "zip.h"
 
+#include <algorithm>
 #include <array>
 #include <charconv>
 #include <fstream>
