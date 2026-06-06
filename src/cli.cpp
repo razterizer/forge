@@ -36,7 +36,7 @@ namespace forge::cli
         << "  forge <command>\n"
         << "  forge new <name>\n"
         << "  forge box <create|inspect|verify|extract> [path]\n"
-        << "  forge release-git [--tag[=<format>] | --tag-force[=<format>]]\n"
+        << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n"
         << "  forge run [arguments...]\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
@@ -152,10 +152,7 @@ namespace forge::cli
       GitReleaseOptions options;
       options.tag_format = "release-<version>";
 
-      if (arguments.size() == 2 && arguments[1] == "--tag")
-      {
-      }
-      else if (arguments.size() == 2 && arguments[1] == "--tag-force")
+      if (arguments.size() == 2 && arguments[1] == "--tag-force")
       {
         options.force_tag = true;
       }
@@ -188,7 +185,7 @@ namespace forge::cli
       {
         error
           << "forge: usage: forge release-git "
-          << "[--tag[=<format>] | --tag-force[=<format>]]\n";
+          << "[--tag=<format> | --tag-force[=<format>]]\n";
         return 2;
       }
 
