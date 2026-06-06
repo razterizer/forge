@@ -1,15 +1,25 @@
 # CBox format version 1
 
-A `.cbox` is a ZIP archive containing one reusable C++ artifact for one target.
+A `.cbox` is a ZIP archive containing one reusable C++ package for one target.
 It is distinct from an application release archive.
 
-The first implemented profile supports executable artifacts:
+The implemented profiles support executable and static-library packages:
 
 ```text
 hello-0.1.0-macos-arm64.cbox
 ├── cbox.toml
 └── bin/
     └── hello
+```
+
+```text
+hello-1.0.0-macos-arm64.cbox
+├── cbox.toml
+├── include/
+│   └── hello/
+│       └── hello.h
+└── lib/
+    └── libhello.a
 ```
 
 When a project specifies a build number, Forge preserves it as SemVer build
@@ -36,11 +46,15 @@ type = "executable"
 os = "macos"
 arch = "arm64"
 
-[artifact]
+[[artifact]]
 path = "bin/hello"
 kind = "executable"
 sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 ```
+
+Each `[[artifact]]` entry declares one packaged file. Static-library boxes
+contain one `static_library` artifact under `lib/` and one or more
+`public_header` artifacts under `include/`.
 
 The manifest determines package identity. The archive filename is only a
 human-readable label.
@@ -63,8 +77,10 @@ individual compiled artifacts.
 - Archive paths use `/` separators.
 - Absolute paths and parent traversal are forbidden.
 - `bin/` contains executable artifacts.
-- Future profiles may add `include/`, `lib/`, `runtime/`, and `licenses/`.
-- Format 1 boxes contain exactly `cbox.toml` and the declared artifact.
+- `include/` contains public headers.
+- `lib/` contains static-library artifacts.
+- Future profiles may add `runtime/` and `licenses/`.
+- Format 1 boxes contain exactly `cbox.toml` and the declared artifacts.
 
 ## Verification
 
@@ -72,14 +88,14 @@ individual compiled artifacts.
 
 - The manifest uses supported format version 1 and contains every required
   field.
-- The artifact path is relative, remains inside the archive, and starts with
-  `bin/`.
+- Artifact paths are relative, remain inside the archive, and use the directory
+  required by their artifact kind.
 - The archive contains no undeclared files, symbolic links, or unsupported
   entries.
-- The artifact matches its lowercase SHA-256 checksum.
+- Every artifact matches its lowercase SHA-256 checksum.
 
 Forge validates the ZIP directory before extraction. Extraction then copies only
-the validated manifest and artifact into the destination.
+the validated manifest and artifacts into the destination.
 
 ## Compatibility
 

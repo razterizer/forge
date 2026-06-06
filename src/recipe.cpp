@@ -196,6 +196,10 @@ namespace forge
       {
         valid = parse_sources(value, recipe.sources);
       }
+      else if (section == "sources" && key == "public_headers")
+      {
+        valid = parse_sources(value, recipe.public_headers);
+      }
 
       if (!valid)
       {

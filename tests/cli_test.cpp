@@ -467,6 +467,100 @@ namespace
     );
   }
 
+  void test_static_library_box_round_trip()
+  {
+    TemporaryDirectory directory;
+    const auto project_directory = directory.path() / "hello-library";
+    write_file(
+      project_directory / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"hello\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"static_library\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"src/hello.cpp\"]\n"
+      "public_headers = [\"include/hello/hello.h\"]\n"
+    );
+    write_file(project_directory / "include/hello/hello.h", "int hello();\n");
+    write_file(
+      project_directory / "src/hello.cpp",
+      "#include <hello/hello.h>\n"
+      "int hello() { return 42; }\n"
+    );
+    constexpr std::array create_arguments {
+      std::string_view { "box" },
+      std::string_view { "create" }
+    };
+    std::ostringstream create_output;
+    std::ostringstream create_error;
+
+    expect(
+      forge::cli::run(create_arguments, project_directory, create_output, create_error) == 0,
+      "box create succeeds for a static library"
+    );
+
+    std::filesystem::path box_path;
+
+    for (const auto& entry : std::filesystem::directory_iterator { project_directory / ".forge/boxes" })
+    {
+      if (entry.path().extension() == ".cbox")
+      {
+        box_path = entry.path();
+      }
+    }
+
+    expect(!box_path.empty(), "static library box create produces a cbox archive");
+    const auto box_path_string = box_path.string();
+    const std::array inspect_arguments {
+      std::string_view { "box" },
+      std::string_view { "inspect" },
+      std::string_view { box_path_string }
+    };
+    std::ostringstream inspect_output;
+    std::ostringstream inspect_error;
+
+    expect(
+      forge::cli::run(inspect_arguments, project_directory, inspect_output, inspect_error) == 0,
+      "static library box inspect succeeds"
+    );
+    expect(contains(inspect_output.str(), "type = \"static_library\""), "manifest identifies a static library");
+    expect(contains(inspect_output.str(), "path = \"include/hello/hello.h\""), "manifest declares the public header");
+#ifdef _WIN32
+    expect(contains(inspect_output.str(), "path = \"lib/hello.lib\""), "manifest declares the static library");
+#else
+    expect(contains(inspect_output.str(), "path = \"lib/libhello.a\""), "manifest declares the static library");
+#endif
+
+    const std::array extract_arguments {
+      std::string_view { "box" },
+      std::string_view { "extract" },
+      std::string_view { box_path_string }
+    };
+    std::ostringstream extract_output;
+    std::ostringstream extract_error;
+
+    expect(
+      forge::cli::run(extract_arguments, directory.path(), extract_output, extract_error) == 0,
+      "static library box extract succeeds"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / box_path.stem() / "include/hello/hello.h"),
+      "static library box extracts its public header"
+    );
+#ifdef _WIN32
+    expect(
+      std::filesystem::exists(directory.path() / box_path.stem() / "lib/hello.lib"),
+      "static library box extracts its library"
+    );
+#else
+    expect(
+      std::filesystem::exists(directory.path() / box_path.stem() / "lib/libhello.a"),
+      "static library box extracts its library"
+    );
+#endif
+  }
+
   void test_unknown_command()
   {
     constexpr std::array arguments { std::string_view { "confuse" } };
@@ -496,6 +590,7 @@ int main()
   test_run_new_project();
   test_release_new_project();
   test_box_round_trip();
+  test_static_library_box_round_trip();
   test_unknown_command();
 
   return failures == 0 ? 0 : 1;

@@ -79,6 +79,25 @@ namespace
     source << "int main() {}\n";
   }
 
+  void write_library_project(const std::filesystem::path& directory)
+  {
+    std::filesystem::create_directories(directory / "src");
+    std::filesystem::create_directories(directory / "include/hello");
+    std::ofstream recipe { directory / "forge.recipe.toml" };
+    recipe
+      << "[project]\n"
+      << "name = \"hello\"\n"
+      << "version = \"0.1.0\"\n"
+      << "type = \"static_library\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = [\"src/hello.cpp\"]\n"
+      << "public_headers = [\"include/hello/hello.h\"]\n";
+
+    std::ofstream { directory / "include/hello/hello.h" } << "int hello();\n";
+    std::ofstream { directory / "src/hello.cpp" } << "#include <hello/hello.h>\nint hello() { return 42; }\n";
+  }
+
   void test_build_generates_cmake_and_commands()
   {
     TemporaryDirectory directory;
@@ -136,6 +155,33 @@ namespace
     expect(contains(error.str(), "configuration failed"), "build explains configuration failure");
   }
 
+  void test_build_generates_static_library()
+  {
+    TemporaryDirectory directory;
+    write_library_project(directory.path());
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 0,
+      "static library build succeeds"
+    );
+
+    const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
+    expect(contains(generated, "add_library(forge_project STATIC"), "build generates a static library target");
+    expect(contains(generated, "include/hello/hello.h"), "build includes public headers");
+    expect(contains(generated, "target_include_directories"), "build exposes the include directory");
+    expect(contains(output.str(), "libhello.a"), "build reports the static library artifact");
+  }
+
   void test_build_rejects_missing_source_without_running_process()
   {
     TemporaryDirectory directory;
@@ -167,6 +213,7 @@ namespace
 int main()
 {
   test_build_generates_cmake_and_commands();
+  test_build_generates_static_library();
   test_build_stops_after_configuration_failure();
   test_build_rejects_missing_source_without_running_process();
 

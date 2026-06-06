@@ -104,9 +104,23 @@ cd path/to/project
 /path/to/forge/build/dev/forge build
 ```
 
-The first build implementation supports executable projects with exact source
-paths. Forge generates CMake infrastructure under `.forge/generated/` and
-builds into `.forge/build/`.
+Forge builds executable and static-library projects with exact source paths.
+Static libraries declare public headers under `include/`:
+
+```toml
+[project]
+name = "hello"
+version = "1.0.0"
+type = "static_library"
+cpp_std = 20
+
+[sources]
+paths = ["src/hello.cpp"]
+public_headers = ["include/hello/hello.h"]
+```
+
+Forge generates CMake infrastructure under `.forge/generated/` and builds into
+`.forge/build/`.
 
 Build and run a Forge project:
 
@@ -128,7 +142,7 @@ Create a release archive:
 `README.md` and `LICENSE` files when present, and creates
 `.forge/release/<name>-<version>.zip`.
 
-Create, inspect, verify, and extract an executable box:
+Create, inspect, verify, and extract an executable or static-library box:
 
 ```sh
 /path/to/forge/build/dev/forge box create

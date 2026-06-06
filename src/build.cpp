@@ -44,17 +44,38 @@ namespace forge
 
       file
         << "cmake_minimum_required(VERSION 3.25)\n"
-        << "project(forge_project LANGUAGES CXX)\n\n"
-        << "add_executable(forge_project\n";
+        << "project(forge_project LANGUAGES CXX)\n\n";
+
+      if (recipe.type == "static_library")
+      {
+        file << "add_library(forge_project STATIC\n";
+      }
+      else
+      {
+        file << "add_executable(forge_project\n";
+      }
 
       for (const auto& source : recipe.sources)
       {
         file << "  \"${FORGE_PROJECT_ROOT}/" << escape_cmake(source.generic_string()) << "\"\n";
       }
 
+      for (const auto& header : recipe.public_headers)
+      {
+        file << "  \"${FORGE_PROJECT_ROOT}/" << escape_cmake(header.generic_string()) << "\"\n";
+      }
+
       file
         << ")\n"
-        << "target_compile_features(forge_project PRIVATE cxx_std_" << recipe.cpp_standard << ")\n"
+        << "target_compile_features(forge_project PUBLIC cxx_std_" << recipe.cpp_standard << ")\n";
+
+      if (!recipe.public_headers.empty())
+      {
+        file
+          << "target_include_directories(forge_project PUBLIC \"${FORGE_PROJECT_ROOT}/include\")\n";
+      }
+
+      file
         << "set_target_properties(forge_project PROPERTIES OUTPUT_NAME \""
         << escape_cmake(recipe.name) << "\")\n";
 
@@ -88,9 +109,9 @@ namespace forge
       return 2;
     }
 
-    if (recipe.type != "executable")
+    if (recipe.type != "executable" && recipe.type != "static_library")
     {
-      error << "forge: build currently supports executable projects only\n";
+      error << "forge: unsupported project type '" << recipe.type << "'\n";
       return 2;
     }
 
@@ -111,6 +132,30 @@ namespace forge
       if (!std::filesystem::is_regular_file(project_directory / source))
       {
         error << "forge: source file '" << source.generic_string() << "' does not exist\n";
+        return 2;
+      }
+    }
+
+    if (recipe.type == "static_library" && recipe.public_headers.empty())
+    {
+      error << "forge: static libraries require public headers\n";
+      return 2;
+    }
+
+    for (const auto& header : recipe.public_headers)
+    {
+      if (header.is_absolute()
+          || header.string().starts_with("..")
+          || header.begin() == header.end()
+          || header.begin()->string() != "include")
+      {
+        error << "forge: public header paths must stay under include/\n";
+        return 2;
+      }
+
+      if (!std::filesystem::is_regular_file(project_directory / header))
+      {
+        error << "forge: public header '" << header.generic_string() << "' does not exist\n";
         return 2;
       }
     }
@@ -166,7 +211,18 @@ namespace forge
       return 2;
     }
 
-    output << "Built " << (build_directory / recipe.name).string() << '\n';
+    auto artifact = build_directory / recipe.name;
+
+    if (recipe.type == "static_library")
+    {
+#ifdef _WIN32
+      artifact += ".lib";
+#else
+      artifact = build_directory / ("lib" + recipe.name + ".a");
+#endif
+    }
+
+    output << "Built " << artifact.string() << '\n';
     return 0;
   }
 

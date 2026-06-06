@@ -22,6 +22,13 @@ namespace forge
   namespace
   {
 
+    struct BoxArtifact
+    {
+      std::filesystem::path path;
+      std::string kind;
+      std::string sha256;
+    };
+
     struct BoxManifest
     {
       int format = 0;
@@ -31,9 +38,7 @@ namespace forge
       std::string type;
       std::string os;
       std::string arch;
-      std::filesystem::path artifact_path;
-      std::string artifact_kind;
-      std::string artifact_sha256;
+      std::vector<BoxArtifact> artifacts;
     };
 
     std::string_view trim(std::string_view value)
@@ -144,10 +149,44 @@ namespace forge
       return true;
     }
 
+    bool stage_artifact(const std::filesystem::path& source,
+                        const std::filesystem::path& artifact_path,
+                        std::string_view kind,
+                        const std::filesystem::path& staging_directory,
+                        std::vector<BoxArtifact>& artifacts,
+                        std::ostream& error)
+    {
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(
+        (staging_directory / artifact_path).parent_path(),
+        filesystem_error
+      );
+
+      if (filesystem_error)
+      {
+        error << "forge: could not create artifact directory\n";
+        return false;
+      }
+
+      const auto destination = staging_directory / artifact_path;
+      std::string checksum;
+
+      if (!copy_file(source, destination, error) || !sha256_file(destination, checksum, error))
+      {
+        return false;
+      }
+
+      artifacts.push_back(BoxArtifact {
+        artifact_path,
+        std::string { kind },
+        checksum
+      });
+      return true;
+    }
+
     bool write_manifest(const std::filesystem::path& path,
                         const Recipe& recipe,
-                        std::string_view executable_name,
-                        std::string_view checksum,
+                        const std::vector<BoxArtifact>& artifacts,
                         std::ostream& error)
     {
       std::ofstream manifest { path };
@@ -171,14 +210,19 @@ namespace forge
       }
 
       manifest
-        << "type = \"executable\"\n\n"
+        << "type = \"" << recipe.type << "\"\n\n"
         << "[target]\n"
         << "os = \"" << target_os() << "\"\n"
-        << "arch = \"" << target_arch() << "\"\n\n"
-        << "[artifact]\n"
-        << "path = \"bin/" << executable_name << "\"\n"
-        << "kind = \"executable\"\n"
-        << "sha256 = \"" << checksum << "\"\n";
+        << "arch = \"" << target_arch() << "\"\n";
+
+      for (const auto& artifact : artifacts)
+      {
+        manifest
+          << "\n[[artifact]]\n"
+          << "path = \"" << artifact.path.generic_string() << "\"\n"
+          << "kind = \"" << artifact.kind << "\"\n"
+          << "sha256 = \"" << artifact.sha256 << "\"\n";
+      }
 
       return static_cast<bool>(manifest);
     }
@@ -238,6 +282,7 @@ namespace forge
       std::istringstream input { content };
       std::set<std::string> seen;
       std::string section;
+      std::optional<std::size_t> artifact_index;
       std::string line;
       std::size_t line_number = 0;
 
@@ -251,6 +296,21 @@ namespace forge
           continue;
         }
 
+        if (trimmed.starts_with("[[") && trimmed.ends_with("]]"))
+        {
+          section = std::string { trim(trimmed.substr(2, trimmed.size() - 4)) };
+
+          if (section != "artifact")
+          {
+            error << "forge: unsupported box manifest section on line " << line_number << '\n';
+            return false;
+          }
+
+          manifest.artifacts.emplace_back();
+          artifact_index = manifest.artifacts.size() - 1;
+          continue;
+        }
+
         if (trimmed.front() == '[' && trimmed.back() == ']')
         {
           section = std::string { trim(trimmed.substr(1, trimmed.size() - 2)) };
@@ -259,6 +319,22 @@ namespace forge
           {
             error << "forge: unsupported box manifest section on line " << line_number << '\n';
             return false;
+          }
+
+          if (section == "artifact")
+          {
+            if (!manifest.artifacts.empty())
+            {
+              error << "forge: duplicate box manifest artifact section\n";
+              return false;
+            }
+
+            manifest.artifacts.emplace_back();
+            artifact_index = 0;
+          }
+          else
+          {
+            artifact_index.reset();
           }
 
           continue;
@@ -274,7 +350,9 @@ namespace forge
 
         const auto key = trim(trimmed.substr(0, equals));
         const auto value = trim(trimmed.substr(equals + 1));
-        const auto identity = section + "." + std::string { key };
+        const auto identity = section == "artifact" && artifact_index
+          ? section + "." + std::to_string(*artifact_index) + "." + std::string { key }
+          : section + "." + std::string { key };
 
         if (!seen.insert(identity).second)
         {
@@ -318,20 +396,20 @@ namespace forge
         {
           valid = parse_string(value, manifest.arch);
         }
-        else if (identity == "artifact.path")
+        else if (section == "artifact" && artifact_index && key == "path")
         {
           std::string artifact_path;
           valid = parse_string(value, artifact_path)
             && artifact_path.find('\\') == std::string::npos;
-          manifest.artifact_path = artifact_path;
+          manifest.artifacts[*artifact_index].path = artifact_path;
         }
-        else if (identity == "artifact.kind")
+        else if (section == "artifact" && artifact_index && key == "kind")
         {
-          valid = parse_string(value, manifest.artifact_kind);
+          valid = parse_string(value, manifest.artifacts[*artifact_index].kind);
         }
-        else if (identity == "artifact.sha256")
+        else if (section == "artifact" && artifact_index && key == "sha256")
         {
-          valid = parse_string(value, manifest.artifact_sha256);
+          valid = parse_string(value, manifest.artifacts[*artifact_index].sha256);
         }
         else
         {
@@ -351,10 +429,7 @@ namespace forge
         "package.version",
         "package.type",
         "target.os",
-        "target.arch",
-        "artifact.path",
-        "artifact.kind",
-        "artifact.sha256"
+        "target.arch"
       };
 
       for (const auto field : required_fields)
@@ -374,15 +449,63 @@ namespace forge
 
       if (!is_safe_path_component(manifest.name)
           || !is_safe_path_component(manifest.version)
-          || manifest.type != "executable"
-          || manifest.artifact_kind != "executable"
-          || !is_safe_archive_path(manifest.artifact_path)
-          || manifest.artifact_path.parent_path().empty()
-          || manifest.artifact_path.begin()->string() != "bin"
-          || manifest.artifact_sha256.size() != 64
-          || manifest.artifact_sha256.find_first_not_of("0123456789abcdef") != std::string::npos)
+          || (manifest.type != "executable" && manifest.type != "static_library")
+          || manifest.artifacts.empty())
       {
         error << "forge: box manifest contains invalid package or artifact values\n";
+        return false;
+      }
+
+      std::set<std::filesystem::path> artifact_paths;
+      std::size_t executable_count = 0;
+      std::size_t library_count = 0;
+      std::size_t header_count = 0;
+
+      for (std::size_t index = 0; index < manifest.artifacts.size(); ++index)
+      {
+        const auto& artifact = manifest.artifacts[index];
+        const auto prefix = artifact.path.empty() ? std::string {} : artifact.path.begin()->string();
+
+        if (!seen.contains("artifact." + std::to_string(index) + ".path")
+            || !seen.contains("artifact." + std::to_string(index) + ".kind")
+            || !seen.contains("artifact." + std::to_string(index) + ".sha256")
+            || !is_safe_archive_path(artifact.path)
+            || artifact.path.parent_path().empty()
+            || !artifact_paths.insert(artifact.path).second
+            || artifact.sha256.size() != 64
+            || artifact.sha256.find_first_not_of("0123456789abcdef") != std::string::npos)
+        {
+          error << "forge: box manifest contains invalid package or artifact values\n";
+          return false;
+        }
+
+        if (artifact.kind == "executable" && prefix == "bin")
+        {
+          ++executable_count;
+        }
+        else if (artifact.kind == "static_library" && prefix == "lib")
+        {
+          ++library_count;
+        }
+        else if (artifact.kind == "public_header" && prefix == "include")
+        {
+          ++header_count;
+        }
+        else
+        {
+          error << "forge: box manifest contains invalid package or artifact values\n";
+          return false;
+        }
+      }
+
+      if ((manifest.type == "executable"
+           && (executable_count != 1 || manifest.artifacts.size() != 1))
+          || (manifest.type == "static_library"
+              && (library_count != 1
+                  || header_count == 0
+                  || library_count + header_count != manifest.artifacts.size())))
+      {
+        error << "forge: box manifest artifacts do not match package type\n";
         return false;
       }
 
@@ -400,31 +523,33 @@ namespace forge
         return false;
       }
 
-      const auto artifact = directory / manifest.artifact_path;
-
-      if (!std::filesystem::is_regular_file(artifact))
-      {
-        error << "forge: box artifact '" << manifest.artifact_path.string() << "' is missing\n";
-        return false;
-      }
-
-      std::set<std::filesystem::path> expected_files {
-        std::filesystem::path { "cbox.toml" },
-        manifest.artifact_path
-      };
+      std::set<std::filesystem::path> expected_files { std::filesystem::path { "cbox.toml" } };
       std::set<std::filesystem::path> expected_directories;
-      auto parent = manifest.artifact_path.parent_path();
 
-      while (!parent.empty())
+      for (const auto& artifact : manifest.artifacts)
       {
-        expected_directories.insert(parent);
-        parent = parent.parent_path();
+        if (!std::filesystem::is_regular_file(directory / artifact.path))
+        {
+          error << "forge: box artifact '" << artifact.path.string() << "' is missing\n";
+          return false;
+        }
+
+        expected_files.insert(artifact.path);
+        auto parent = artifact.path.parent_path();
+
+        while (!parent.empty())
+        {
+          expected_directories.insert(parent);
+          parent = parent.parent_path();
+        }
       }
 
-      std::set<std::string> expected_archive_entries {
-        "cbox.toml",
-        manifest.artifact_path.generic_string()
-      };
+      std::set<std::string> expected_archive_entries { "cbox.toml" };
+
+      for (const auto& artifact : manifest.artifacts)
+      {
+        expected_archive_entries.insert(artifact.path.generic_string());
+      }
 
       for (const auto& directory_path : expected_directories)
       {
@@ -478,17 +603,20 @@ namespace forge
         }
       }
 
-      std::string checksum;
-
-      if (!sha256_file(artifact, checksum, error))
+      for (const auto& artifact : manifest.artifacts)
       {
-        return false;
-      }
+        std::string checksum;
 
-      if (checksum != manifest.artifact_sha256)
-      {
-        error << "forge: box artifact checksum does not match cbox.toml\n";
-        return false;
+        if (!sha256_file(directory / artifact.path, checksum, error))
+        {
+          return false;
+        }
+
+        if (checksum != artifact.sha256)
+        {
+          error << "forge: box artifact checksum does not match cbox.toml\n";
+          return false;
+        }
       }
 
       return true;
@@ -580,15 +708,20 @@ namespace forge
       return 2;
     }
 
-    auto executable = project_directory / ".forge" / "build" / recipe.name;
+    auto built_artifact = project_directory / ".forge" / "build" / recipe.name;
 
 #ifdef _WIN32
-    executable += ".exe";
+    built_artifact += recipe.type == "static_library" ? ".lib" : ".exe";
+#else
+    if (recipe.type == "static_library")
+    {
+      built_artifact = project_directory / ".forge" / "build" / ("lib" + recipe.name + ".a");
+    }
 #endif
 
-    if (!std::filesystem::is_regular_file(executable))
+    if (!std::filesystem::is_regular_file(built_artifact))
     {
-      error << "forge: built executable '" << executable.string() << "' does not exist\n";
+      error << "forge: built artifact '" << built_artifact.string() << "' does not exist\n";
       return 2;
     }
 
@@ -598,23 +731,63 @@ namespace forge
     const auto staging_directory = boxes_directory / "staging" / box_name;
     const auto archive_path = boxes_directory / (box_name + ".cbox");
 
-    if (!prepare_empty_directory(staging_directory / "bin", error))
+    if (!prepare_empty_directory(staging_directory, error))
     {
       return 2;
     }
 
-    const auto staged_executable = staging_directory / "bin" / executable.filename();
-    std::string checksum;
+    std::vector<BoxArtifact> artifacts;
 
-    if (!copy_file(executable, staged_executable, error)
-        || !sha256_file(staged_executable, checksum, error)
-        || !write_manifest(
-          staging_directory / "cbox.toml",
-          recipe,
-          executable.filename().string(),
-          checksum,
+    if (recipe.type == "executable")
+    {
+      if (!stage_artifact(
+        built_artifact,
+        std::filesystem::path { "bin" } / built_artifact.filename(),
+        "executable",
+        staging_directory,
+        artifacts,
+        error
+      ))
+      {
+        return 2;
+      }
+    }
+    else if (recipe.type == "static_library")
+    {
+      if (!stage_artifact(
+        built_artifact,
+        std::filesystem::path { "lib" } / built_artifact.filename(),
+        "static_library",
+        staging_directory,
+        artifacts,
+        error
+      ))
+      {
+        return 2;
+      }
+
+      for (const auto& header : recipe.public_headers)
+      {
+        if (!stage_artifact(
+          project_directory / header,
+          header,
+          "public_header",
+          staging_directory,
+          artifacts,
           error
         ))
+        {
+          return 2;
+        }
+      }
+    }
+    else
+    {
+      error << "forge: unsupported project type '" << recipe.type << "'\n";
+      return 2;
+    }
+
+    if (!write_manifest(staging_directory / "cbox.toml", recipe, artifacts, error))
     {
       return 2;
     }
@@ -623,16 +796,25 @@ namespace forge
     std::filesystem::remove(archive_path, filesystem_error);
     output << "Creating box " << box_name << '\n' << std::flush;
 
-    const std::vector<std::string> archive_arguments {
+    std::vector<std::string> archive_arguments {
       "cmake",
       "-E",
       "tar",
       "cf",
       archive_path.string(),
       "--format=zip",
-      "cbox.toml",
-      "bin"
+      "cbox.toml"
     };
+
+    if (recipe.type == "executable")
+    {
+      archive_arguments.push_back("bin");
+    }
+    else
+    {
+      archive_arguments.push_back("include");
+      archive_arguments.push_back("lib");
+    }
 
     if (process_runner(archive_arguments, staging_directory, error) != 0)
     {
@@ -771,15 +953,29 @@ namespace forge
       return 2;
     }
 
-    if (!prepare_empty_directory(destination / manifest.artifact_path.parent_path(), error)
-        || !copy_file(validation_directory / "cbox.toml", destination / "cbox.toml", error)
-        || !copy_file(
-          validation_directory / manifest.artifact_path,
-          destination / manifest.artifact_path,
-          error
-        ))
+    if (!prepare_empty_directory(destination, error)
+        || !copy_file(validation_directory / "cbox.toml", destination / "cbox.toml", error))
     {
       return 2;
+    }
+
+    for (const auto& artifact : manifest.artifacts)
+    {
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(
+        (destination / artifact.path).parent_path(),
+        filesystem_error
+      );
+
+      if (filesystem_error
+          || !copy_file(
+            validation_directory / artifact.path,
+            destination / artifact.path,
+            error
+          ))
+      {
+        return 2;
+      }
     }
 
     output << "Extracted " << destination.string() << '\n';
