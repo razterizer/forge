@@ -80,6 +80,19 @@ Run:
 ./build/dev/forge --help
 ```
 
+Forge can also build and release itself using the root `forge.recipe.toml`:
+
+```sh
+./build/dev/forge build
+./build/dev/forge release
+```
+
+The self-hosted executable is written to `.forge/build/forge`, and the release
+archive is written to `.forge/release/forge-0.1.0.zip`.
+
+Runnable and packageable sample projects are available under
+[`examples/`](examples/).
+
 Create a new C++ project:
 
 ```sh

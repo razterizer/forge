@@ -1,0 +1,10 @@
+#:schema https://raw.githubusercontent.com/razterizer/forge/main/schemas/forge.recipe.schema.json
+
+[project]
+name = "forge"
+version = "0.1.0"
+type = "executable"
+cpp_std = 20
+
+[sources]
+paths = ["src/box.cpp", "src/build.cpp", "src/cli.cpp", "src/init.cpp", "src/main.cpp", "src/new.cpp", "src/process.cpp", "src/recipe.cpp", "src/release.cpp", "src/run.cpp", "src/sha256.cpp", "src/zip.cpp"]

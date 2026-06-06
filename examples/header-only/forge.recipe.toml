@@ -1,0 +1,11 @@
+#:schema https://raw.githubusercontent.com/razterizer/forge/main/schemas/forge.recipe.schema.json
+
+[project]
+name = "forge-example-header-only"
+version = "0.1.0"
+type = "header_only"
+cpp_std = 20
+
+[sources]
+paths = []
+public_headers = ["include/forge_example/greeting.h"]
