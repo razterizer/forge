@@ -183,5 +183,9 @@ Forge packages version `3.0.0`, build `6` as
 
 See [docs/cbox-format.md](docs/cbox-format.md) for the implemented format.
 
+Forge provides a JSON Schema for recipe validation and editor completion at
+[`schemas/forge.recipe.schema.json`](schemas/forge.recipe.schema.json). See
+[docs/recipe-schema.md](docs/recipe-schema.md) for editor integration.
+
 See [docs/design.md](docs/design.md) for the current design baseline and
 roadmap.
