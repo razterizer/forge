@@ -34,7 +34,9 @@ Forge aims to reduce this accidental complexity so developers can focus on writi
 * ✓ Header-only dependencies
 * ✓ Source dependencies
 * ✓ Static libraries
-* ✓ Dynamic libraries
+* Dynamic libraries
+* Imported vendor SDKs and precompiled binaries
+* Reproducible runtime dependency assembly
 
 * ✓ Recipe-driven workflow
 

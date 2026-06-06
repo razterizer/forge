@@ -51,8 +51,24 @@ transitive static-library closure in dependency order.
    `forge release`
 2. v0.2: local path dependencies
 3. v0.3: `.cbox` creation and consumption
-4. v0.4: Git dependencies
-5. v0.5: lock file generation and reproducible resolution
+4. v0.4: shared-library projects and dynamically linked boxes
+5. v0.5: compatible local box caching
+6. v0.6: Git dependencies
+7. v0.7: lock file generation and reproducible resolution
+8. v0.8: imported vendor SDK and precompiled binary boxes
+9. v0.9: reproducible runtime assembly for executables and releases
+
+The dependency-management roadmap aims to replace scattered source
+submodules, copied libraries, implicit linker configuration, and manually
+maintained runtime directories with one declared dependency graph. Recipes
+will state whether dependencies link statically or dynamically, while lock
+files will record exact source revisions, box identities, and checksums.
+
+Imported binary recipes will describe vendor SDKs and other projects that
+cannot be built by Forge. These recipes will map headers, static libraries,
+shared libraries, import libraries, and runtime binaries into verified boxes.
+Forge will then assemble the required runtime libraries automatically when
+building, running, and releasing an executable.
 
 ## Deferred decisions
 
@@ -60,3 +76,6 @@ transitive static-library closure in dependency order.
 - Binary compatibility identity, including compiler and runtime ABI
 - Version constraint syntax
 - Registry protocol and shared binary cache behavior
+- Platform-specific shared-library identity, runtime search paths, and import
+  library handling
+- Imported binary recipe syntax and vendor SDK redistribution rules
