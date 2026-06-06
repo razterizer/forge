@@ -100,7 +100,13 @@ namespace forge
 
       for (const char character : value)
       {
-        if (character == '\\' || character == '"' || character == '$')
+        if (character == '\\')
+        {
+          escaped += '/';
+          continue;
+        }
+
+        if (character == '"' || character == '$')
         {
           escaped += '\\';
         }
@@ -127,6 +133,8 @@ namespace forge
       return "lib" + std::string { name } + ".dylib";
 #elif defined(__linux__)
       return "lib" + std::string { name } + ".so";
+#elif defined(_WIN32)
+      return std::string { name } + ".dll";
 #else
       return {};
 #endif
@@ -247,6 +255,15 @@ namespace forge
       file
         << "set_target_properties(forge_project PROPERTIES OUTPUT_NAME \""
         << escape_cmake(recipe.name) << "\")\n";
+
+#ifdef _WIN32
+      if (recipe.type == "static_library")
+      {
+        file
+          << "set_target_properties(forge_project PROPERTIES "
+          << "PREFIX \"\" SUFFIX \".lib\")\n";
+      }
+#endif
 
 #ifdef __APPLE__
       file
@@ -805,7 +822,7 @@ namespace forge
       "-G",
       "Ninja",
       "-DCMAKE_BUILD_TYPE=Debug",
-      "-DFORGE_PROJECT_ROOT=" + project_directory.string()
+      "-DFORGE_PROJECT_ROOT=" + project_directory.generic_string()
     };
 
     if (process_runner(configure_arguments, project_directory, error) != 0)

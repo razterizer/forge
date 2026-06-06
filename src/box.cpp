@@ -101,6 +101,7 @@ namespace forge
 #endif
     }
 
+#ifndef _WIN32
     std::filesystem::path shared_library_filename(std::string_view name)
     {
 #ifdef __APPLE__
@@ -111,6 +112,7 @@ namespace forge
       return {};
 #endif
     }
+#endif
 
     bool is_safe_path_component(std::string_view value)
     {

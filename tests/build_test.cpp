@@ -139,6 +139,10 @@ namespace
     expect(commands.size() == 2, "build invokes configure and build commands");
     expect(commands[0].size() > 1 && commands[0][0] == "cmake", "configure uses CMake");
     expect(commands[1].size() > 2 && commands[1][1] == "--build", "build uses CMake build mode");
+    expect(
+      commands[0].back().find('\\') == std::string::npos,
+      "configure passes the project root using CMake path separators"
+    );
 
     const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
     expect(contains(generated, "add_executable(forge_project"), "build generates an executable target");
@@ -196,7 +200,12 @@ namespace
     expect(contains(generated, "add_library(forge_project STATIC"), "build generates a static library target");
     expect(contains(generated, "include/hello/hello.h"), "build includes public headers");
     expect(contains(generated, "target_include_directories"), "build exposes the include directory");
+#ifdef _WIN32
+    expect(contains(generated, "PREFIX \"\" SUFFIX \".lib\""), "build standardizes the Windows library name");
+    expect(contains(output.str(), "hello.lib"), "build reports the static library artifact");
+#else
     expect(contains(output.str(), "libhello.a"), "build reports the static library artifact");
+#endif
   }
 
   void test_build_generates_shared_library()
