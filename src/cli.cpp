@@ -35,13 +35,13 @@ namespace forge::cli
         << "Usage:\n"
         << "  forge <command>\n"
         << "  forge new <name>\n"
-        << "  forge box <create|inspect|verify|extract> [path]\n"
+        << "  forge box <create|inspect|verify|extract|publish> [path]\n"
         << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n"
         << "  forge run [arguments...]\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
         << "Commands:\n"
-        << "  box       Create, inspect, verify, or extract boxes\n"
+        << "  box       Create, inspect, verify, publish, or extract boxes\n"
         << "  init      Adopt the current project\n"
         << "  new       Create a new project\n"
         << "  build     Build the current project\n"
@@ -138,7 +138,12 @@ namespace forge::cli
         return extract_box(arguments[2], working_directory, output, error);
       }
 
-      error << "forge: usage: forge box <create|inspect|verify|extract> [path]\n";
+      if (arguments.size() == 3 && arguments[1] == "publish")
+      {
+        return publish_box(arguments[2], working_directory, output, error);
+      }
+
+      error << "forge: usage: forge box <create|inspect|verify|extract|publish> [path]\n";
       return 2;
     }
 

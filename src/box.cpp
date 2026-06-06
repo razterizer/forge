@@ -996,6 +996,102 @@ namespace forge
     return 0;
   }
 
+  int publish_box(const std::filesystem::path& box_path,
+                  const std::filesystem::path& project_directory,
+                  std::ostream& output,
+                  std::ostream& error)
+  {
+    return publish_box(box_path, project_directory, run_process, output, error);
+  }
+
+  int publish_box(const std::filesystem::path& box_path,
+                  const std::filesystem::path& project_directory,
+                  const ProcessRunner& process_runner,
+                  std::ostream& output,
+                  std::ostream& error)
+  {
+    if (!std::filesystem::is_regular_file(project_directory / "forge.recipe.toml"))
+    {
+      error << "forge: forge.recipe.toml was not found in the current directory\n";
+      return 2;
+    }
+
+    const auto resolved_box = resolve_box_path(box_path, project_directory);
+    BoxMetadata metadata;
+
+    if (!read_box_metadata(resolved_box, project_directory, process_runner, metadata, error))
+    {
+      return 2;
+    }
+
+    const auto boxes_directory = project_directory / "boxes";
+    const auto published_box = boxes_directory / resolved_box.filename();
+    const auto checksum_path = boxes_directory / (resolved_box.filename().string() + ".sha256");
+    std::string source_checksum;
+
+    if (!sha256_file(resolved_box, source_checksum, error))
+    {
+      return 2;
+    }
+
+    std::error_code filesystem_error;
+    std::filesystem::create_directories(boxes_directory, filesystem_error);
+
+    if (filesystem_error)
+    {
+      error << "forge: could not create '" << boxes_directory.string() << "'\n";
+      return 2;
+    }
+
+    if (std::filesystem::is_regular_file(published_box))
+    {
+      std::string published_checksum;
+
+      if (!sha256_file(published_box, published_checksum, error))
+      {
+        return 2;
+      }
+
+      if (published_checksum != source_checksum)
+      {
+        error << "forge: published box '" << published_box.string()
+              << "' already exists with different contents\n";
+        return 2;
+      }
+    }
+    else
+    {
+      std::filesystem::copy_file(resolved_box, published_box, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not publish '" << published_box.string() << "'\n";
+        return 2;
+      }
+    }
+
+    std::ofstream checksum_file { checksum_path };
+
+    if (!checksum_file)
+    {
+      error << "forge: could not write '" << checksum_path.string() << "'\n";
+      return 2;
+    }
+
+    checksum_file << source_checksum << "  " << published_box.filename().string() << '\n';
+
+    if (!checksum_file)
+    {
+      error << "forge: could not write '" << checksum_path.string() << "'\n";
+      return 2;
+    }
+
+    output
+      << "Published " << published_box.string() << '\n'
+      << "Checksum " << source_checksum << '\n';
+    return 0;
+  }
+
   int extract_box(const std::filesystem::path& box_path,
                   const std::filesystem::path& working_directory,
                   std::ostream& output,

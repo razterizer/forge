@@ -99,7 +99,8 @@ individual compiled artifacts.
 
 ## Verification
 
-`forge box inspect`, `forge box verify`, and `forge box extract` validate:
+`forge box inspect`, `forge box verify`, `forge box publish`, and
+`forge box extract` validate:
 
 - The manifest uses supported format version 1 and contains every required
   field.
@@ -111,6 +112,11 @@ individual compiled artifacts.
 
 Forge validates the ZIP directory before extraction. Extraction then copies only
 the validated manifest and artifacts into the destination.
+
+`forge box publish <box>` copies a verified box into the project-root `boxes/`
+directory and writes `<box>.sha256` using the standard
+`<checksum>  <filename>` format. The command must run from a Forge project
+root.
 
 ## Compatibility
 

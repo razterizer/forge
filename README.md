@@ -412,8 +412,15 @@ shared-library, or header-only box:
 /path/to/forge/build/dev/forge box create
 /path/to/forge/build/dev/forge box inspect .forge/boxes/hello-0.1.0-macos-arm64.cbox
 /path/to/forge/build/dev/forge box verify .forge/boxes/hello-0.1.0-macos-arm64.cbox
+/path/to/forge/build/dev/forge box publish .forge/boxes/hello-0.1.0-macos-arm64.cbox
 /path/to/forge/build/dev/forge box extract .forge/boxes/hello-0.1.0-macos-arm64.cbox
 ```
+
+`forge box publish <box>` verifies the box, copies it into the project-root
+`boxes/` directory, and writes a sibling `.sha256` file suitable for publishing
+alongside the box or copying into a dependency recipe. Republishing identical
+contents is safe; Forge refuses to overwrite a same-named box with different
+contents. Publishing must run from a directory containing `forge.recipe.toml`.
 
 Projects may specify an optional build number without changing their dependency
 version:

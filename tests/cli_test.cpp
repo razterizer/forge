@@ -655,6 +655,36 @@ namespace
     );
     expect(contains(verify_output.str(), "Verified"), "box verify reports success");
 
+    const std::array publish_arguments {
+      std::string_view { "box" },
+      std::string_view { "publish" },
+      std::string_view { box_path_string }
+    };
+    std::ostringstream publish_output;
+    std::ostringstream publish_error;
+    expect(
+      forge::cli::run(publish_arguments, project_directory, publish_output, publish_error) == 0,
+      "box publish succeeds"
+    );
+    const auto published_box = project_directory / "boxes" / box_path.filename();
+    const auto published_checksum =
+      project_directory / "boxes" / (box_path.filename().string() + ".sha256");
+    expect(std::filesystem::exists(published_box), "box publish copies the box");
+    expect(std::filesystem::exists(published_checksum), "box publish writes a checksum file");
+    expect(
+      contains(read_file(published_checksum), box_path.filename().string()),
+      "box checksum names the published box"
+    );
+    expect(contains(publish_output.str(), "Checksum "), "box publish reports the checksum");
+
+    std::ostringstream republish_output;
+    std::ostringstream republish_error;
+    expect(
+      forge::cli::run(publish_arguments, project_directory, republish_output, republish_error) == 0,
+      "box publish is idempotent"
+    );
+    expect(republish_error.str().empty(), "idempotent box publish does not write an error");
+
     const std::array extract_arguments {
       std::string_view { "box" },
       std::string_view { "extract" },
