@@ -430,7 +430,7 @@ namespace
     expect(contains(error.str(), "cycle detected"), "build explains the dependency cycle");
   }
 
-  void test_build_resolves_github_dependency()
+  void test_update_resolves_github_dependency()
   {
     TemporaryDirectory directory;
     write_project(directory.path());
@@ -456,6 +456,18 @@ namespace
     const auto asset = "answer-1.2.3+build.6-" + target + ".cbox";
     const std::string release_url =
       "https://github.com/example/answer/releases/download/release-1.2.3/";
+    std::ofstream existing_lock { directory.path() / "forge.lock.toml" };
+    existing_lock
+      << "format = 1\n\n"
+      << "[[dependency]]\n"
+      << "name = \"answer\"\n"
+      << "github = \"example/answer\"\n"
+      << "version = \"1.2.3+build.6\"\n"
+      << "target = \"other-target\"\n"
+      << "url = \"https://example.invalid/answer.cbox\"\n"
+      << "sha256 = \"" << checksum << "\"\n";
+    existing_lock.close();
+    const auto original_lock = read_file(directory.path() / "forge.lock.toml");
 
     const forge::ProcessRunner runner =
       [&commands, &checksum, &asset](const std::vector<std::string>& arguments,
@@ -483,25 +495,111 @@ namespace
         return 1;
       };
 
+    forge::BuildOptions options;
+    options.update_dependencies = true;
     expect(
-      forge::build_project(directory.path(), runner, output, error) == 2,
-      "GitHub dependency reaches box download"
+      forge::build_project(directory.path(), options, runner, output, error) == 2,
+      "GitHub dependency update reaches box validation"
     );
     expect(commands.size() >= 2, "GitHub dependency downloads checksum before box");
+
+    if (commands.size() >= 2)
+    {
+      expect(
+        commands[0][1] == "-DURL=" + release_url + asset + ".sha256",
+        "GitHub dependency resolves the checksum asset URL"
+      );
+      expect(
+        commands[1][1] == "-DURL=" + release_url + asset,
+        "GitHub dependency resolves the box asset URL"
+      );
+    }
+
     expect(
-      commands[0][1] == "-DURL=" + release_url + asset + ".sha256",
-      "GitHub dependency resolves the checksum asset URL"
+      read_file(directory.path() / "forge.lock.toml") == original_lock,
+      "failed GitHub dependency update preserves the lockfile"
     );
+  }
+
+  void test_build_requires_and_uses_locked_github_dependency()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[dependencies]\n"
+      << "answer = { github = \"example/answer\", version = \"1.2.3\" }\n";
+    recipe.close();
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 1;
+      };
+
     expect(
-      commands[1][1] == "-DURL=" + release_url + asset,
-      "GitHub dependency resolves the box asset URL"
+      forge::build_project(directory.path(), runner, output, error) == 2,
+      "build rejects an unlocked GitHub dependency"
     );
-    const auto lock = read_file(directory.path() / "forge.lock.toml");
-    expect(contains(lock, "format = 1"), "GitHub dependency writes a lockfile");
-    expect(contains(lock, "github = \"example/answer\""), "lockfile records the GitHub repository");
-    expect(contains(lock, "version = \"1.2.3+build.6\""), "lockfile records the packaged version");
-    expect(contains(lock, "url = \"" + release_url + asset + "\""), "lockfile records the exact asset URL");
-    expect(contains(lock, "sha256 = \"" + checksum + "\""), "lockfile records the exact checksum");
+    expect(invocations == 0, "unlocked GitHub dependency does not access the network");
+    expect(contains(error.str(), "run forge update answer"), "unlocked dependency explains how to resolve it");
+
+#ifdef _WIN32
+    const std::string target = "windows-x86_64";
+#elif __APPLE__
+    const std::string target = "macos-arm64";
+#else
+    const std::string target = "linux-x86_64";
+#endif
+
+    const std::string checksum =
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    std::ofstream lock { directory.path() / "forge.lock.toml" };
+    lock
+      << "format = 1\n\n"
+      << "[[dependency]]\n"
+      << "name = \"answer\"\n"
+      << "github = \"example/answer\"\n"
+      << "version = \"1.2.3\"\n"
+      << "target = \"" << target << "\"\n"
+      << "url = \"https://example.invalid/answer.cbox\"\n"
+      << "sha256 = \"" << checksum << "\"\n";
+    lock.close();
+    std::filesystem::create_directories(directory.path() / ".forge/cache/downloads");
+    std::ofstream { directory.path() / ".forge/cache/downloads" / (checksum + ".cbox") };
+    invocations = 0;
+    output.str({});
+    error.str({});
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 2,
+      "locked GitHub dependency reaches box validation"
+    );
+    expect(invocations == 0, "locked GitHub dependency skips checksum and box downloads");
+    expect(contains(output.str(), "Using locked dependency answer"), "build reports the locked dependency");
+
+    write_project(directory.path());
+    std::ofstream changed_recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    changed_recipe
+      << "\n[dependencies]\n"
+      << "answer = { github = \"example/answer\", version = \"1.2.4\" }\n";
+    changed_recipe.close();
+    invocations = 0;
+    output.str({});
+    error.str({});
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 2,
+      "build rejects a recipe that conflicts with its lockfile"
+    );
+    expect(invocations == 0, "lockfile conflict does not access the network");
+    expect(contains(error.str(), "conflicts with forge.lock.toml"), "lockfile conflict is explained");
   }
 
   void test_build_rejects_incomplete_github_dependency()
@@ -546,7 +644,8 @@ int main()
   test_build_rejects_missing_source_without_running_process();
   test_build_rejects_dependency_name_mismatch();
   test_build_rejects_dependency_cycle();
-  test_build_resolves_github_dependency();
+  test_update_resolves_github_dependency();
+  test_build_requires_and_uses_locked_github_dependency();
   test_build_rejects_incomplete_github_dependency();
 
   return failures == 0 ? 0 : 1;

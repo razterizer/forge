@@ -23,6 +23,7 @@ namespace forge::cli
       std::string_view { "build" },
       std::string_view { "clean" },
       std::string_view { "run" },
+      std::string_view { "update" },
       std::string_view { "release" },
       std::string_view { "prepare-release" },
       std::string_view { "release-git" },
@@ -37,6 +38,7 @@ namespace forge::cli
         << "  forge <command>\n"
         << "  forge new <name>\n"
         << "  forge box <create|inspect|verify|extract|publish> [path]\n"
+        << "  forge update [dependency]\n"
         << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n"
         << "  forge run [arguments...]\n"
         << "  forge --help\n"
@@ -48,6 +50,7 @@ namespace forge::cli
         << "  build           Build the current project\n"
         << "  clean           Remove generated project state\n"
         << "  run             Run the current project\n"
+        << "  update          Refresh locked GitHub dependencies\n"
         << "  release         Create a local release artifact\n"
         << "  prepare-release Prepare hosted release assets\n"
         << "  release-git     Create and push a release tag\n";
@@ -152,6 +155,26 @@ namespace forge::cli
     if (arguments.front() == "run")
     {
       return run_project(working_directory, arguments.subspan(1), output, error);
+    }
+
+    if (arguments.front() == "update")
+    {
+      if (arguments.size() > 2)
+      {
+        error << "forge: usage: forge update [dependency]\n";
+        return 2;
+      }
+
+      BuildOptions options;
+      options.dependencies_only = true;
+      options.update_dependencies = true;
+
+      if (arguments.size() == 2)
+      {
+        options.update_dependency = std::string { arguments[1] };
+      }
+
+      return build_project(working_directory, options, output, error);
     }
 
     if (arguments.front() == "release-git" || arguments.front() == "release-github")

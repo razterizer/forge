@@ -35,11 +35,27 @@ namespace forge
       std::optional<BoxMetadata> box_metadata;
     };
 
+    struct LockedDependency
+    {
+      std::string name;
+      std::string github;
+      std::string version;
+      std::string target;
+      std::string url;
+      std::string sha256;
+    };
+
     struct DependencySession
     {
       std::map<std::filesystem::path, DependencyNode> nodes;
       std::map<std::string, std::filesystem::path> names;
       std::set<std::filesystem::path> active_projects;
+      std::map<std::string, LockedDependency> locked_dependencies;
+      std::filesystem::path root_project;
+      BuildOptions options;
+      bool lock_loaded = false;
+      bool lock_dirty = false;
+      bool update_dependency_found = false;
     };
 
     thread_local DependencySession* dependency_session = nullptr;
@@ -410,25 +426,197 @@ namespace forge
       return true;
     }
 
-    bool write_github_lock_header(const std::filesystem::path& project_directory,
-                                  const Recipe& recipe,
-                                  std::ostream& error)
+    std::string_view trim(std::string_view value)
     {
-      const auto has_github_dependency = std::any_of(
-        recipe.dependencies.begin(),
-        recipe.dependencies.end(),
-        [](const Dependency& dependency)
-        {
-          return !dependency.github.empty();
-        }
-      );
+      const auto first = value.find_first_not_of(" \t\r\n");
 
-      if (!has_github_dependency)
+      if (first == std::string_view::npos)
+      {
+        return {};
+      }
+
+      const auto last = value.find_last_not_of(" \t\r\n");
+      return value.substr(first, last - first + 1);
+    }
+
+    bool parse_lock_string(std::string_view value, std::string& result)
+    {
+      value = trim(value);
+
+      if (value.size() < 2 || value.front() != '"' || value.back() != '"')
+      {
+        return false;
+      }
+
+      result = std::string { value.substr(1, value.size() - 2) };
+      return result.find('"') == std::string::npos;
+    }
+
+    std::string lock_key(std::string_view name, std::string_view target)
+    {
+      return std::string { name } + '\n' + std::string { target };
+    }
+
+    std::string current_target()
+    {
+      return target_os() + "-" + target_arch();
+    }
+
+    bool load_lockfile(const std::filesystem::path& project_directory,
+                       std::ostream& error)
+    {
+      if (dependency_session->lock_loaded)
       {
         return true;
       }
 
-      std::ofstream lock { project_directory / "forge.lock.toml" };
+      dependency_session->lock_loaded = true;
+      const auto path = project_directory / "forge.lock.toml";
+
+      if (!std::filesystem::is_regular_file(path))
+      {
+        return true;
+      }
+
+      std::ifstream file { path };
+      std::optional<LockedDependency> dependency;
+      std::string line;
+      std::size_t line_number = 0;
+      bool valid_format = false;
+
+      const auto store_dependency =
+        [&dependency, &error]() -> bool
+        {
+          if (!dependency)
+          {
+            return true;
+          }
+
+          if (dependency->name.empty()
+              || dependency->github.empty()
+              || dependency->version.empty()
+              || dependency->target.empty()
+              || dependency->url.empty()
+              || !is_sha256(dependency->sha256))
+          {
+            error << "forge: forge.lock.toml contains an incomplete dependency\n";
+            return false;
+          }
+
+          const auto key = lock_key(dependency->name, dependency->target);
+
+          if (!dependency_session->locked_dependencies.emplace(key, *dependency).second)
+          {
+            error << "forge: forge.lock.toml contains a duplicate dependency target\n";
+            return false;
+          }
+
+          dependency.reset();
+          return true;
+        };
+
+      while (std::getline(file, line))
+      {
+        ++line_number;
+        const auto content = trim(line);
+
+        if (content.empty() || content.front() == '#')
+        {
+          continue;
+        }
+
+        if (content == "[[dependency]]")
+        {
+          if (!store_dependency())
+          {
+            return false;
+          }
+
+          dependency.emplace();
+          continue;
+        }
+
+        const auto equals = content.find('=');
+
+        if (equals == std::string_view::npos)
+        {
+          error << "forge: invalid forge.lock.toml line " << line_number << '\n';
+          return false;
+        }
+
+        const auto key = trim(content.substr(0, equals));
+        const auto value = trim(content.substr(equals + 1));
+
+        if (!dependency && key == "format" && value == "1")
+        {
+          valid_format = true;
+          continue;
+        }
+
+        std::string parsed;
+
+        if (!dependency
+            || !parse_lock_string(value, parsed)
+            || (key != "name"
+                && key != "github"
+                && key != "version"
+                && key != "target"
+                && key != "url"
+                && key != "sha256"))
+        {
+          error << "forge: invalid forge.lock.toml line " << line_number << '\n';
+          return false;
+        }
+
+        if (key == "name")
+        {
+          dependency->name = std::move(parsed);
+        }
+        else if (key == "github")
+        {
+          dependency->github = std::move(parsed);
+        }
+        else if (key == "version")
+        {
+          dependency->version = std::move(parsed);
+        }
+        else if (key == "target")
+        {
+          dependency->target = std::move(parsed);
+        }
+        else if (key == "url")
+        {
+          dependency->url = std::move(parsed);
+        }
+        else
+        {
+          dependency->sha256 = std::move(parsed);
+        }
+      }
+
+      if (!store_dependency() || !valid_format)
+      {
+        if (!valid_format)
+        {
+          error << "forge: forge.lock.toml has an unsupported or missing format\n";
+        }
+
+        return false;
+      }
+
+      return true;
+    }
+
+    bool write_lockfile(std::ostream& error)
+    {
+      if (!dependency_session->lock_dirty)
+      {
+        return true;
+      }
+
+      const auto lock_path = dependency_session->root_project / "forge.lock.toml";
+      const auto temporary_path = dependency_session->root_project / "forge.lock.toml.tmp";
+      std::ofstream lock { temporary_path };
 
       if (!lock)
       {
@@ -438,41 +626,117 @@ namespace forge
 
       lock << "format = 1\n";
 
+      for (const auto& entry : dependency_session->locked_dependencies)
+      {
+        const auto& dependency = entry.second;
+        lock
+          << "\n[[dependency]]\n"
+          << "name = \"" << dependency.name << "\"\n"
+          << "github = \"" << dependency.github << "\"\n"
+          << "version = \"" << dependency.version << "\"\n"
+          << "target = \"" << dependency.target << "\"\n"
+          << "url = \"" << dependency.url << "\"\n"
+          << "sha256 = \"" << dependency.sha256 << "\"\n";
+      }
+
       if (!lock)
       {
         error << "forge: could not write forge.lock.toml\n";
         return false;
       }
 
+      lock.close();
+      const auto backup_path = dependency_session->root_project / "forge.lock.toml.bak";
+      std::error_code filesystem_error;
+      std::filesystem::remove(backup_path, filesystem_error);
+      filesystem_error.clear();
+
+      if (std::filesystem::is_regular_file(lock_path))
+      {
+        std::filesystem::rename(lock_path, backup_path, filesystem_error);
+
+        if (filesystem_error)
+        {
+          error << "forge: could not replace forge.lock.toml\n";
+          return false;
+        }
+      }
+
+      std::filesystem::rename(temporary_path, lock_path, filesystem_error);
+
+      if (filesystem_error)
+      {
+        filesystem_error.clear();
+        std::filesystem::rename(backup_path, lock_path, filesystem_error);
+        error << "forge: could not replace forge.lock.toml\n";
+        return false;
+      }
+
+      std::filesystem::remove(backup_path, filesystem_error);
       return true;
     }
 
-    bool append_github_lock(const std::filesystem::path& project_directory,
-                            const Dependency& dependency,
-                            std::ostream& error)
+    bool use_locked_github_dependency(Dependency& dependency,
+                                      const ProcessRunner& process_runner,
+                                      std::ostream& output,
+                                      std::ostream& error)
     {
-      std::ofstream lock { project_directory / "forge.lock.toml", std::ios::app };
+      const auto target = current_target();
+      const auto key = lock_key(dependency.name, target);
+      const auto update =
+        dependency_session->options.update_dependencies
+        && (!dependency_session->options.update_dependency
+            || *dependency_session->options.update_dependency == dependency.name);
 
-      if (!lock)
+      if (update)
       {
-        error << "forge: could not write forge.lock.toml\n";
+        dependency_session->update_dependency_found = true;
+
+        if (!resolve_github_dependency(
+          dependency_session->root_project,
+          dependency,
+          process_runner,
+          output,
+          error
+        ))
+        {
+          return false;
+        }
+
+        dependency_session->locked_dependencies[key] =
+          {
+            dependency.name,
+            dependency.github,
+            dependency.version,
+            target,
+            dependency.url,
+            dependency.sha256
+          };
+        dependency_session->lock_dirty = true;
+        return true;
+      }
+
+      const auto locked = dependency_session->locked_dependencies.find(key);
+
+      if (locked == dependency_session->locked_dependencies.end())
+      {
+        error << "forge: dependency '" << dependency.name << "' is not locked for "
+              << target << "; run forge update " << dependency.name << '\n';
         return false;
       }
 
-      lock
-        << "\n[[dependency]]\n"
-        << "name = \"" << dependency.name << "\"\n"
-        << "github = \"" << dependency.github << "\"\n"
-        << "version = \"" << dependency.version << "\"\n"
-        << "url = \"" << dependency.url << "\"\n"
-        << "sha256 = \"" << dependency.sha256 << "\"\n";
-
-      if (!lock)
+      if (locked->second.github != dependency.github
+          || locked->second.version != dependency.version)
       {
-        error << "forge: could not write forge.lock.toml\n";
+        error << "forge: dependency '" << dependency.name
+              << "' conflicts with forge.lock.toml; run forge update "
+              << dependency.name << '\n';
         return false;
       }
 
+      dependency.url = locked->second.url;
+      dependency.sha256 = locked->second.sha256;
+      output << "Using locked dependency " << dependency.name << " for " << target << '\n';
       return true;
     }
 
@@ -701,8 +965,7 @@ namespace forge
       auto resolved_dependency = dependency;
 
       if (!resolved_dependency.github.empty()
-          && !resolve_github_dependency(
-            parent_directory,
+          && !use_locked_github_dependency(
             resolved_dependency,
             process_runner,
             output,
@@ -721,12 +984,6 @@ namespace forge
             output,
             error
           ))
-      {
-        return false;
-      }
-
-      if (!resolved_dependency.github.empty()
-          && !append_github_lock(parent_directory, resolved_dependency, error))
       {
         return false;
       }
@@ -1055,11 +1312,6 @@ namespace forge
       std::set<std::filesystem::path> collected;
       std::vector<DependencyNode*> ordered;
 
-      if (!write_github_lock_header(project_directory, recipe, error))
-      {
-        return false;
-      }
-
       for (const auto& dependency : recipe.dependencies)
       {
         if (!direct_names.insert(dependency.name).second)
@@ -1112,10 +1364,27 @@ namespace forge
                     std::ostream& output,
                     std::ostream& error)
   {
-    return build_project(project_directory, run_process, output, error);
+    return build_project(project_directory, BuildOptions {}, run_process, output, error);
   }
 
   int build_project(const std::filesystem::path& project_directory,
+                    const BuildOptions& options,
+                    std::ostream& output,
+                    std::ostream& error)
+  {
+    return build_project(project_directory, options, run_process, output, error);
+  }
+
+  int build_project(const std::filesystem::path& project_directory,
+                    const ProcessRunner& process_runner,
+                    std::ostream& output,
+                    std::ostream& error)
+  {
+    return build_project(project_directory, BuildOptions {}, process_runner, output, error);
+  }
+
+  int build_project(const std::filesystem::path& project_directory,
+                    const BuildOptions& options,
                     const ProcessRunner& process_runner,
                     std::ostream& output,
                     std::ostream& error)
@@ -1129,6 +1398,19 @@ namespace forge
     {
       error << "forge: could not resolve project directory\n";
       return 2;
+    }
+
+    const auto is_root_project = dependency_session->root_project.empty();
+
+    if (is_root_project)
+    {
+      dependency_session->root_project = canonical_project;
+      dependency_session->options = options;
+
+      if (!load_lockfile(canonical_project, error))
+      {
+        return 2;
+      }
     }
 
     ActiveProjectScope active_project { canonical_project };
@@ -1234,6 +1516,26 @@ namespace forge
       return 2;
     }
 
+    if (is_root_project
+        && dependency_session->options.update_dependency
+        && !dependency_session->update_dependency_found)
+    {
+      error << "forge: GitHub dependency '" << *dependency_session->options.update_dependency
+            << "' was not found\n";
+      return 2;
+    }
+
+    if (is_root_project && dependency_session->options.dependencies_only)
+    {
+      if (!write_lockfile(error))
+      {
+        return 2;
+      }
+
+      output << "Updated locked dependencies for " << current_target() << '\n';
+      return 0;
+    }
+
     if (!stage_runtime_dependencies(build_directory / "runtime", dependencies, error))
     {
       return 2;
@@ -1308,6 +1610,12 @@ namespace forge
       }
 
       output << '\n';
+
+      if (is_root_project && !write_lockfile(error))
+      {
+        return 2;
+      }
+
       return 0;
     }
 
@@ -1327,6 +1635,12 @@ namespace forge
     }
 
     output << "Built " << artifact.string() << '\n';
+
+    if (is_root_project && !write_lockfile(error))
+    {
+      return 2;
+    }
+
     return 0;
   }
 

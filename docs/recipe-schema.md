@@ -27,7 +27,8 @@ rules:
   dependencies using name and either project-path or cbox-path inline tables.
 - Downloadable cbox dependencies require both `url` and lowercase `sha256`.
 - GitHub Release cbox dependencies require `github = "owner/repository"` and a
-  packaged `version`.
+  packaged `version`. `forge update` writes their exact target-specific
+  resolutions to `forge.lock.toml`; normal builds require those locked entries.
 
 ## Taplo and VS Code
 

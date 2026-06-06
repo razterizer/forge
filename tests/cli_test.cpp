@@ -413,6 +413,54 @@ namespace
     expect(contains(build_error.str(), "no source files"), "build explains an empty project");
   }
 
+  void test_update_rejects_unknown_dependency()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array new_arguments {
+      std::string_view { "new" },
+      std::string_view { "hello" }
+    };
+    constexpr std::array update_arguments {
+      std::string_view { "update" },
+      std::string_view { "missing" }
+    };
+    constexpr std::array update_all_arguments { std::string_view { "update" } };
+    std::ostringstream new_output;
+    std::ostringstream new_error;
+    std::ostringstream update_all_output;
+    std::ostringstream update_all_error;
+    std::ostringstream update_output;
+    std::ostringstream update_error;
+    forge::cli::run(new_arguments, directory.path(), new_output, new_error);
+    const auto project_directory = directory.path() / "hello";
+
+    expect(
+      forge::cli::run(
+        update_all_arguments,
+        project_directory,
+        update_all_output,
+        update_all_error
+      ) == 0,
+      "update succeeds without GitHub dependencies"
+    );
+    expect(
+      !std::filesystem::exists(project_directory / ".forge/build/hello"),
+      "update does not build the current project"
+    );
+    expect(contains(update_all_output.str(), "Updated locked dependencies"), "update reports success");
+
+    expect(
+      forge::cli::run(
+        update_arguments,
+        project_directory,
+        update_output,
+        update_error
+      ) == 2,
+      "update rejects an unknown dependency"
+    );
+    expect(contains(update_error.str(), "was not found"), "unknown update dependency is explained");
+  }
+
   void test_run_new_project()
   {
     TemporaryDirectory directory;
@@ -1452,6 +1500,7 @@ int main()
   test_new_requires_name();
   test_build_new_project();
   test_build_rejects_empty_project();
+  test_update_rejects_unknown_dependency();
   test_run_new_project();
   test_release_new_project();
   test_prepare_executable_release();

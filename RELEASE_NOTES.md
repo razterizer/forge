@@ -31,6 +31,9 @@
 - Added checksum-verified downloadable `.cbox` dependencies with local caching.
 - Added GitHub Release `.cbox` dependency shorthand with target-aware asset
   resolution and generated `forge.lock.toml` entries.
+- Added authoritative target-specific lockfiles and explicit
+  `forge update [dependency]` refreshes for reproducible GitHub dependency
+  builds.
 - Added `forge box publish <box>` for verified local publication and checksum
   generation.
 - Added runnable examples, unit and integration tests, CMake presets, and an

@@ -234,9 +234,28 @@ answer = { github = "example/answer", version = "1.0.0" }
 ```
 
 Forge resolves the target-qualified `.cbox` and sibling `.sha256` asset from
-the `release-1.0.0` GitHub Release, verifies and caches the box, and writes the
-exact resolved URL and checksum to `forge.lock.toml`. Commit the lockfile so
-other builds can inspect the exact artifact resolution.
+the `release-1.0.0` GitHub Release when explicitly updated, verifies and caches
+the box, and writes the exact target, URL, and checksum to `forge.lock.toml`.
+Commit the lockfile so normal builds remain reproducible.
+
+Resolve or refresh every GitHub dependency for the current target:
+
+```sh
+forge update
+```
+
+Refresh one dependency:
+
+```sh
+forge update answer
+```
+
+Normal `forge build`, `forge run`, and release commands require matching
+target-specific lock entries and never re-resolve GitHub release checksums.
+They fail with an update command when the recipe and lockfile disagree.
+Updating resolves and verifies dependencies without building the current
+project. Updating one target preserves entries previously resolved for other
+targets.
 
 When selecting a box with build metadata, include it in the dependency version:
 
