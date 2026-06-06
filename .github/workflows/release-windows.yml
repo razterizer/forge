@@ -1,0 +1,41 @@
+name: release windows
+
+on:
+  push:
+    tags:
+      - "release-*"
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake --preset dev
+
+      - name: Build
+        run: cmake --build --preset dev
+
+      - name: Test
+        run: ctest --preset dev
+
+      - name: Create release archive
+        shell: pwsh
+        run: |
+          ./build/dev/forge.exe release
+          Move-Item .forge/release/forge-*.zip ".forge/release/forge-${{ github.ref_name }}-windows.zip"
+
+      - name: Publish GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: .forge/release/forge-${{ github.ref_name }}-windows.zip
+          bodyFile: .forge/release/RELEASE_NOTES.md
+          tag: ${{ github.ref_name }}

@@ -305,6 +305,22 @@ Create a release archive:
 `README.md` and `LICENSE` files when present, and creates
 `.forge/release/<name>-<version>.zip`.
 
+When `RELEASE_NOTES.md` exists, Forge requires a `## <version>` section matching
+the recipe version. It packages only that section and writes a copy to
+`.forge/release/RELEASE_NOTES.md` for hosted release publication:
+
+```markdown
+# Release notes
+
+## 0.2.0
+
+- Added something useful.
+
+## 0.1.0
+
+- Initial release.
+```
+
 Additional release files and directories can be declared in the recipe:
 
 ```toml
@@ -315,6 +331,13 @@ files = ["RELEASE_NOTES.md", "assets", "examples"]
 Forge copies declared entries recursively while preserving their
 project-relative paths. Paths must remain inside the project, and symbolic
 links are rejected.
+
+`forge new` and `forge init` create `RELEASE_NOTES.md` and Linux, macOS, and
+Windows release workflows under `.github/workflows`. Pushing a `release-*` or
+`v*` tag builds Forge, creates a platform archive, and publishes it to the
+matching GitHub Release. Existing workflow files and release notes are never
+overwritten by `forge init`. Forge does not create or push the tag yet, so tag
+creation remains an explicit user action.
 
 Create, inspect, verify, and extract an executable, static-library,
 shared-library, or header-only box:

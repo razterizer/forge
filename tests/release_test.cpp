@@ -76,7 +76,12 @@ namespace
     std::ofstream { directory / "assets/background.tx" } << "background\n";
     std::ofstream { directory / "assets/nested/colors.tx" } << "colors\n";
     std::ofstream { directory / "assets/.forge/generated.txt" } << "generated\n";
-    std::ofstream { directory / "RELEASE_NOTES.md" } << "# Release notes\n";
+    std::ofstream { directory / "RELEASE_NOTES.md" }
+      << "# Release notes\n\n"
+      << "## 0.1.0\n\n"
+      << "- First release.\n\n"
+      << "## 0.0.0\n\n"
+      << "- Older release.\n";
   }
 
   void test_release_stages_files_and_creates_archive_command()
@@ -140,6 +145,15 @@ namespace
       ),
       "release stages a declared file"
     );
+    expect(
+      std::filesystem::exists(directory.path() / ".forge/release/RELEASE_NOTES.md"),
+      "release writes notes for hosted release publication"
+    );
+    std::ifstream notes { directory.path() / ".forge/release/RELEASE_NOTES.md" };
+    std::ostringstream notes_text;
+    notes_text << notes.rdbuf();
+    expect(contains(notes_text.str(), "First release."), "release extracts current notes");
+    expect(!contains(notes_text.str(), "Older release."), "release excludes older notes");
     expect(
       !std::filesystem::exists(
         directory.path() / ".forge/release/hello-0.1.0/assets/.forge"
@@ -224,6 +238,46 @@ namespace
     expect(contains(error.str(), "must stay inside"), "release explains unsafe file paths");
   }
 
+  void test_release_rejects_missing_version_notes()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream { directory.path() / "RELEASE_NOTES.md" }
+      << "# Release notes\n\n"
+      << "## 0.0.0\n\n"
+      << "- Older release.\n";
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&invocations, &directory](const std::vector<std::string>& command,
+                                 const std::filesystem::path&,
+                                 std::ostream&)
+      {
+        ++invocations;
+
+        if (command.size() > 1 && command[1] == "--build")
+        {
+          std::filesystem::create_directories(directory.path() / ".forge/build");
+#ifdef _WIN32
+          std::ofstream executable { directory.path() / ".forge/build/hello.exe" };
+#else
+          std::ofstream executable { directory.path() / ".forge/build/hello" };
+#endif
+        }
+
+        return 0;
+      };
+
+    expect(
+      forge::release_project(directory.path(), runner, output, error) == 2,
+      "release rejects missing version notes"
+    );
+    expect(invocations == 2, "missing version notes are rejected before archiving");
+    expect(contains(error.str(), "were not found"), "release explains missing version notes");
+  }
+
 } // namespace
 
 int main()
@@ -231,6 +285,7 @@ int main()
   test_release_stages_files_and_creates_archive_command();
   test_release_reports_archive_failure();
   test_release_rejects_file_outside_project();
+  test_release_rejects_missing_version_notes();
 
   return failures == 0 ? 0 : 1;
 }

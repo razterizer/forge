@@ -1,5 +1,6 @@
 #include "init.h"
 
+#include "github.h"
 #include "recipe.h"
 
 #include <algorithm>
@@ -175,13 +176,14 @@ namespace forge
       return 2;
     }
 
-    const auto project_name = escape_toml_string(project_directory.filename().string());
+    const auto project_name = project_directory.filename().string();
+    const auto escaped_project_name = escape_toml_string(project_name);
     const auto formatted_sources = format_sources(sources);
     const std::string recipe =
       "#:schema " + std::string { recipe_schema_url } + "\n"
       "\n"
       "[project]\n"
-      "name = \"" + project_name + "\"\n"
+      "name = \"" + escaped_project_name + "\"\n"
       "version = \"0.1.0\"\n"
       "type = \"executable\"\n"
       "cpp_std = 20\n"
@@ -190,6 +192,11 @@ namespace forge
       "paths = " + formatted_sources + "\n";
 
     if (!write_file(recipe_path, recipe, error))
+    {
+      return 2;
+    }
+
+    if (!generate_github_release_support(project_directory, project_name, error))
     {
       return 2;
     }

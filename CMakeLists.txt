@@ -13,6 +13,7 @@ add_library(forge_core STATIC
     src/box.cpp
     src/build.cpp
     src/cli.cpp
+    src/github.cpp
     src/init.cpp
     src/new.cpp
     src/process.cpp

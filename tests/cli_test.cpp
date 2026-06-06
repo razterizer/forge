@@ -137,6 +137,14 @@ namespace
       read_file(directory.path() / "forge.recipe.toml").starts_with("#:schema https://"),
       "init recipe declares its schema"
     );
+    expect(
+      std::filesystem::exists(directory.path() / ".github/workflows/release-linux.yml"),
+      "init creates GitHub release workflows"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / "RELEASE_NOTES.md"),
+      "init creates release notes"
+    );
     expect(contains(output.str(), "Found 3 C++ source files"), "init reports discovered sources");
     expect(error.str().empty(), "init does not write an error");
   }
@@ -203,6 +211,36 @@ namespace
     expect(contains(second_error.str(), "already exists"), "init explains overwrite refusal");
   }
 
+  void test_init_preserves_existing_release_support()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "init" } };
+    std::ostringstream output;
+    std::ostringstream error;
+    write_file(directory.path() / "main.cpp", "int main() {}\n");
+    write_file(directory.path() / "RELEASE_NOTES.md", "# Existing notes\n");
+    write_file(
+      directory.path() / ".github/workflows/release-linux.yml",
+      "name: custom release\n"
+    );
+
+    forge::cli::run(arguments, directory.path(), output, error);
+
+    expect(
+      read_file(directory.path() / "RELEASE_NOTES.md") == "# Existing notes\n",
+      "init preserves existing release notes"
+    );
+    expect(
+      read_file(directory.path() / ".github/workflows/release-linux.yml")
+        == "name: custom release\n",
+      "init preserves existing GitHub workflows"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / ".github/workflows/release-windows.yml"),
+      "init creates missing GitHub workflows"
+    );
+  }
+
   void test_new()
   {
     TemporaryDirectory directory;
@@ -236,6 +274,18 @@ namespace
     expect(
       read_file(directory.path() / "hello/forge.recipe.toml").starts_with("#:schema https://"),
       "new recipe declares its schema"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / "hello/.github/workflows/release-macos.yml"),
+      "new creates GitHub release workflows"
+    );
+    expect(
+      contains(read_file(directory.path() / "hello/.github/workflows/release-windows.yml"), "hello-*.zip"),
+      "new workflows use the project name"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / "hello/RELEASE_NOTES.md"),
+      "new creates release notes"
     );
     expect(error.str().empty(), "new does not write an error");
   }
@@ -927,6 +977,7 @@ int main()
   test_init_ignores_generated_directories();
   test_init_empty_project();
   test_init_refuses_to_overwrite();
+  test_init_preserves_existing_release_support();
   test_new();
   test_new_refuses_existing_path();
   test_new_requires_simple_name();

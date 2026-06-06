@@ -1,0 +1,40 @@
+name: release macos
+
+on:
+  push:
+    tags:
+      - "release-*"
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake --preset dev
+
+      - name: Build
+        run: cmake --build --preset dev
+
+      - name: Test
+        run: ctest --preset dev
+
+      - name: Create release archive
+        run: |
+          ./build/dev/forge release
+          mv .forge/release/forge-*.zip ".forge/release/forge-${{ github.ref_name }}-macos.zip"
+
+      - name: Publish GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: .forge/release/forge-${{ github.ref_name }}-macos.zip
+          bodyFile: .forge/release/RELEASE_NOTES.md
+          tag: ${{ github.ref_name }}

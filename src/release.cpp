@@ -4,6 +4,9 @@
 #include "recipe.h"
 
 #include <array>
+#include <fstream>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -138,6 +141,110 @@ namespace forge
       return true;
     }
 
+    std::string_view trim(std::string_view value)
+    {
+      const auto first = value.find_first_not_of(" \t\r");
+
+      if (first == std::string_view::npos)
+      {
+        return {};
+      }
+
+      return value.substr(first, value.find_last_not_of(" \t\r") - first + 1);
+    }
+
+    bool is_release_heading(std::string_view line, std::string_view version)
+    {
+      line = trim(line);
+
+      if (!line.starts_with("##"))
+      {
+        return false;
+      }
+
+      line.remove_prefix(2);
+      return trim(line) == version;
+    }
+
+    bool is_section_heading(std::string_view line)
+    {
+      line = trim(line);
+      return line.starts_with("##") && !line.starts_with("###");
+    }
+
+    bool extract_release_notes(const std::filesystem::path& source,
+                               std::string_view version,
+                               std::optional<std::string>& notes,
+                               std::ostream& error)
+    {
+      if (!std::filesystem::is_regular_file(source))
+      {
+        return true;
+      }
+
+      std::ifstream input { source };
+
+      if (!input)
+      {
+        error << "forge: could not read '" << source.string() << "'\n";
+        return false;
+      }
+
+      std::ostringstream extracted;
+      std::string line;
+      bool found = false;
+
+      while (std::getline(input, line))
+      {
+        if (!found)
+        {
+          found = is_release_heading(line, version);
+          continue;
+        }
+
+        if (is_section_heading(line))
+        {
+          break;
+        }
+
+        extracted << line << '\n';
+      }
+
+      if (!found)
+      {
+        error
+          << "forge: release notes for version '" << version
+          << "' were not found in '" << source.string() << "'\n";
+        return false;
+      }
+
+      notes = extracted.str();
+      return true;
+    }
+
+    bool write_release_notes(const std::filesystem::path& path,
+                             const std::string& notes,
+                             std::ostream& error)
+    {
+      std::ofstream output { path };
+
+      if (!output)
+      {
+        error << "forge: could not write '" << path.string() << "'\n";
+        return false;
+      }
+
+      output << notes;
+
+      if (!output)
+      {
+        error << "forge: could not write '" << path.string() << "'\n";
+        return false;
+      }
+
+      return true;
+    }
+
   } // namespace
 
   int release_project(const std::filesystem::path& project_directory,
@@ -247,6 +354,25 @@ namespace forge
       {
         return 2;
       }
+    }
+
+    std::optional<std::string> release_notes;
+
+    if (!extract_release_notes(
+      project_directory / "RELEASE_NOTES.md",
+      recipe.version,
+      release_notes,
+      error
+    ))
+    {
+      return 2;
+    }
+
+    if (release_notes
+        && (!write_release_notes(staging_directory / "RELEASE_NOTES.md", *release_notes, error)
+            || !write_release_notes(release_directory / "RELEASE_NOTES.md", *release_notes, error)))
+    {
+      return 2;
     }
 
     output << "Packaging " << package_name << '\n' << std::flush;

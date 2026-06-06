@@ -1,5 +1,6 @@
 #include "new.h"
 
+#include "github.h"
 #include "recipe.h"
 
 #include <fstream>
@@ -119,7 +120,9 @@ namespace forge
       "  std::cout << \"Hello from Forge!\\n\";\n"
       "}\n";
 
-    if (!write_file(recipe_path, recipe, error) || !write_file(main_path, main_source, error))
+    if (!write_file(recipe_path, recipe, error)
+        || !write_file(main_path, main_source, error)
+        || !generate_github_release_support(project_directory, project_name, error))
     {
       std::filesystem::remove_all(project_directory, filesystem_error);
       return 2;
