@@ -392,22 +392,22 @@ namespace forge
     }
 
     bool create_and_push_tag(const std::filesystem::path& project_directory,
-                             const Recipe& recipe,
+                             std::string_view version,
+                             const std::optional<std::string>& release_notes,
                              std::string_view tag,
                              const ProcessRunner& process_runner,
                              std::ostream& output,
                              std::ostream& error)
     {
-      const auto notes_path = project_directory / ".forge" / "release" / "RELEASE_NOTES.md";
       std::vector<std::string> tag_arguments { "git", "tag", "-a", std::string { tag } };
 
-      if (std::filesystem::is_regular_file(notes_path))
+      if (release_notes)
       {
-        tag_arguments.insert(tag_arguments.end(), { "-F", notes_path.string() });
+        tag_arguments.insert(tag_arguments.end(), { "-m", *release_notes });
       }
       else
       {
-        tag_arguments.insert(tag_arguments.end(), { "-m", "Release " + recipe.version });
+        tag_arguments.insert(tag_arguments.end(), { "-m", "Release " + std::string { version } });
       }
 
       if (process_runner(tag_arguments, project_directory, error) != 0)
@@ -437,14 +437,6 @@ namespace forge
                       std::ostream& error)
   {
     return release_project(project_directory, run_process, output, error);
-  }
-
-  int release_project(const std::filesystem::path& project_directory,
-                      const ReleaseOptions& options,
-                      std::ostream& output,
-                      std::ostream& error)
-  {
-    return release_project(project_directory, options, run_process, output, error);
   }
 
   int release_project(const std::filesystem::path& project_directory,
@@ -593,17 +585,20 @@ namespace forge
     return 0;
   }
 
-  int release_project(const std::filesystem::path& project_directory,
-                      const ReleaseOptions& options,
-                      const ProcessRunner& process_runner,
-                      std::ostream& output,
-                      std::ostream& error)
+  int release_github(const std::filesystem::path& project_directory,
+                     const GitHubReleaseOptions& options,
+                     std::ostream& output,
+                     std::ostream& error)
   {
-    if (!options.tag_format)
-    {
-      return release_project(project_directory, process_runner, output, error);
-    }
+    return release_github(project_directory, options, run_process, output, error);
+  }
 
+  int release_github(const std::filesystem::path& project_directory,
+                     const GitHubReleaseOptions& options,
+                     const ProcessRunner& process_runner,
+                     std::ostream& output,
+                     std::ostream& error)
+  {
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
@@ -613,28 +608,28 @@ namespace forge
 
     std::string tag;
 
-    if (!expand_tag_format(*options.tag_format, recipe, tag, error)
+    if (!expand_tag_format(options.tag_format.value_or("release-<version>"), recipe, tag, error)
         || !preflight_tag(project_directory, tag, process_runner, error))
     {
       return 2;
     }
 
-    if (release_project(project_directory, process_runner, output, error) != 0)
-    {
-      return 2;
-    }
+    std::optional<std::string> release_notes;
 
-    if (process_runner({ "git", "diff-index", "--quiet", "HEAD", "--" },
-                       project_directory,
-                       error) != 0)
+    if (!extract_release_notes(
+      project_directory / "RELEASE_NOTES.md",
+      recipe.version,
+      release_notes,
+      error
+    ))
     {
-      error << "forge: release changed tracked files; commit them before tagging\n";
       return 2;
     }
 
     return create_and_push_tag(
       project_directory,
-      recipe,
+      recipe.version,
+      release_notes,
       tag,
       process_runner,
       output,

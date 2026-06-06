@@ -10,7 +10,7 @@
 namespace forge
 {
 
-  struct ReleaseOptions
+  struct GitHubReleaseOptions
   {
     std::optional<std::string> tag_format;
   };
@@ -20,19 +20,19 @@ namespace forge
                       std::ostream& error);
 
   int release_project(const std::filesystem::path& project_directory,
-                      const ReleaseOptions& options,
-                      std::ostream& output,
-                      std::ostream& error);
-
-  int release_project(const std::filesystem::path& project_directory,
                       const ProcessRunner& process_runner,
                       std::ostream& output,
                       std::ostream& error);
 
-  int release_project(const std::filesystem::path& project_directory,
-                      const ReleaseOptions& options,
-                      const ProcessRunner& process_runner,
-                      std::ostream& output,
-                      std::ostream& error);
+  int release_github(const std::filesystem::path& project_directory,
+                     const GitHubReleaseOptions& options,
+                     std::ostream& output,
+                     std::ostream& error);
+
+  int release_github(const std::filesystem::path& project_directory,
+                     const GitHubReleaseOptions& options,
+                     const ProcessRunner& process_runner,
+                     std::ostream& output,
+                     std::ostream& error);
 
 } // namespace forge

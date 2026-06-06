@@ -301,7 +301,7 @@ namespace
     std::vector<std::vector<std::string>> commands;
     std::ostringstream output;
     std::ostringstream error;
-    forge::ReleaseOptions options;
+    forge::GitHubReleaseOptions options;
     options.tag_format = "<name>-<version>+build.<build-nr>-<configuration>";
 
     const forge::ProcessRunner runner =
@@ -330,21 +330,24 @@ namespace
       };
 
     expect(
-      forge::release_project(directory.path(), options, runner, output, error) == 0,
-      "tagged release succeeds"
+      forge::release_github(directory.path(), options, runner, output, error) == 0,
+      "GitHub release succeeds"
     );
-    expect(commands.size() == 10, "tagged release preflights, releases, rechecks, tags, and pushes");
+    expect(commands.size() == 6, "GitHub release preflights, tags, and pushes");
     expect(
-      command_contains(commands[8], "hello-0.1.0+build.7-release"),
-      "tagged release expands custom placeholders"
+      command_contains(commands[4], "hello-0.1.0+build.7-release"),
+      "GitHub release expands custom placeholders"
     );
-    expect(command_contains(commands[8], "-F"), "tag annotation uses extracted release notes");
     expect(
-      command_contains(commands[9], "refs/tags/hello-0.1.0+build.7-release"),
-      "tagged release pushes the exact tag"
+      command_contains(commands[4], "\n- First release.\n\n"),
+      "tag annotation uses extracted release notes"
     );
-    expect(contains(output.str(), "Tagged and pushed"), "tagged release reports the pushed tag");
-    expect(error.str().empty(), "successful tagged release does not write an error");
+    expect(
+      command_contains(commands[5], "refs/tags/hello-0.1.0+build.7-release"),
+      "GitHub release pushes the exact tag"
+    );
+    expect(contains(output.str(), "Tagged and pushed"), "GitHub release reports the pushed tag");
+    expect(error.str().empty(), "successful GitHub release does not write an error");
   }
 
   void test_release_tag_rejects_dirty_tree_before_build()
@@ -354,7 +357,7 @@ namespace
     int invocations = 0;
     std::ostringstream output;
     std::ostringstream error;
-    forge::ReleaseOptions options;
+    forge::GitHubReleaseOptions options;
     options.tag_format = "release-<version>";
 
     const forge::ProcessRunner runner =
@@ -367,8 +370,8 @@ namespace
       };
 
     expect(
-      forge::release_project(directory.path(), options, runner, output, error) == 2,
-      "tagged release rejects a dirty tree"
+      forge::release_github(directory.path(), options, runner, output, error) == 2,
+      "GitHub release rejects a dirty tree"
     );
     expect(invocations == 3, "dirty tree is rejected before building");
     expect(contains(error.str(), "clean working tree"), "tagged release explains dirty tree");
@@ -381,7 +384,7 @@ namespace
     int invocations = 0;
     std::ostringstream output;
     std::ostringstream error;
-    forge::ReleaseOptions options;
+    forge::GitHubReleaseOptions options;
     options.tag_format = "release-<version>-<build-nr>";
 
     const forge::ProcessRunner runner =
@@ -394,8 +397,8 @@ namespace
       };
 
     expect(
-      forge::release_project(directory.path(), options, runner, output, error) == 2,
-      "tagged release requires a declared build number"
+      forge::release_github(directory.path(), options, runner, output, error) == 2,
+      "GitHub release requires a declared build number"
     );
     expect(invocations == 0, "invalid tag format runs no processes");
     expect(contains(error.str(), "no build number"), "tagged release explains missing build number");

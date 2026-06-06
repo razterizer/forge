@@ -44,19 +44,23 @@ Each workflow reacts to `release-*` and `v*` tags, bootstraps Forge, runs
 to the matching GitHub Release. Existing workflow and release-note files are
 left unchanged. Tag creation remains an explicit opt-in action.
 
-Tagged releases are opt-in:
+GitHub releases are explicit and separate from local releases:
 
 ```sh
-forge release --tag
-forge release --tag="release-<version>-<curr-date>"
+forge release
+forge release-github
+forge release-github --tag="release-<version>-<curr-date>"
 ```
 
-The default tag is `release-<version>`. Formats may use `<name>`, `<version>`,
-`<build-nr>`, `<curr-date>`, `<target>`, and `<configuration>`. Forge validates
-the expanded tag and clean tracked Git state before and after building, then
-creates an annotated tag from the extracted release notes and pushes it to
-`origin`. Custom formats must match `release-*` or `v*`, or the generated
-workflow triggers must be customized, to publish hosted artifacts.
+`forge release` builds and packages only on the local machine.
+`forge release-github` does not build locally; it creates and pushes the tag
+that triggers the generated platform workflows. The default tag is
+`release-<version>`. Formats may use `<name>`, `<version>`, `<build-nr>`,
+`<curr-date>`, `<target>`, and `<configuration>`. Forge validates the expanded
+tag and clean tracked Git state, then creates an annotated tag from the
+matching release notes and pushes it to `origin`. Custom formats must match
+`release-*` or `v*`, or the generated workflow triggers must be customized, to
+publish hosted artifacts.
 
 ## Planned
 

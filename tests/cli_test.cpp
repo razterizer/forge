@@ -465,9 +465,26 @@ namespace
 
     expect(
       forge::cli::run(arguments, directory.path(), output, error) == 2,
-      "release rejects an empty tag format"
+      "local release rejects tag arguments"
     );
-    expect(contains(error.str(), "cannot be empty"), "release explains an empty tag format");
+    expect(contains(error.str(), "do not accept arguments"), "local release explains tag arguments");
+  }
+
+  void test_release_github_rejects_empty_tag_format()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments {
+      std::string_view { "release-github" },
+      std::string_view { "--tag=" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "GitHub release rejects an empty tag format"
+    );
+    expect(contains(error.str(), "cannot be empty"), "GitHub release explains an empty tag format");
   }
 
   void test_box_round_trip()
@@ -1008,6 +1025,7 @@ int main()
   test_run_new_project();
   test_release_new_project();
   test_release_rejects_empty_tag_format();
+  test_release_github_rejects_empty_tag_format();
   test_box_round_trip();
   test_static_library_box_round_trip();
   test_header_only_box_round_trip();

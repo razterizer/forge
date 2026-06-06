@@ -234,6 +234,9 @@ namespace
     const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
     expect(contains(generated, "add_library(forge_project SHARED"), "build generates a shared library target");
     expect(contains(generated, "runtime"), "build configures a runtime search path");
+#ifdef __linux__
+    expect(contains(generated, "INSTALL_RPATH \"$ORIGIN\""), "shared library searches its own directory");
+#endif
 #endif
   }
 

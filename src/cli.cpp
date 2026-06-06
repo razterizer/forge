@@ -22,6 +22,7 @@ namespace forge::cli
       std::string_view { "build" },
       std::string_view { "run" },
       std::string_view { "release" },
+      std::string_view { "release-github" },
     };
 
     void print_help(std::ostream& output)
@@ -32,7 +33,7 @@ namespace forge::cli
         << "  forge <command>\n"
         << "  forge new <name>\n"
         << "  forge box <create|inspect|verify|extract> [path]\n"
-        << "  forge release [--tag[=<format>]]\n"
+        << "  forge release-github [--tag[=<format>]]\n"
         << "  forge run [arguments...]\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
@@ -42,7 +43,8 @@ namespace forge::cli
         << "  new       Create a new project\n"
         << "  build     Build the current project\n"
         << "  run       Run the current project\n"
-        << "  release   Create a release artifact\n";
+        << "  release   Create a local release artifact\n"
+        << "  release-github  Trigger GitHub release workflows\n";
     }
 
     bool is_command(std::string_view candidate)
@@ -141,13 +143,13 @@ namespace forge::cli
       return run_project(working_directory, arguments.subspan(1), output, error);
     }
 
-    if (arguments.front() == "release")
+    if (arguments.front() == "release-github")
     {
-      ReleaseOptions options;
+      GitHubReleaseOptions options;
+      options.tag_format = "release-<version>";
 
       if (arguments.size() == 2 && arguments[1] == "--tag")
       {
-        options.tag_format = "release-<version>";
       }
       else if (arguments.size() == 2 && arguments[1].starts_with("--tag="))
       {
@@ -163,11 +165,11 @@ namespace forge::cli
       }
       else if (arguments.size() != 1)
       {
-        error << "forge: usage: forge release [--tag[=<format>]]\n";
+        error << "forge: usage: forge release-github [--tag[=<format>]]\n";
         return 2;
       }
 
-      return release_project(working_directory, options, output, error);
+      return release_github(working_directory, options, output, error);
     }
 
     if (arguments.size() != 1)
@@ -184,6 +186,11 @@ namespace forge::cli
     if (arguments.front() == "build")
     {
       return build_project(working_directory, output, error);
+    }
+
+    if (arguments.front() == "release")
+    {
+      return release_project(working_directory, output, error);
     }
 
     error << "forge: '" << arguments.front() << "' is not implemented yet\n";

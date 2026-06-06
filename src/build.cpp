@@ -263,7 +263,9 @@ namespace forge
 #elif defined(__linux__)
       file
         << "set_target_properties(forge_project PROPERTIES "
-        << "BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH \"$ORIGIN/runtime\")\n";
+        << "BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH \""
+        << (recipe.type == "shared_library" ? "$ORIGIN" : "$ORIGIN/runtime")
+        << "\")\n";
 #endif
 
       if (!file)

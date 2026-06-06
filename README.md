@@ -339,24 +339,27 @@ matching GitHub Release. Existing workflow files and release notes are never
 overwritten by `forge init`. Generated `.gitignore` files exclude Forge build
 state. Tag creation remains an explicit opt-in action.
 
-Create and push an annotated release tag after packaging succeeds:
+Trigger the generated GitHub release workflows by creating and pushing an
+annotated release tag:
 
 ```sh
-forge release --tag
-forge release --tag="<name>-<version>+build.<build-nr>"
+forge release-github
+forge release-github --tag="<name>-<version>+build.<build-nr>"
 ```
 
-Plain `--tag` uses `release-<version>`. Custom formats support `<name>`,
+`forge release` remains a local-only build and packaging command.
+`forge release-github` does not build locally; it pushes a tag that causes
+GitHub Actions to build the platform releases. Its default tag is
+`release-<version>`. Custom formats support `<name>`,
 `<version>`, `<build-nr>`, `<curr-date>`, `<target>`, and `<configuration>`.
 `<build-nr>` requires `[build].number`; `<curr-date>` uses the current UTC
 date; `<target>` is the current OS and architecture; and `<configuration>` is
 `release`.
 
-Before building, tagged releases require a Git repository with clean tracked
-and staged state and reject invalid or existing local tags. Forge checks the
-tracked state again after packaging, creates an annotated tag from the
-extracted release notes, and pushes it to `origin`. If pushing fails, the local
-tag remains for inspection or a manual retry.
+GitHub releases require a Git repository with clean tracked and staged state
+and reject invalid or existing local tags. Forge creates an annotated tag from
+the matching release notes and pushes it to `origin`. If pushing fails, the
+local tag remains for inspection or a manual retry.
 
 Generated GitHub workflows react to `release-*` and `v*`. A custom tag format
 must match one of those patterns, or the generated workflow triggers must be
