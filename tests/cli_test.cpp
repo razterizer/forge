@@ -118,6 +118,10 @@ namespace
       contains(read_file(directory.path() / "forge.recipe.toml"), "source/game.cc"),
       "recipe contains a nested source"
     );
+    expect(
+      read_file(directory.path() / "forge.recipe.toml").starts_with("#:schema https://"),
+      "init recipe declares its schema"
+    );
     expect(contains(output.str(), "Found 3 C++ source files"), "init reports discovered sources");
     expect(error.str().empty(), "init does not write an error");
   }
@@ -213,6 +217,10 @@ namespace
     expect(
       contains(read_file(directory.path() / "hello/forge.recipe.toml"), "paths = [\"main.cpp\"]"),
       "new recipe contains the starter source"
+    );
+    expect(
+      read_file(directory.path() / "hello/forge.recipe.toml").starts_with("#:schema https://"),
+      "new recipe declares its schema"
     );
     expect(error.str().empty(), "new does not write an error");
   }

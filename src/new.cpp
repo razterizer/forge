@@ -1,5 +1,7 @@
 #include "new.h"
 
+#include "recipe.h"
+
 #include <fstream>
 #include <string>
 #include <system_error>
@@ -98,6 +100,8 @@ namespace forge
     const auto main_path = project_directory / "main.cpp";
     const auto escaped_name = escape_toml_string(project_name);
     const std::string recipe =
+      "#:schema " + std::string { recipe_schema_url } + "\n"
+      "\n"
       "[project]\n"
       "name = \"" + escaped_name + "\"\n"
       "version = \"0.1.0\"\n"

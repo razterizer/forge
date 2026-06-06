@@ -25,7 +25,8 @@ rules:
 
 ## Taplo and VS Code
 
-Taplo understands a schema directive at the start of a recipe:
+`forge new` and `forge init` automatically add the Taplo-compatible schema
+directive at the start of generated recipes:
 
 ```toml
 #:schema https://raw.githubusercontent.com/razterizer/forge/main/schemas/forge.recipe.schema.json

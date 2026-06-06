@@ -1,5 +1,7 @@
 #include "init.h"
 
+#include "recipe.h"
+
 #include <algorithm>
 #include <fstream>
 #include <string>
@@ -176,6 +178,8 @@ namespace forge
     const auto project_name = escape_toml_string(project_directory.filename().string());
     const auto formatted_sources = format_sources(sources);
     const std::string recipe =
+      "#:schema " + std::string { recipe_schema_url } + "\n"
+      "\n"
       "[project]\n"
       "name = \"" + project_name + "\"\n"
       "version = \"0.1.0\"\n"
