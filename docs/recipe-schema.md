@@ -24,7 +24,7 @@ rules:
 - Public headers must remain under `include/`.
 - Build numbers must be non-negative.
 - Projects may declare local static-library, shared-library, and header-only
-  dependencies using name and path inline tables.
+  dependencies using name and either project-path or cbox-path inline tables.
 
 ## Taplo and VS Code
 

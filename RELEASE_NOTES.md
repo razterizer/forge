@@ -24,5 +24,6 @@
   while keeping `forge release` local-only.
 - Fixed Linux runtime loading for transitive shared-library dependencies.
 - Added `forge clean` for removing all generated project state under `.forge/`.
+- Added verified direct local `.cbox` dependencies through `{ box = "..." }`.
 - Added runnable examples, unit and integration tests, CMake presets, and an
   Xcode project.

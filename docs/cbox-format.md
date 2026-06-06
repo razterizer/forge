@@ -114,6 +114,7 @@ the validated manifest and artifacts into the destination.
 
 ## Compatibility
 
-One box represents one OS and architecture target. Compiler, standard-library,
-ABI, build-type, permissions, and deterministic archive rules will be added
-before binary dependency resolution relies on boxes.
+One box represents one OS and architecture target. Forge validates both before
+installing a direct local box dependency. Compiler, standard-library, ABI,
+build-type, permissions, and deterministic archive rules remain future
+compatibility dimensions.

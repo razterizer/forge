@@ -120,7 +120,7 @@ namespace forge
       return true;
     }
 
-    bool parse_dependency(std::string_view value, std::filesystem::path& path)
+    bool parse_dependency(std::string_view value, Dependency& dependency)
     {
       value = trim(value);
 
@@ -132,11 +132,12 @@ namespace forge
       value = trim(value.substr(1, value.size() - 2));
       const auto equals = value.find('=');
 
-      if (equals == std::string_view::npos || trim(value.substr(0, equals)) != "path")
+      if (equals == std::string_view::npos)
       {
         return false;
       }
 
+      const auto kind = trim(value.substr(0, equals));
       std::string parsed_path;
 
       if (!parse_string(value.substr(equals + 1), parsed_path))
@@ -144,8 +145,19 @@ namespace forge
         return false;
       }
 
-      path = parsed_path;
-      return true;
+      if (kind == "path")
+      {
+        dependency.path = parsed_path;
+        return true;
+      }
+
+      if (kind == "box")
+      {
+        dependency.box = parsed_path;
+        return true;
+      }
+
+      return false;
     }
 
   } // namespace
@@ -232,7 +244,7 @@ namespace forge
       {
         Dependency dependency;
         dependency.name = std::string { key };
-        valid = !dependency.name.empty() && parse_dependency(value, dependency.path);
+        valid = !dependency.name.empty() && parse_dependency(value, dependency);
 
         if (valid)
         {

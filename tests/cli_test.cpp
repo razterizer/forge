@@ -961,6 +961,112 @@ namespace
     expect(error.str().empty(), "successful dependency build does not write an error");
   }
 
+  void test_run_with_local_box_dependency()
+  {
+    TemporaryDirectory directory;
+    const auto answer = directory.path() / "answer";
+    const auto packages = directory.path() / "packages";
+    const auto application = directory.path() / "app";
+    write_file(
+      answer / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"answer\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"static_library\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"src/answer.cpp\"]\n"
+      "public_headers = [\"include/answer/answer.h\"]\n"
+    );
+    write_file(answer / "include/answer/answer.h", "int answer();\n");
+    write_file(
+      answer / "src/answer.cpp",
+      "#include <answer/answer.h>\n"
+      "int answer() { return 42; }\n"
+    );
+    constexpr std::array create_arguments {
+      std::string_view { "box" },
+      std::string_view { "create" }
+    };
+    std::ostringstream create_output;
+    std::ostringstream create_error;
+
+    expect(
+      forge::cli::run(create_arguments, answer, create_output, create_error) == 0,
+      "box dependency fixture is created"
+    );
+
+    std::filesystem::create_directories(packages);
+    std::filesystem::path box_path;
+
+    for (const auto& entry : std::filesystem::directory_iterator { answer / ".forge/boxes" })
+    {
+      if (entry.path().extension() == ".cbox")
+      {
+        box_path = packages / entry.path().filename();
+        std::filesystem::copy_file(entry.path(), box_path);
+      }
+    }
+
+    std::filesystem::remove_all(answer);
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[dependencies]\n"
+      "answer = { box = \"../packages/" + box_path.filename().generic_string() + "\" }\n"
+    );
+    write_file(
+      application / "main.cpp",
+      "#include <answer/answer.h>\n"
+      "int main() { return answer() == 42 ? 0 : 1; }\n"
+    );
+    constexpr std::array run_arguments { std::string_view { "run" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(run_arguments, application, output, error) == 0,
+      "run succeeds with a local box dependency"
+    );
+    expect(
+      std::filesystem::exists(application / ".forge/deps/answer/include/answer/answer.h"),
+      "build installs headers from the local box"
+    );
+    expect(
+      std::filesystem::exists(application / ".forge/deps/answer/lib"),
+      "build installs the library from the local box"
+    );
+    expect(error.str().empty(), "successful local box dependency does not write an error");
+
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[dependencies]\n"
+      "wrong-name = { box = \"../packages/" + box_path.filename().generic_string() + "\" }\n"
+    );
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    std::ostringstream mismatch_output;
+    std::ostringstream mismatch_error;
+
+    expect(
+      forge::cli::run(build_arguments, application, mismatch_output, mismatch_error) == 2,
+      "build rejects a local box with a different package name"
+    );
+    expect(contains(mismatch_error.str(), "does not match box name"), "box name mismatch is explained");
+  }
+
   void test_run_and_release_with_shared_dependency()
   {
 #ifndef _WIN32
@@ -1128,6 +1234,7 @@ int main()
   test_static_library_box_round_trip();
   test_header_only_box_round_trip();
   test_run_with_local_dependencies();
+  test_run_with_local_box_dependency();
   test_run_and_release_with_shared_dependency();
   test_unknown_command();
 

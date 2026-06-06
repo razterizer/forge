@@ -1070,4 +1070,52 @@ namespace forge
     return 0;
   }
 
+  bool read_box_metadata(const std::filesystem::path& box_path,
+                         const std::filesystem::path& working_directory,
+                         const ProcessRunner& process_runner,
+                         BoxMetadata& metadata,
+                         std::ostream& error)
+  {
+    const auto resolved_box = resolve_box_path(box_path, working_directory);
+
+    if (!validate_box_path(resolved_box, error))
+    {
+      return false;
+    }
+
+    const auto validation_directory = working_directory / ".forge" / "cache" / "box-metadata";
+    BoxManifest manifest;
+    std::string manifest_content;
+
+    if (!unpack_and_validate_box(
+      resolved_box,
+      validation_directory,
+      process_runner,
+      manifest,
+      manifest_content,
+      error
+    ))
+    {
+      return false;
+    }
+
+    metadata =
+      {
+        manifest.name,
+        manifest.version,
+        manifest.build_number,
+        manifest.type,
+        manifest.os,
+        manifest.arch,
+        {}
+      };
+
+    for (const auto& artifact : manifest.artifacts)
+    {
+      metadata.artifacts.push_back({ artifact.path, artifact.kind });
+    }
+
+    return true;
+  }
+
 } // namespace forge

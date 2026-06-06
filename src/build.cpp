@@ -31,6 +31,7 @@ namespace forge
       std::filesystem::path directory;
       Recipe recipe;
       std::filesystem::path box;
+      std::optional<BoxMetadata> box_metadata;
     };
 
     struct DependencySession
@@ -137,6 +138,30 @@ namespace forge
       return std::string { name } + ".dll";
 #else
       return {};
+#endif
+    }
+
+    std::string target_os()
+    {
+#ifdef _WIN32
+      return "windows";
+#elif __APPLE__
+      return "macos";
+#elif __linux__
+      return "linux";
+#else
+      return "unknown";
+#endif
+    }
+
+    std::string target_arch()
+    {
+#if defined(__x86_64__) || defined(_M_X64)
+      return "x86_64";
+#elif defined(__aarch64__) || defined(_M_ARM64)
+      return "arm64";
+#else
+      return "unknown";
 #endif
     }
 
@@ -349,6 +374,7 @@ namespace forge
 
     bool read_dependency_node(const std::filesystem::path& parent_directory,
                               const Dependency& dependency,
+                              const ProcessRunner& process_runner,
                               DependencyNode*& node,
                               std::ostream& error)
     {
@@ -359,16 +385,19 @@ namespace forge
       }
 
       std::error_code filesystem_error;
+      const auto dependency_location = dependency.box.empty() ? dependency.path : dependency.box;
       const auto directory =
-        std::filesystem::weakly_canonical(parent_directory / dependency.path, filesystem_error);
+        std::filesystem::weakly_canonical(parent_directory / dependency_location, filesystem_error);
 
-      if (filesystem_error || !std::filesystem::is_directory(directory))
+      if (filesystem_error
+          || (dependency.box.empty() && !std::filesystem::is_directory(directory))
+          || (!dependency.box.empty() && !std::filesystem::is_regular_file(directory)))
       {
-        error << "forge: dependency '" << dependency.name << "' path does not exist\n";
+        error << "forge: dependency '" << dependency.name << "' location does not exist\n";
         return false;
       }
 
-      if (dependency_session->active_projects.contains(directory))
+      if (dependency.box.empty() && dependency_session->active_projects.contains(directory))
       {
         error << "forge: dependency cycle detected at '" << dependency.name << "'\n";
         return false;
@@ -388,8 +417,39 @@ namespace forge
       if (existing_node == dependency_session->nodes.end())
       {
         Recipe dependency_recipe;
+        std::optional<BoxMetadata> box_metadata;
 
-        if (!read_recipe(directory / "forge.recipe.toml", dependency_recipe, error))
+        if (!dependency.box.empty())
+        {
+          BoxMetadata metadata;
+
+          if (!read_box_metadata(directory, parent_directory, process_runner, metadata, error))
+          {
+            return false;
+          }
+
+          if (metadata.name != dependency.name)
+          {
+            error << "forge: dependency name '" << dependency.name
+                  << "' does not match box name '" << metadata.name << "'\n";
+            return false;
+          }
+
+          if (metadata.os != target_os() || metadata.arch != target_arch())
+          {
+            error << "forge: dependency '" << dependency.name
+                  << "' box targets " << metadata.os << '-' << metadata.arch
+                  << ", but this build targets " << target_os() << '-' << target_arch() << '\n';
+            return false;
+          }
+
+          dependency_recipe.name = metadata.name;
+          dependency_recipe.version = metadata.version;
+          dependency_recipe.type = metadata.type;
+          dependency_recipe.build_number = metadata.build_number;
+          box_metadata = std::move(metadata);
+        }
+        else if (!read_recipe(directory / "forge.recipe.toml", dependency_recipe, error))
         {
           return false;
         }
@@ -417,7 +477,8 @@ namespace forge
             {
               directory,
               std::move(dependency_recipe),
-              {}
+              dependency.box.empty() ? std::filesystem::path {} : directory,
+              std::move(box_metadata)
             }
         ).first;
       }
@@ -463,7 +524,7 @@ namespace forge
     {
       DependencyNode* node = nullptr;
 
-      if (!read_dependency_node(parent_directory, dependency, node, error)
+      if (!read_dependency_node(parent_directory, dependency, process_runner, node, error)
           || !ensure_dependency_box(*node, process_runner, output, error))
       {
         return false;
@@ -540,16 +601,50 @@ namespace forge
 
       if (node.recipe.type == "static_library")
       {
+        if (node.box_metadata)
+        {
+          for (const auto& artifact : node.box_metadata->artifacts)
+          {
+            if (artifact.kind == "static_library")
+            {
+              resolved.library = destination / artifact.path;
+            }
+          }
+        }
+        else
+        {
 #ifdef _WIN32
-        resolved.library = destination / "lib" / (node.recipe.name + ".lib");
+          resolved.library = destination / "lib" / (node.recipe.name + ".lib");
 #else
-        resolved.library = destination / "lib" / ("lib" + node.recipe.name + ".a");
+          resolved.library = destination / "lib" / ("lib" + node.recipe.name + ".a");
 #endif
+        }
       }
       else if (node.recipe.type == "shared_library")
       {
-        resolved.library = destination / "runtime" / shared_library_filename(node.recipe.name);
+        if (node.box_metadata)
+        {
+          for (const auto& artifact : node.box_metadata->artifacts)
+          {
+            if (artifact.kind == "shared_library")
+            {
+              resolved.library = destination / artifact.path;
+            }
+          }
+        }
+        else
+        {
+          resolved.library = destination / "runtime" / shared_library_filename(node.recipe.name);
+        }
+
         resolved.runtime = resolved.library;
+      }
+
+      if ((node.recipe.type == "static_library" || node.recipe.type == "shared_library")
+          && !resolved.library)
+      {
+        error << "forge: dependency '" << node.recipe.name << "' box has no linkable library\n";
+        return false;
       }
 
       return true;

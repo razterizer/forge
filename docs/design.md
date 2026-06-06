@@ -46,6 +46,10 @@ dependencies, rejects cycles and conflicting project names, links the
 transitive static-library closure in dependency order, and stages shared
 libraries for running and releasing applications.
 
+Local `.cbox` dependencies are verified and installed directly without their
+source project. Format-1 boxes do not contain dependency graph metadata, so
+direct boxes are currently treated as self-contained leaf dependencies.
+
 ## Initial roadmap
 
 1. v0.1: `forge new`, `forge init`, `forge build`, `forge run`, and

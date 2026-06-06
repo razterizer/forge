@@ -199,6 +199,18 @@ Forge builds each dependency into a verified box, installs it under
 libraries when present. Dependencies are resolved recursively, shared
 dependencies are built once per command, and dependency cycles are rejected.
 
+Projects may also consume an existing local box directly:
+
+```toml
+[dependencies]
+answer = { box = "../packages/answer-1.0.0-macos-arm64.cbox" }
+```
+
+Forge verifies the box, checks its package name and target, installs its exact
+declared artifacts under `.forge/deps/answer/`, and imports its headers and
+library. Format-1 boxes do not yet record dependency graphs, so direct boxes
+must currently be self-contained leaf dependencies.
+
 ### Local dependency example
 
 A workspace may contain a static library, a header-only library, and an

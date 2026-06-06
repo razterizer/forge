@@ -17,6 +17,7 @@ namespace forge
   {
     std::string name;
     std::filesystem::path path;
+    std::filesystem::path box;
   };
 
   struct Recipe

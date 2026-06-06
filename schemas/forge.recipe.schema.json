@@ -84,23 +84,33 @@
     },
     "dependencies": {
       "type": "object",
-      "description": "Local static-library, shared-library, and header-only dependencies.",
+      "description": "Local project or cbox static-library, shared-library, and header-only dependencies.",
       "propertyNames": {
         "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
       },
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "path"
-        ],
         "properties": {
           "path": {
             "type": "string",
             "minLength": 1,
             "description": "Path to a local Forge project, relative to this recipe or absolute."
+          },
+          "box": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Path to a local cbox file, relative to this recipe or absolute."
           }
-        }
+        },
+        "oneOf": [
+          {
+            "required": ["path"]
+          },
+          {
+            "required": ["box"]
+          }
+        ]
       }
     },
     "release": {
