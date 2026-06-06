@@ -1,6 +1,7 @@
 #include "cli.h"
 #include "box.h"
 #include "build.h"
+#include "clean.h"
 #include "init.h"
 #include "new.h"
 #include "release.h"
@@ -20,6 +21,7 @@ namespace forge::cli
       std::string_view { "init" },
       std::string_view { "new" },
       std::string_view { "build" },
+      std::string_view { "clean" },
       std::string_view { "run" },
       std::string_view { "release" },
       std::string_view { "release-git" },
@@ -43,6 +45,7 @@ namespace forge::cli
         << "  init      Adopt the current project\n"
         << "  new       Create a new project\n"
         << "  build     Build the current project\n"
+        << "  clean     Remove generated project state\n"
         << "  run       Run the current project\n"
         << "  release   Create a local release artifact\n"
         << "  release-git  Create and push a release tag\n";
@@ -206,6 +209,11 @@ namespace forge::cli
     if (arguments.front() == "build")
     {
       return build_project(working_directory, output, error);
+    }
+
+    if (arguments.front() == "clean")
+    {
+      return clean_project(working_directory, output, error);
     }
 
     if (arguments.front() == "release")

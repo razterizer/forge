@@ -137,6 +137,16 @@ public_headers = ["include/hello/hello.h"]
 Forge generates CMake infrastructure under `.forge/generated/` and builds into
 `.forge/build/`.
 
+Remove all generated project state, including builds, dependencies, boxes,
+release artifacts, and caches:
+
+```sh
+forge clean
+```
+
+For safety, `forge clean` only runs from a directory containing
+`forge.recipe.toml`.
+
 Shared libraries use the same source and public-header layout:
 
 ```toml

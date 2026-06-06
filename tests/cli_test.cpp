@@ -504,6 +504,65 @@ namespace
     expect(contains(error.str(), "cannot be empty"), "forced Git release explains an empty tag format");
   }
 
+  void test_clean_removes_generated_state()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "clean" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    write_file(directory.path() / ".forge/build/app", "");
+    write_file(directory.path() / ".forge/release/app.zip", "");
+    write_file(directory.path() / "forge.recipe.toml", "");
+    write_file(directory.path() / "main.cpp", "int main() {}\n");
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "clean succeeds"
+    );
+    expect(!std::filesystem::exists(directory.path() / ".forge"), "clean removes Forge state");
+    expect(std::filesystem::exists(directory.path() / "main.cpp"), "clean preserves project files");
+    expect(contains(output.str(), "Cleaned"), "clean reports removed state");
+    expect(error.str().empty(), "successful clean does not write an error");
+  }
+
+  void test_clean_accepts_already_clean_project()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "clean" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    write_file(directory.path() / "forge.recipe.toml", "");
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "clean accepts a project without Forge state"
+    );
+    expect(contains(output.str(), "Already clean"), "clean reports an already clean project");
+    expect(error.str().empty(), "already clean project does not write an error");
+  }
+
+  void test_clean_refuses_non_project_directory()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "clean" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    write_file(directory.path() / ".forge/important.txt", "");
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "clean rejects a non-project directory"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / ".forge/important.txt"),
+      "clean preserves non-project state"
+    );
+    expect(contains(error.str(), "forge.recipe.toml"), "clean explains the required recipe");
+  }
+
   void test_box_round_trip()
   {
     TemporaryDirectory directory;
@@ -1044,6 +1103,9 @@ int main()
   test_release_rejects_empty_tag_format();
   test_release_github_rejects_empty_tag_format();
   test_release_git_force_rejects_empty_tag_format();
+  test_clean_removes_generated_state();
+  test_clean_accepts_already_clean_project();
+  test_clean_refuses_non_project_directory();
   test_box_round_trip();
   test_static_library_box_round_trip();
   test_header_only_box_round_trip();

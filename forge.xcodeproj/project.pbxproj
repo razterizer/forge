@@ -20,6 +20,7 @@
 		10000000000000000000000B /* sha256.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000017 /* sha256.cpp */; };
 		10000000000000000000000C /* zip.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000019 /* zip.cpp */; };
 		10000000000000000000000D /* github.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001B /* github.cpp */; };
+		10000000000000000000000E /* clean.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001D /* clean.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,6 +32,8 @@
 		20000000000000000000001A /* zip.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = zip.h; sourceTree = "<group>"; };
 		20000000000000000000001B /* github.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = github.cpp; sourceTree = "<group>"; };
 		20000000000000000000001C /* github.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = github.h; sourceTree = "<group>"; };
+		20000000000000000000001D /* clean.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = clean.cpp; sourceTree = "<group>"; };
+		20000000000000000000001E /* clean.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = clean.h; sourceTree = "<group>"; };
 		200000000000000000000001 /* build.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = build.cpp; sourceTree = "<group>"; };
 		200000000000000000000002 /* build.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = build.h; sourceTree = "<group>"; };
 		200000000000000000000003 /* cli.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cli.cpp; sourceTree = "<group>"; };
@@ -81,6 +84,8 @@
 				200000000000000000000016 /* box.h */,
 				200000000000000000000001 /* build.cpp */,
 				200000000000000000000002 /* build.h */,
+				20000000000000000000001D /* clean.cpp */,
+				20000000000000000000001E /* clean.h */,
 				200000000000000000000003 /* cli.cpp */,
 				200000000000000000000004 /* cli.h */,
 				20000000000000000000001B /* github.cpp */,
@@ -185,6 +190,7 @@
 				100000000000000000000001 /* build.cpp in Sources */,
 				100000000000000000000002 /* cli.cpp in Sources */,
 				10000000000000000000000D /* github.cpp in Sources */,
+				10000000000000000000000E /* clean.cpp in Sources */,
 				100000000000000000000003 /* init.cpp in Sources */,
 				100000000000000000000004 /* main.cpp in Sources */,
 				100000000000000000000005 /* new.cpp in Sources */,
