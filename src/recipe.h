@@ -29,6 +29,7 @@ namespace forge
     std::vector<std::filesystem::path> sources;
     std::vector<std::filesystem::path> public_headers;
     std::vector<Dependency> dependencies;
+    std::vector<std::filesystem::path> release_files;
   };
 
   bool read_recipe(const std::filesystem::path& path,

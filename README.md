@@ -305,6 +305,17 @@ Create a release archive:
 `README.md` and `LICENSE` files when present, and creates
 `.forge/release/<name>-<version>.zip`.
 
+Additional release files and directories can be declared in the recipe:
+
+```toml
+[release]
+files = ["RELEASE_NOTES.md", "assets", "examples"]
+```
+
+Forge copies declared entries recursively while preserving their
+project-relative paths. Paths must remain inside the project, and symbolic
+links are rejected.
+
 Create, inspect, verify, and extract an executable, static-library,
 shared-library, or header-only box:
 

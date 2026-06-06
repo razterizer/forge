@@ -59,6 +59,7 @@ libraries for running and releasing applications.
 7. v0.7: lock file generation and reproducible resolution
 8. v0.8: imported vendor SDK and precompiled binary boxes
 9. v0.9: reproducible runtime assembly for executables and releases
+10. v0.10: declarative build, test, release, and publication workflows
 
 The dependency-management roadmap aims to replace scattered source
 submodules, copied libraries, implicit linker configuration, and manually
@@ -71,6 +72,13 @@ cannot be built by Forge. These recipes will map headers, static libraries,
 shared libraries, import libraries, and runtime binaries into verified boxes.
 Forge will then assemble the required runtime libraries automatically when
 building, running, and releasing an executable.
+
+Workflow support will absorb repeated CI and release glue currently maintained
+by projects such as Termin8or. The intended surface includes build/test
+matrices, locked and development dependency modes, release asset selection,
+release-note extraction, version generation, checksums, tags, and publication.
+Actions that modify Git history or publish remotely must remain explicit and
+reviewable.
 
 ## Deferred decisions
 

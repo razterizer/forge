@@ -102,6 +102,17 @@
           }
         }
       }
+    },
+    "release": {
+      "type": "object",
+      "description": "Additional project files and directories included in application releases.",
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "$ref": "#/$defs/projectPaths",
+          "description": "Project-relative files and directories copied into the release archive."
+        }
+      }
     }
   },
   "allOf": [

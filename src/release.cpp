@@ -76,6 +76,68 @@ namespace forge
       return true;
     }
 
+    bool copy_release_entry(const std::filesystem::path& source,
+                            const std::filesystem::path& destination,
+                            std::ostream& error)
+    {
+      if (source.filename() == ".forge" || source.filename() == ".git")
+      {
+        return true;
+      }
+
+      std::error_code filesystem_error;
+
+      if (std::filesystem::is_symlink(source, filesystem_error))
+      {
+        error << "forge: release files cannot contain symbolic links\n";
+        return false;
+      }
+
+      if (std::filesystem::is_regular_file(source, filesystem_error))
+      {
+        std::filesystem::create_directories(destination.parent_path(), filesystem_error);
+
+        if (filesystem_error)
+        {
+          error << "forge: could not create release directory\n";
+          return false;
+        }
+
+        return copy_file(source, destination, error);
+      }
+
+      if (!std::filesystem::is_directory(source, filesystem_error))
+      {
+        error << "forge: release file '" << source.string() << "' does not exist\n";
+        return false;
+      }
+
+      std::filesystem::create_directories(destination, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not create release directory\n";
+        return false;
+      }
+
+      for (const auto& entry : std::filesystem::directory_iterator { source, filesystem_error })
+      {
+        if (filesystem_error
+            || !copy_release_entry(entry.path(), destination / entry.path().filename(), error))
+        {
+          return false;
+        }
+      }
+
+      if (filesystem_error)
+      {
+        error << "forge: could not inspect release directory\n";
+        return false;
+      }
+
+      return true;
+    }
+
   } // namespace
 
   int release_project(const std::filesystem::path& project_directory,
@@ -162,6 +224,26 @@ namespace forge
 
       if (std::filesystem::is_regular_file(source)
           && !copy_file(source, staging_directory / filename, error))
+      {
+        return 2;
+      }
+    }
+
+    for (const auto& release_file : recipe.release_files)
+    {
+      if (release_file.empty()
+          || release_file.is_absolute()
+          || release_file.string().starts_with(".."))
+      {
+        error << "forge: release file paths must stay inside the project\n";
+        return 2;
+      }
+
+      if (!copy_release_entry(
+        project_directory / release_file,
+        staging_directory / release_file,
+        error
+      ))
       {
         return 2;
       }

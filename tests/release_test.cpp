@@ -63,12 +63,20 @@ namespace
       << "type = \"executable\"\n"
       << "cpp_std = 20\n\n"
       << "[sources]\n"
-      << "paths = [\"main.cpp\"]\n";
+      << "paths = [\"main.cpp\"]\n\n"
+      << "[release]\n"
+      << "files = [\"assets\", \"RELEASE_NOTES.md\"]\n";
 
     std::ofstream source { directory / "main.cpp" };
     source << "int main() {}\n";
     std::ofstream readme { directory / "README.md" };
     readme << "# hello\n";
+    std::filesystem::create_directories(directory / "assets/nested");
+    std::filesystem::create_directories(directory / "assets/.forge");
+    std::ofstream { directory / "assets/background.tx" } << "background\n";
+    std::ofstream { directory / "assets/nested/colors.tx" } << "colors\n";
+    std::ofstream { directory / "assets/.forge/generated.txt" } << "generated\n";
+    std::ofstream { directory / "RELEASE_NOTES.md" } << "# Release notes\n";
   }
 
   void test_release_stages_files_and_creates_archive_command()
@@ -120,6 +128,24 @@ namespace
       std::filesystem::exists(directory.path() / ".forge/release/hello-0.1.0/README.md"),
       "release stages an optional readme"
     );
+    expect(
+      std::filesystem::exists(
+        directory.path() / ".forge/release/hello-0.1.0/assets/nested/colors.tx"
+      ),
+      "release stages a declared directory recursively"
+    );
+    expect(
+      std::filesystem::exists(
+        directory.path() / ".forge/release/hello-0.1.0/RELEASE_NOTES.md"
+      ),
+      "release stages a declared file"
+    );
+    expect(
+      !std::filesystem::exists(
+        directory.path() / ".forge/release/hello-0.1.0/assets/.forge"
+      ),
+      "release excludes nested Forge state"
+    );
     expect(contains(output.str(), "Released"), "release reports the archive");
     expect(error.str().empty(), "successful release does not write an error");
   }
@@ -159,13 +185,52 @@ namespace
     expect(contains(error.str(), "archive creation failed"), "release explains archive failure");
   }
 
+  void test_release_rejects_file_outside_project()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe << "files = [\"../secret.txt\"]\n";
+    recipe.close();
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&invocations, &directory](const std::vector<std::string>& command,
+                                 const std::filesystem::path&,
+                                 std::ostream&)
+      {
+        ++invocations;
+
+        if (command.size() > 1 && command[1] == "--build")
+        {
+          std::filesystem::create_directories(directory.path() / ".forge/build");
+#ifdef _WIN32
+          std::ofstream executable { directory.path() / ".forge/build/hello.exe" };
+#else
+          std::ofstream executable { directory.path() / ".forge/build/hello" };
+#endif
+        }
+
+        return 0;
+      };
+
+    expect(
+      forge::release_project(directory.path(), runner, output, error) == 2,
+      "release rejects a file outside the project"
+    );
+    expect(invocations == 2, "unsafe release files are rejected before archiving");
+    expect(contains(error.str(), "must stay inside"), "release explains unsafe file paths");
+  }
+
 } // namespace
 
 int main()
 {
   test_release_stages_files_and_creates_archive_command();
   test_release_reports_archive_failure();
+  test_release_rejects_file_outside_project();
 
   return failures == 0 ? 0 : 1;
 }
-

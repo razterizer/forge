@@ -239,6 +239,10 @@ namespace forge
           recipe.dependencies.push_back(std::move(dependency));
         }
       }
+      else if (section == "release" && key == "files")
+      {
+        valid = parse_sources(value, recipe.release_files);
+      }
 
       if (!valid)
       {
