@@ -255,6 +255,59 @@ namespace
     expect(contains(error.str(), "does not exist"), "build explains the missing source");
   }
 
+  void test_build_rejects_dependency_name_mismatch()
+  {
+    TemporaryDirectory directory;
+    const auto dependency = directory.path() / "dependency";
+    const auto application = directory.path() / "application";
+    std::filesystem::create_directories(dependency / "include/actual");
+    std::filesystem::create_directories(application);
+    std::ofstream dependency_recipe { dependency / "forge.recipe.toml" };
+    dependency_recipe
+      << "[project]\n"
+      << "name = \"actual\"\n"
+      << "version = \"1.0.0\"\n"
+      << "type = \"header_only\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = []\n"
+      << "public_headers = [\"include/actual/actual.h\"]\n";
+    dependency_recipe.close();
+    std::ofstream { dependency / "include/actual/actual.h" } << "inline void actual() {}\n";
+    std::ofstream application_recipe { application / "forge.recipe.toml" };
+    application_recipe
+      << "[project]\n"
+      << "name = \"application\"\n"
+      << "version = \"1.0.0\"\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = [\"main.cpp\"]\n\n"
+      << "[dependencies]\n"
+      << "expected = { path = \"../dependency\" }\n";
+    application_recipe.close();
+    std::ofstream { application / "main.cpp" } << "int main() {}\n";
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::build_project(application, runner, output, error) == 2,
+      "build rejects a dependency name mismatch"
+    );
+    expect(invocations == 0, "invalid dependencies do not invoke external tools");
+    expect(contains(error.str(), "does not match"), "build explains dependency name mismatch");
+  }
+
 } // namespace
 
 int main()
@@ -264,6 +317,7 @@ int main()
   test_build_validates_header_only_project();
   test_build_stops_after_configuration_failure();
   test_build_rejects_missing_source_without_running_process();
+  test_build_rejects_dependency_name_mismatch();
 
   return failures == 0 ? 0 : 1;
 }

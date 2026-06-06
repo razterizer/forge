@@ -140,6 +140,19 @@ Forge generates and compiles one private validation translation unit per public
 header. These temporary sources remain under `.forge/generated/`; header-only
 boxes contain only the declared headers.
 
+Executable projects may use direct local static-library and header-only
+dependencies:
+
+```toml
+[dependencies]
+answer = { path = "../answer" }
+format = { path = "../format" }
+```
+
+Forge builds each dependency into a verified box, installs it under
+`.forge/deps/<name>/`, adds its public include directory, and links static
+libraries when present. Transitive dependencies are not supported yet.
+
 Build and run a Forge project:
 
 ```sh

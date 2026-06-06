@@ -1,9 +1,13 @@
 #include "build.h"
 
+#include "box.h"
 #include "process.h"
 #include "recipe.h"
 
+#include <algorithm>
 #include <fstream>
+#include <optional>
+#include <set>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -12,6 +16,13 @@ namespace forge
 {
   namespace
   {
+
+    struct ResolvedDependency
+    {
+      std::string name;
+      std::filesystem::path root;
+      std::optional<std::filesystem::path> library;
+    };
 
     std::string escape_cmake(std::string_view value)
     {
@@ -28,6 +39,16 @@ namespace forge
       }
 
       return escaped;
+    }
+
+    bool is_safe_dependency_name(std::string_view name)
+    {
+      return
+        !name.empty()
+        && name != "."
+        && name != ".."
+        && name.find('/') == std::string_view::npos
+        && name.find('\\') == std::string_view::npos;
     }
 
     bool write_header_validation_sources(const std::filesystem::path& directory,
@@ -65,6 +86,7 @@ namespace forge
 
     bool write_generated_cmake(const std::filesystem::path& path,
                                const Recipe& recipe,
+                               const std::vector<ResolvedDependency>& dependencies,
                                std::ostream& error)
     {
       std::ofstream file { path };
@@ -118,6 +140,24 @@ namespace forge
           << "target_include_directories(forge_project PUBLIC \"${FORGE_PROJECT_ROOT}/include\")\n";
       }
 
+      for (std::size_t index = 0; index < dependencies.size(); ++index)
+      {
+        const auto& dependency = dependencies[index];
+        file
+          << "target_include_directories(forge_project PRIVATE \""
+          << escape_cmake((dependency.root / "include").string()) << "\")\n";
+
+        if (dependency.library)
+        {
+          file
+            << "add_library(forge_dependency_" << index << " STATIC IMPORTED)\n"
+            << "set_target_properties(forge_dependency_" << index
+            << " PROPERTIES IMPORTED_LOCATION \""
+            << escape_cmake(dependency.library->string()) << "\")\n"
+            << "target_link_libraries(forge_project PRIVATE forge_dependency_" << index << ")\n";
+        }
+      }
+
       file
         << "set_target_properties(forge_project PROPERTIES OUTPUT_NAME \""
         << escape_cmake(recipe.name) << "\")\n";
@@ -126,6 +166,196 @@ namespace forge
       {
         error << "forge: could not write '" << path.string() << "'\n";
         return false;
+      }
+
+      return true;
+    }
+
+    std::filesystem::path find_dependency_box(const std::filesystem::path& dependency_directory,
+                                              const Recipe& recipe,
+                                              std::ostream& error)
+    {
+      const auto boxes_directory = dependency_directory / ".forge" / "boxes";
+      const auto prefix = recipe.name + "-" + recipe.version;
+      std::filesystem::path result;
+      std::filesystem::file_time_type result_time;
+      std::error_code filesystem_error;
+
+      for (const auto& entry : std::filesystem::directory_iterator { boxes_directory, filesystem_error })
+      {
+        if (filesystem_error)
+        {
+          break;
+        }
+
+        const auto filename = entry.path().filename().string();
+
+        if (!entry.is_regular_file()
+            || entry.path().extension() != ".cbox"
+            || !filename.starts_with(prefix)
+            || (filename.size() > prefix.size()
+                && filename[prefix.size()] != '-'
+                && filename[prefix.size()] != '+'))
+        {
+          continue;
+        }
+
+        const auto modified = entry.last_write_time(filesystem_error);
+
+        if (filesystem_error)
+        {
+          break;
+        }
+
+        if (result.empty() || modified > result_time)
+        {
+          result = entry.path();
+          result_time = modified;
+        }
+      }
+
+      if (filesystem_error || result.empty())
+      {
+        error << "forge: could not locate box for dependency '" << recipe.name << "'\n";
+      }
+
+      return result;
+    }
+
+    bool resolve_dependencies(const std::filesystem::path& project_directory,
+                              const Recipe& recipe,
+                              const ProcessRunner& process_runner,
+                              std::vector<ResolvedDependency>& resolved,
+                              std::ostream& output,
+                              std::ostream& error)
+    {
+      const auto dependencies_directory = project_directory / ".forge" / "deps";
+      std::set<std::filesystem::path> dependency_paths;
+      std::set<std::string> dependency_names;
+
+      for (const auto& dependency : recipe.dependencies)
+      {
+        if (!is_safe_dependency_name(dependency.name))
+        {
+          error << "forge: dependency names must be safe path components\n";
+          return false;
+        }
+
+        if (!dependency_names.insert(dependency.name).second)
+        {
+          error << "forge: duplicate dependency name '" << dependency.name << "'\n";
+          return false;
+        }
+
+        std::error_code filesystem_error;
+        const auto dependency_directory =
+          std::filesystem::weakly_canonical(project_directory / dependency.path, filesystem_error);
+
+        if (filesystem_error || !std::filesystem::is_directory(dependency_directory))
+        {
+          error << "forge: dependency '" << dependency.name << "' path does not exist\n";
+          return false;
+        }
+
+        const auto canonical_project = std::filesystem::weakly_canonical(
+          project_directory,
+          filesystem_error
+        );
+
+        if (filesystem_error
+            || dependency_directory == canonical_project
+            || !dependency_paths.insert(dependency_directory).second)
+        {
+          error << "forge: dependency paths must be unique and cannot reference the project itself\n";
+          return false;
+        }
+
+        Recipe dependency_recipe;
+
+        if (!read_recipe(dependency_directory / "forge.recipe.toml", dependency_recipe, error))
+        {
+          return false;
+        }
+
+        if (dependency_recipe.name != dependency.name)
+        {
+          error << "forge: dependency name '" << dependency.name << "' does not match recipe name '"
+                << dependency_recipe.name << "'\n";
+          return false;
+        }
+
+        if (dependency_recipe.type != "static_library" && dependency_recipe.type != "header_only")
+        {
+          error << "forge: dependency '" << dependency.name
+                << "' must be a static_library or header_only project\n";
+          return false;
+        }
+
+        if (!dependency_recipe.dependencies.empty())
+        {
+          error << "forge: transitive dependencies are not supported yet\n";
+          return false;
+        }
+
+        output << "Resolving dependency " << dependency.name << '\n';
+
+        if (create_box(dependency_directory, process_runner, output, error) != 0)
+        {
+          return false;
+        }
+
+        const auto box = find_dependency_box(dependency_directory, dependency_recipe, error);
+
+        if (box.empty())
+        {
+          return false;
+        }
+
+        std::filesystem::create_directories(dependencies_directory, filesystem_error);
+
+        if (filesystem_error)
+        {
+          error << "forge: could not create dependency directory\n";
+          return false;
+        }
+
+        const auto extracted = dependencies_directory / box.stem();
+        const auto destination = dependencies_directory / dependency.name;
+        std::filesystem::remove_all(extracted, filesystem_error);
+        filesystem_error.clear();
+        std::filesystem::remove_all(destination, filesystem_error);
+        filesystem_error.clear();
+
+        if (extract_box(box, dependencies_directory, process_runner, output, error) != 0)
+        {
+          return false;
+        }
+
+        std::filesystem::rename(extracted, destination, filesystem_error);
+
+        if (filesystem_error)
+        {
+          error << "forge: could not install dependency '" << dependency.name << "'\n";
+          return false;
+        }
+
+        ResolvedDependency resolved_dependency
+          {
+            dependency.name,
+            destination,
+            std::nullopt
+          };
+
+        if (dependency_recipe.type == "static_library")
+        {
+#ifdef _WIN32
+          resolved_dependency.library = destination / "lib" / (dependency.name + ".lib");
+#else
+          resolved_dependency.library = destination / "lib" / ("lib" + dependency.name + ".a");
+#endif
+        }
+
+        resolved.push_back(std::move(resolved_dependency));
       }
 
       return true;
@@ -194,6 +424,13 @@ namespace forge
       return 2;
     }
 
+    if (recipe.type != "executable" && !recipe.dependencies.empty())
+    {
+      error << "forge: only executable projects can declare dependencies until transitive "
+               "dependencies are supported\n";
+      return 2;
+    }
+
     for (const auto& header : recipe.public_headers)
     {
       if (header.is_absolute()
@@ -215,6 +452,20 @@ namespace forge
     const auto forge_directory = project_directory / ".forge";
     const auto generated_directory = forge_directory / "generated";
     const auto build_directory = forge_directory / "build";
+    std::vector<ResolvedDependency> dependencies;
+
+    if (!resolve_dependencies(
+      project_directory,
+      recipe,
+      process_runner,
+      dependencies,
+      output,
+      error
+    ))
+    {
+      return 2;
+    }
+
     std::error_code filesystem_error;
     std::filesystem::create_directories(generated_directory, filesystem_error);
 
@@ -230,7 +481,12 @@ namespace forge
            recipe,
            error
          ))
-        || !write_generated_cmake(generated_directory / "CMakeLists.txt", recipe, error))
+        || !write_generated_cmake(
+          generated_directory / "CMakeLists.txt",
+          recipe,
+          dependencies,
+          error
+        ))
     {
       return 2;
     }

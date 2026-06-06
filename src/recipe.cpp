@@ -120,6 +120,34 @@ namespace forge
       return true;
     }
 
+    bool parse_dependency(std::string_view value, std::filesystem::path& path)
+    {
+      value = trim(value);
+
+      if (value.size() < 2 || value.front() != '{' || value.back() != '}')
+      {
+        return false;
+      }
+
+      value = trim(value.substr(1, value.size() - 2));
+      const auto equals = value.find('=');
+
+      if (equals == std::string_view::npos || trim(value.substr(0, equals)) != "path")
+      {
+        return false;
+      }
+
+      std::string parsed_path;
+
+      if (!parse_string(value.substr(equals + 1), parsed_path))
+      {
+        return false;
+      }
+
+      path = parsed_path;
+      return true;
+    }
+
   } // namespace
 
   bool read_recipe(const std::filesystem::path& path,
@@ -199,6 +227,17 @@ namespace forge
       else if (section == "sources" && key == "public_headers")
       {
         valid = parse_sources(value, recipe.public_headers);
+      }
+      else if (section == "dependencies")
+      {
+        Dependency dependency;
+        dependency.name = std::string { key };
+        valid = !dependency.name.empty() && parse_dependency(value, dependency.path);
+
+        if (valid)
+        {
+          recipe.dependencies.push_back(std::move(dependency));
+        }
       }
 
       if (!valid)

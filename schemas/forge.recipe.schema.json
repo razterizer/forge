@@ -80,6 +80,27 @@
           "$ref": "#/$defs/publicHeaders"
         }
       }
+    },
+    "dependencies": {
+      "type": "object",
+      "description": "Direct local static-library and header-only dependencies.",
+      "propertyNames": {
+        "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Path to a local Forge project, relative to this recipe or absolute."
+          }
+        }
+      }
     }
   },
   "allOf": [
@@ -131,6 +152,7 @@
       },
       "then": {
         "properties": {
+          "dependencies": false,
           "sources": {
             "type": "object",
             "required": [
@@ -168,6 +190,7 @@
       },
       "then": {
         "properties": {
+          "dependencies": false,
           "sources": {
             "type": "object",
             "required": [

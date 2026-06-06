@@ -30,7 +30,7 @@ directory:
 ```text
 .forge/
 ├── boxes/       # packaged binary artifacts
-├── deps/        # source dependency checkouts
+├── deps/        # installed dependency boxes
 ├── build/       # build outputs
 ├── cache/       # reusable local cache
 └── generated/   # generated CMake files and presets
@@ -39,6 +39,10 @@ directory:
 Dependency resolution should prefer a compatible cached box. When no matching
 box exists, Forge fetches or uses source, builds it, creates a box, and caches
 that box.
+
+The first dependency-resolution slice supports direct local path dependencies
+for executable projects. Dependencies must currently be static-library or
+header-only projects without dependencies of their own.
 
 ## Initial roadmap
 

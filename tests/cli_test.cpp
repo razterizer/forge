@@ -651,6 +651,86 @@ namespace
     );
   }
 
+  void test_run_with_local_dependencies()
+  {
+    TemporaryDirectory directory;
+    const auto static_library = directory.path() / "answer";
+    const auto header_only = directory.path() / "doubled";
+    const auto application = directory.path() / "app";
+    write_file(
+      static_library / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"answer\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"static_library\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"src/answer.cpp\"]\n"
+      "public_headers = [\"include/answer/answer.h\"]\n"
+    );
+    write_file(static_library / "include/answer/answer.h", "int answer();\n");
+    write_file(
+      static_library / "src/answer.cpp",
+      "#include <answer/answer.h>\n"
+      "int answer() { return 42; }\n"
+    );
+    write_file(
+      header_only / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"doubled\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/doubled/doubled.h\"]\n"
+    );
+    write_file(
+      header_only / "include/doubled/doubled.h",
+      "inline int doubled(int value) { return value * 2; }\n"
+    );
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[dependencies]\n"
+      "answer = { path = \"../answer\" }\n"
+      "doubled = { path = \"../doubled\" }\n"
+    );
+    write_file(
+      application / "main.cpp",
+      "#include <answer/answer.h>\n"
+      "#include <doubled/doubled.h>\n"
+      "int main() { return doubled(answer()) == 84 ? 0 : 1; }\n"
+    );
+    constexpr std::array run_arguments { std::string_view { "run" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(run_arguments, application, output, error) == 0,
+      "run succeeds with local dependencies"
+    );
+    expect(
+      std::filesystem::exists(application / ".forge/deps/answer/lib"),
+      "build installs a static-library dependency box"
+    );
+    expect(
+      std::filesystem::exists(application / ".forge/deps/doubled/include/doubled/doubled.h"),
+      "build installs a header-only dependency box"
+    );
+    const auto generated = read_file(application / ".forge/generated/CMakeLists.txt");
+    expect(contains(generated, "forge_dependency_0"), "build imports a static-library dependency");
+    expect(contains(generated, ".forge/deps/doubled/include"), "build adds dependency include paths");
+    expect(contains(output.str(), "Running app"), "run launches the linked executable");
+    expect(error.str().empty(), "successful dependency build does not write an error");
+  }
+
   void test_unknown_command()
   {
     constexpr std::array arguments { std::string_view { "confuse" } };
@@ -682,6 +762,7 @@ int main()
   test_box_round_trip();
   test_static_library_box_round_trip();
   test_header_only_box_round_trip();
+  test_run_with_local_dependencies();
   test_unknown_command();
 
   return failures == 0 ? 0 : 1;

@@ -13,6 +13,12 @@ namespace forge
   inline constexpr std::string_view recipe_schema_url =
     "https://raw.githubusercontent.com/razterizer/forge/main/schemas/forge.recipe.schema.json";
 
+  struct Dependency
+  {
+    std::string name;
+    std::filesystem::path path;
+  };
+
   struct Recipe
   {
     std::string name;
@@ -22,6 +28,7 @@ namespace forge
     std::optional<int> build_number;
     std::vector<std::filesystem::path> sources;
     std::vector<std::filesystem::path> public_headers;
+    std::vector<Dependency> dependencies;
   };
 
   bool read_recipe(const std::filesystem::path& path,
