@@ -15,6 +15,8 @@
   `forge run <target> -- [arguments...]`.
 - Added transitive internal dependencies between named library and executable
   targets, with missing-target and cycle validation.
+- Added `forge test [target]` for building and running marked named test
+  executables with argument forwarding and aggregate results.
 
 ## 0.2.0
 

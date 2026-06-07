@@ -132,6 +132,10 @@
             },
             "uniqueItems": true,
             "description": "Named library targets from this recipe linked into this target."
+          },
+          "test": {
+            "type": "boolean",
+            "description": "Marks an executable target for forge test."
           }
         }
       }

@@ -22,6 +22,14 @@ target_link_libraries(forge_run_unit_tests PRIVATE forge::core)
 add_test(NAME forge.run.unit COMMAND forge_run_unit_tests)
 set_tests_properties(forge.run.unit PROPERTIES LABELS unit)
 
+add_executable(forge_test_unit_tests
+    test_test.cpp
+)
+target_link_libraries(forge_test_unit_tests PRIVATE forge::core)
+
+add_test(NAME forge.test.unit COMMAND forge_test_unit_tests)
+set_tests_properties(forge.test.unit PROPERTIES LABELS unit)
+
 add_executable(forge_release_unit_tests
     release_test.cpp
 )

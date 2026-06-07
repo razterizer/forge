@@ -176,21 +176,27 @@ dependencies = ["hello"]
 type = "executable"
 cpp_std = 20
 sources = ["Tests/unit_tests.cpp"]
+dependencies = ["hello"]
+test = true
 ```
 
-Build or run one named target with:
+Build, run, or test named targets with:
 
 ```sh
 forge build examples
 forge run examples -- --help
+forge test
+forge test unit_tests -- --quick
 ```
 
 Named targets use isolated directories under `.forge/generated/<target>` and
 `.forge/build/<target>`. Internal dependencies build and link the required
 named static, dynamic, and header-only library target closure. Missing,
 executable, and cyclic internal dependencies are rejected. Existing
-single-target recipes remain supported. `forge test`, boxing, and releasing
-named targets are planned follow-up slices.
+single-target recipes remain supported. `forge test` builds and runs every
+executable target marked with `test = true`, continues after failures, and
+reports an aggregate result. Boxing and releasing named targets are planned
+follow-up slices.
 
 Remove all generated project state, including builds, dependencies, boxes,
 release artifacts, and caches:

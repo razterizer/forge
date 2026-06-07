@@ -456,6 +456,7 @@ namespace
       "type = \"executable\"\n"
       "cpp_std = 20\n"
       "sources = [\"Tests/unit_tests.cpp\"]\n"
+      "test = true\n"
     );
     write_file(
       directory.path() / "include/suite/message.h",
@@ -490,10 +491,15 @@ namespace
       std::string_view { "--" },
       std::string_view { "--message" }
     };
+    constexpr std::array test_arguments {
+      std::string_view { "test" }
+    };
     std::ostringstream build_output;
     std::ostringstream build_error;
     std::ostringstream run_output;
     std::ostringstream run_error;
+    std::ostringstream test_output;
+    std::ostringstream test_error;
 
     expect(
       forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
@@ -514,8 +520,14 @@ namespace
       "CLI runs a selected named target"
     );
     expect(contains(run_output.str(), "Running examples"), "CLI reports the selected named target");
+    expect(
+      forge::cli::run(test_arguments, directory.path(), test_output, test_error) == 0,
+      "CLI builds and runs marked test targets"
+    );
+    expect(contains(test_output.str(), "1 passed, 0 failed"), "CLI reports the test summary");
     expect(build_error.str().empty(), "named target CLI build does not write an error");
     expect(run_error.str().empty(), "named target CLI run does not write an error");
+    expect(test_error.str().empty(), "successful CLI test does not write an error");
   }
 
   void test_update_rejects_unknown_dependency()

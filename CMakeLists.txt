@@ -24,6 +24,7 @@ add_library(forge_core STATIC
     src/run.cpp
     src/runtime_assets.cpp
     src/sha256.cpp
+    src/test.cpp
     src/zip.cpp
 )
 add_library(forge::core ALIAS forge_core)

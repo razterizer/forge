@@ -23,6 +23,7 @@
 		10000000000000000000000E /* clean.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001D /* clean.cpp */; };
 		10000000000000000000000F /* bump.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001F /* bump.cpp */; };
 		100000000000000000000010 /* runtime_assets.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000021 /* runtime_assets.cpp */; };
+		100000000000000000000011 /* test.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000023 /* test.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,6 +41,8 @@
 		200000000000000000000020 /* bump.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bump.h; sourceTree = "<group>"; };
 		200000000000000000000021 /* runtime_assets.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = runtime_assets.cpp; sourceTree = "<group>"; };
 		200000000000000000000022 /* runtime_assets.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = runtime_assets.h; sourceTree = "<group>"; };
+		200000000000000000000023 /* test.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = test.cpp; sourceTree = "<group>"; };
+		200000000000000000000024 /* test.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = test.h; sourceTree = "<group>"; };
 		200000000000000000000001 /* build.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = build.cpp; sourceTree = "<group>"; };
 		200000000000000000000002 /* build.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = build.h; sourceTree = "<group>"; };
 		200000000000000000000003 /* cli.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cli.cpp; sourceTree = "<group>"; };
@@ -115,6 +118,8 @@
 				200000000000000000000022 /* runtime_assets.h */,
 				200000000000000000000017 /* sha256.cpp */,
 				200000000000000000000018 /* sha256.h */,
+				200000000000000000000023 /* test.cpp */,
+				200000000000000000000024 /* test.h */,
 				200000000000000000000019 /* zip.cpp */,
 				20000000000000000000001A /* zip.h */,
 			);
@@ -211,6 +216,7 @@
 				100000000000000000000009 /* run.cpp in Sources */,
 				100000000000000000000010 /* runtime_assets.cpp in Sources */,
 				10000000000000000000000B /* sha256.cpp in Sources */,
+				100000000000000000000011 /* test.cpp in Sources */,
 				10000000000000000000000C /* zip.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

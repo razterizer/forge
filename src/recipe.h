@@ -48,6 +48,7 @@ namespace forge
     std::vector<std::filesystem::path> public_headers;
     std::vector<std::filesystem::path> runtime_files;
     std::vector<std::string> dependencies;
+    bool test = false;
   };
 
   struct Recipe

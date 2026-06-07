@@ -39,6 +39,7 @@ rules:
   standard, sources, public headers, and runtime files.
 - Named targets may declare internal library target dependencies. Forge builds
   and links their transitive closure and rejects missing or cyclic targets.
+- Named executable targets marked with `test = true` are run by `forge test`.
 
 `shared_library` remains accepted as a legacy alias for `dynamic_library`.
 

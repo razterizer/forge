@@ -60,6 +60,25 @@ namespace forge
       return parse_result.ec == std::errc {} && parse_result.ptr == value.data() + value.size();
     }
 
+    bool parse_boolean(std::string_view value, bool& result)
+    {
+      value = trim(value);
+
+      if (value == "true")
+      {
+        result = true;
+        return true;
+      }
+
+      if (value == "false")
+      {
+        result = false;
+        return true;
+      }
+
+      return false;
+    }
+
     bool is_safe_name(std::string_view value)
     {
       return
@@ -408,6 +427,10 @@ namespace forge
         else if (key == "dependencies")
         {
           valid = parse_names(value, target->dependencies);
+        }
+        else if (key == "test")
+        {
+          valid = parse_boolean(value, target->test);
         }
         else
         {

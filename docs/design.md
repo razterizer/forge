@@ -23,6 +23,8 @@ compilers and build systems rather than replacing them.
   directories. The legacy single-target recipe form remains supported.
 - Named targets may depend on other named library targets in the same recipe.
   Forge builds and links the internal dependency closure.
+- `forge test` builds and runs marked named executable targets and summarizes
+  all results after continuing through failures.
 - `forge release` stages an application release and creates a versioned ZIP
   archive. Release archives are distinct from dependency `.cbox` artifacts.
 

@@ -8,6 +8,7 @@
 #include "recipe.h"
 #include "release.h"
 #include "run.h"
+#include "test.h"
 
 #include <array>
 #include <filesystem>
@@ -26,6 +27,7 @@ namespace forge::cli
       std::string_view { "bump" },
       std::string_view { "clean" },
       std::string_view { "run" },
+      std::string_view { "test" },
       std::string_view { "update" },
       std::string_view { "release" },
       std::string_view { "prepare-release" },
@@ -46,6 +48,7 @@ namespace forge::cli
         << "  forge bump <major|minor|patch>\n"
         << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n"
         << "  forge run [target] [-- arguments...]\n"
+        << "  forge test [target] [-- arguments...]\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
         << "Commands:\n"
@@ -56,6 +59,7 @@ namespace forge::cli
         << "  bump            Bump the project version and prepare release notes\n"
         << "  clean           Remove generated project state\n"
         << "  run             Run the current project\n"
+        << "  test            Build and run named test targets\n"
         << "  update          Refresh locked GitHub dependencies\n"
         << "  release         Create a local release artifact\n"
         << "  prepare-release Prepare hosted release assets\n"
@@ -191,6 +195,25 @@ namespace forge::cli
         output,
         error
       );
+    }
+
+    if (arguments.front() == "test")
+    {
+      std::optional<std::string> target;
+      auto test_arguments = arguments.subspan(1);
+
+      if (!test_arguments.empty() && test_arguments.front() != "--")
+      {
+        target = std::string { test_arguments.front() };
+        test_arguments = test_arguments.subspan(1);
+      }
+
+      if (!test_arguments.empty() && test_arguments.front() == "--")
+      {
+        test_arguments = test_arguments.subspan(1);
+      }
+
+      return test_project(working_directory, target, test_arguments, output, error);
     }
 
     if (arguments.front() == "bump")
