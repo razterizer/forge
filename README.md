@@ -13,7 +13,7 @@
 ![Last Commit](https://img.shields.io/github/last-commit/razterizer/forge?color=blue)
 ![Contributors](https://img.shields.io/github/contributors/razterizer/forge?color=blue)
 
-![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/razterizer/TextUR/total)
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/razterizer/forge/total)
 
 > Write C++, write a recipe, Forge the rest.
 
