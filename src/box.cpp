@@ -111,16 +111,23 @@ namespace forge
 #endif
     }
 
-#ifndef _WIN32
     std::filesystem::path dynamic_library_filename(std::string_view name)
     {
 #ifdef __APPLE__
       return "lib" + std::string { name } + ".dylib";
 #elif defined(__linux__)
       return "lib" + std::string { name } + ".so";
+#elif defined(_WIN32)
+      return std::string { name } + ".dll";
 #else
       return {};
 #endif
+    }
+
+#ifdef _WIN32
+    std::filesystem::path import_library_filename(std::string_view name)
+    {
+      return std::string { name } + ".lib";
     }
 #endif
 
@@ -582,6 +589,7 @@ namespace forge
       std::size_t executable_count = 0;
       std::size_t library_count = 0;
       std::size_t dynamic_library_count = 0;
+      std::size_t import_library_count = 0;
       std::size_t header_count = 0;
 
       for (std::size_t index = 0; index < manifest.artifacts.size(); ++index)
@@ -613,6 +621,10 @@ namespace forge
         else if (artifact.kind == "dynamic_library" && prefix == "runtime")
         {
           ++dynamic_library_count;
+        }
+        else if (artifact.kind == "import_library" && prefix == "lib")
+        {
+          ++import_library_count;
         }
         else if (artifact.kind == "public_header" && prefix == "include")
         {
@@ -669,8 +681,10 @@ namespace forge
                   || library_count + header_count != manifest.artifacts.size()))
           || (manifest.type == "dynamic_library"
               && (dynamic_library_count != 1
+                  || import_library_count != (manifest.os == "windows" ? 1 : 0)
                   || header_count == 0
-                  || dynamic_library_count + header_count != manifest.artifacts.size()))
+                  || dynamic_library_count + import_library_count + header_count
+                     != manifest.artifacts.size()))
           || (manifest.type == "header_only"
               && (header_count == 0 || header_count != manifest.artifacts.size())))
       {
@@ -917,9 +931,23 @@ namespace forge
     }
 
     auto built_artifact = project_directory / ".forge" / "build" / recipe.name;
+    std::optional<std::filesystem::path> built_import_library;
 
 #ifdef _WIN32
-    built_artifact += recipe.type == "static_library" ? ".lib" : ".exe";
+    if (recipe.type == "static_library")
+    {
+      built_artifact += ".lib";
+    }
+    else if (recipe.type == "dynamic_library")
+    {
+      built_artifact = project_directory / ".forge" / "build" / dynamic_library_filename(recipe.name);
+      built_import_library =
+        project_directory / ".forge" / "build" / import_library_filename(recipe.name);
+    }
+    else
+    {
+      built_artifact += ".exe";
+    }
 #else
     if (recipe.type == "static_library")
     {
@@ -934,6 +962,13 @@ namespace forge
     if (recipe.type != "header_only" && !std::filesystem::is_regular_file(built_artifact))
     {
       error << "forge: built artifact '" << built_artifact.string() << "' does not exist\n";
+      return 2;
+    }
+
+    if (built_import_library && !std::filesystem::is_regular_file(*built_import_library))
+    {
+      error << "forge: built import library '" << built_import_library->string()
+            << "' does not exist\n";
       return 2;
     }
 
@@ -1003,6 +1038,19 @@ namespace forge
         artifacts,
         error
       ))
+      {
+        return 2;
+      }
+
+      if (built_import_library
+          && !stage_artifact(
+            *built_import_library,
+            std::filesystem::path { "lib" } / built_import_library->filename(),
+            "import_library",
+            staging_directory,
+            artifacts,
+            error
+          ))
       {
         return 2;
       }
@@ -1107,6 +1155,10 @@ namespace forge
     else if (recipe.type == "dynamic_library")
     {
       archive_arguments.push_back("include");
+      if (built_import_library)
+      {
+        archive_arguments.push_back("lib");
+      }
       archive_arguments.push_back("runtime");
     }
     else

@@ -526,7 +526,11 @@ namespace forge
 
     if (!copy_runtime_dependencies(
       project_directory / ".forge" / "build" / "runtime",
+#ifdef _WIN32
+      staging_directory,
+#else
       staging_directory / "runtime",
+#endif
       error
     ))
     {

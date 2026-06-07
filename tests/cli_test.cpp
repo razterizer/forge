@@ -1416,7 +1416,6 @@ namespace
 
   void test_run_and_release_with_dynamic_dependency()
   {
-#ifndef _WIN32
     TemporaryDirectory directory;
     const auto answer = directory.path() / "answer";
     const auto dynamic_library = directory.path() / "greeting";
@@ -1486,9 +1485,12 @@ namespace
 #ifdef __APPLE__
     constexpr std::string_view runtime_filename = "libgreeting.dylib";
     constexpr std::string_view transitive_runtime_filename = "libanswer.dylib";
-#else
+#elif defined(__linux__)
     constexpr std::string_view runtime_filename = "libgreeting.so";
     constexpr std::string_view transitive_runtime_filename = "libanswer.so";
+#else
+    constexpr std::string_view runtime_filename = "greeting.dll";
+    constexpr std::string_view transitive_runtime_filename = "answer.dll";
 #endif
     expect(
       std::filesystem::exists(application / ".forge/build/runtime" / runtime_filename),
@@ -1513,6 +1515,20 @@ namespace
       contains(dynamic_manifest, "kind = \"dynamic_library\""),
       "new boxes identify dynamic-library artifacts with the public terminology"
     );
+#ifdef _WIN32
+    expect(
+      contains(dynamic_manifest, "kind = \"import_library\""),
+      "Windows dynamic-library boxes identify their import library"
+    );
+    expect(
+      std::filesystem::exists(application / ".forge/deps/greeting/lib/greeting.lib"),
+      "build installs the dynamic-library import library"
+    );
+    expect(
+      std::filesystem::exists(application / ".forge/build" / runtime_filename),
+      "build copies the dynamic-library runtime beside the executable"
+    );
+#endif
     constexpr std::array release_arguments { std::string_view { "release" } };
     std::ostringstream release_output;
     std::ostringstream release_error;
@@ -1523,17 +1539,28 @@ namespace
     );
     expect(
       std::filesystem::exists(
+#ifdef _WIN32
+        application / ".forge/release/app-1.0.0" / runtime_filename
+#else
         application / ".forge/release/app-1.0.0/runtime" / runtime_filename
+#endif
       ),
       "release stages the dynamic-library runtime"
     );
     expect(
       std::filesystem::exists(
+#ifdef _WIN32
+        application / ".forge/release/app-1.0.0" / transitive_runtime_filename
+#else
         application / ".forge/release/app-1.0.0/runtime" / transitive_runtime_filename
+#endif
       ),
       "release stages the transitive dynamic-library runtime"
     );
-    const auto released_executable = application / ".forge/release/app-1.0.0/app";
+    auto released_executable = application / ".forge/release/app-1.0.0/app";
+#ifdef _WIN32
+    released_executable += ".exe";
+#endif
     const std::vector<std::string> released_arguments { released_executable.string() };
     std::ostringstream released_error;
     expect(
@@ -1547,7 +1574,6 @@ namespace
     expect(run_error.str().empty(), "dynamic-library run does not write an error");
     expect(release_error.str().empty(), "dynamic-library release does not write an error");
     expect(released_error.str().empty(), "released executable does not write an error");
-#endif
   }
 
   void test_bump_updates_recipe_and_release_notes()

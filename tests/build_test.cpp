@@ -210,7 +210,6 @@ namespace
 
   void test_build_generates_dynamic_library()
   {
-#ifndef _WIN32
     TemporaryDirectory directory;
     write_library_project(directory.path());
     std::ofstream recipe { directory.path() / "forge.recipe.toml" };
@@ -246,13 +245,15 @@ namespace
     expect(contains(generated, "INSTALL_RPATH \"@loader_path\""), "dynamic library searches its own directory");
 #elif defined(__linux__)
     expect(contains(generated, "INSTALL_RPATH \"$ORIGIN\""), "dynamic library searches its own directory");
-#endif
+#elif defined(_WIN32)
+    expect(contains(generated, "IMPORT_PREFIX \"\" IMPORT_SUFFIX \".lib\""), "dynamic library generates a standard import library");
+    expect(contains(generated, "WINDOWS_EXPORT_ALL_SYMBOLS TRUE"), "dynamic library exports symbols on Windows");
+    expect(contains(output.str(), "hello.dll"), "build reports the dynamic library artifact");
 #endif
   }
 
   void test_build_accepts_legacy_shared_library_alias()
   {
-#ifndef _WIN32
     TemporaryDirectory directory;
     write_library_project(directory.path());
     std::ofstream recipe { directory.path() / "forge.recipe.toml" };
@@ -285,7 +286,6 @@ namespace
       contains(read_file(directory.path() / ".forge/generated/CMakeLists.txt"), " SHARED"),
       "legacy shared_library alias generates a dynamic library"
     );
-#endif
   }
 
   void test_build_validates_header_only_project()

@@ -212,6 +212,65 @@ namespace
     expect(contains(read_file(manifest), "build = 6"), "box manifest includes the build number");
   }
 
+#ifdef _WIN32
+  void test_create_windows_dynamic_library_box()
+  {
+    TemporaryDirectory directory;
+    std::filesystem::create_directories(directory.path() / "src");
+    std::filesystem::create_directories(directory.path() / "include/hello");
+    std::ofstream { directory.path() / "forge.recipe.toml" }
+      << "[project]\n"
+      << "name = \"hello\"\n"
+      << "version = \"0.1.0\"\n"
+      << "type = \"dynamic_library\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = [\"src/hello.cpp\"]\n"
+      << "public_headers = [\"include/hello/hello.h\"]\n";
+    std::ofstream { directory.path() / "src/hello.cpp" } << "int hello() { return 42; }\n";
+    std::ofstream { directory.path() / "include/hello/hello.h" } << "int hello();\n";
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&directory](const std::vector<std::string>& command,
+                   const std::filesystem::path&,
+                   std::ostream&)
+      {
+        if (command.size() > 1 && command[1] == "--build")
+        {
+          std::filesystem::create_directories(directory.path() / ".forge/build");
+          std::ofstream { directory.path() / ".forge/build/hello.dll" };
+          std::ofstream { directory.path() / ".forge/build/hello.lib" };
+        }
+
+        return 0;
+      };
+
+    expect(
+      forge::create_box(directory.path(), runner, output, error) == 0,
+      "Windows dynamic-library box creation succeeds"
+    );
+
+    std::filesystem::path staging;
+
+    for (const auto& entry : std::filesystem::directory_iterator {
+      directory.path() / ".forge/boxes/staging"
+    })
+    {
+      staging = entry.path();
+    }
+
+    const auto manifest = read_file(staging / "cbox.toml");
+    expect(contains(manifest, "path = \"runtime/hello.dll\""), "box declares the Windows DLL");
+    expect(contains(manifest, "kind = \"dynamic_library\""), "box identifies the Windows DLL");
+    expect(contains(manifest, "path = \"lib/hello.lib\""), "box declares the import library");
+    expect(contains(manifest, "kind = \"import_library\""), "box identifies the import library");
+    expect(std::filesystem::exists(staging / "runtime/hello.dll"), "box stages the Windows DLL");
+    expect(std::filesystem::exists(staging / "lib/hello.lib"), "box stages the import library");
+  }
+#endif
+
   void test_inspect_prints_manifest()
   {
     TemporaryDirectory directory;
@@ -462,6 +521,9 @@ int main()
 {
   test_create_box_stages_manifest_and_executable();
   test_create_box_includes_build_number();
+#ifdef _WIN32
+  test_create_windows_dynamic_library_box();
+#endif
   test_inspect_prints_manifest();
   test_verify_rejects_checksum_mismatch();
   test_verify_rejects_unexpected_file();

@@ -161,11 +161,11 @@ paths = ["src/hello.cpp"]
 public_headers = ["include/hello/hello.h"]
 ```
 
-Dynamic-library dependencies are boxed with their runtime artifact, installed
-under `.forge/deps/`, and copied into `.forge/build/runtime`. Forge-generated
-binaries use an origin-relative runtime search path, and `forge release`
-includes the runtime directory. Dynamic libraries currently support macOS and
-Linux; Windows DLL and import-library support remains planned.
+Dynamic-library dependencies are boxed with their runtime artifact and, on
+Windows, their import library. They are installed under `.forge/deps/` and
+staged for execution and release. Forge-generated macOS and Linux binaries use
+an origin-relative runtime search path. On Windows, Forge links through the
+import library and copies required DLLs beside the consuming executable.
 
 Legacy recipes using `type = "shared_library"` remain accepted as an alias for
 `dynamic_library`.

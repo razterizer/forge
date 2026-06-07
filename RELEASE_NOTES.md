@@ -16,6 +16,8 @@
   dependent boxes.
 - Renamed the public dynamic-linking project type to `dynamic_library`, while
   preserving `shared_library` as a legacy recipe and box alias.
+- Added Windows dynamic-library builds and boxes with separate DLL runtime and
+  import-library artifacts, automatic dependent linking, and DLL staging.
 - Added `forge box publish <box>` for verified local publication and checksum
   generation.
 - Added `forge prepare-release` for type-aware hosted release assets:

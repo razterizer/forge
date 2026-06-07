@@ -159,6 +159,13 @@ namespace forge
 #endif
     }
 
+#ifdef _WIN32
+    std::filesystem::path import_library_filename(std::string_view name)
+    {
+      return std::string { name } + ".lib";
+    }
+#endif
+
     std::string target_os()
     {
 #ifdef _WIN32
@@ -846,10 +853,34 @@ namespace forge
           file
             << "add_library(forge_dependency_" << index << ' '
             << (dependency.runtime ? "SHARED" : "STATIC") << " IMPORTED)\n"
-            << "set_target_properties(forge_dependency_" << index
-            << " PROPERTIES IMPORTED_LOCATION \""
-            << escape_cmake(dependency.library->string()) << "\")\n"
-            << "target_link_libraries(forge_project PRIVATE forge_dependency_" << index << ")\n";
+            << "set_target_properties(forge_dependency_" << index << " PROPERTIES ";
+
+#ifdef _WIN32
+          if (dependency.runtime)
+          {
+            file
+              << "IMPORTED_IMPLIB \"" << escape_cmake(dependency.library->string()) << "\" "
+              << "IMPORTED_LOCATION \"" << escape_cmake(dependency.runtime->string()) << "\")\n";
+          }
+          else
+#endif
+          {
+            file
+              << "IMPORTED_LOCATION \"" << escape_cmake(dependency.library->string()) << "\")\n";
+          }
+
+          file << "target_link_libraries(forge_project PRIVATE forge_dependency_" << index << ")\n";
+
+#ifdef _WIN32
+          if (dependency.runtime)
+          {
+            file
+              << "add_custom_command(TARGET forge_project POST_BUILD "
+              << "COMMAND ${CMAKE_COMMAND} -E copy_if_different \""
+              << escape_cmake(dependency.runtime->string())
+              << "\" \"$<TARGET_FILE_DIR:forge_project>\")\n";
+          }
+#endif
         }
       }
 
@@ -863,6 +894,14 @@ namespace forge
         file
           << "set_target_properties(forge_project PROPERTIES "
           << "PREFIX \"\" SUFFIX \".lib\")\n";
+      }
+      else if (recipe.type == "dynamic_library")
+      {
+        file
+          << "set_target_properties(forge_project PROPERTIES "
+          << "PREFIX \"\" SUFFIX \".dll\" "
+          << "IMPORT_PREFIX \"\" IMPORT_SUFFIX \".lib\" "
+          << "WINDOWS_EXPORT_ALL_SYMBOLS TRUE)\n";
       }
 #endif
 
@@ -1452,22 +1491,39 @@ namespace forge
           {
             if (artifact.kind == "dynamic_library")
             {
+              resolved.runtime = destination / artifact.path;
+            }
+            else if (artifact.kind == "import_library")
+            {
               resolved.library = destination / artifact.path;
             }
           }
         }
         else
         {
+#ifdef _WIN32
+          resolved.library = destination / "lib" / import_library_filename(node.recipe.name);
+#else
           resolved.library = destination / "runtime" / dynamic_library_filename(node.recipe.name);
+#endif
+          resolved.runtime = destination / "runtime" / dynamic_library_filename(node.recipe.name);
         }
 
-        resolved.runtime = resolved.library;
+#ifndef _WIN32
+        resolved.library = resolved.runtime;
+#endif
       }
 
       if ((node.recipe.type == "static_library" || node.recipe.type == "dynamic_library")
           && !resolved.library)
       {
         error << "forge: dependency '" << node.recipe.name << "' box has no linkable library\n";
+        return false;
+      }
+
+      if (node.recipe.type == "dynamic_library" && !resolved.runtime)
+      {
+        error << "forge: dependency '" << node.recipe.name << "' box has no runtime library\n";
         return false;
       }
 
@@ -1656,14 +1712,6 @@ namespace forge
       error << "forge: unsupported project type '" << recipe.type << "'\n";
       return 2;
     }
-
-#ifdef _WIN32
-    if (recipe.type == "dynamic_library")
-    {
-      error << "forge: dynamic_library projects are not supported on Windows yet\n";
-      return 2;
-    }
-#endif
 
     if (recipe.sources.empty() && recipe.type != "header_only")
     {

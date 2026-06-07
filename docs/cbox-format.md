@@ -74,9 +74,10 @@ sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 Each `[[artifact]]` entry declares one packaged file. Static-library boxes
 contain one `static_library` artifact under `lib/` and one or more
-`public_header` artifacts under `include/`. Shared-library boxes contain one
+`public_header` artifacts under `include/`. Dynamic-library boxes contain one
 `dynamic_library` artifact under `runtime/` and one or more `public_header`
-artifacts under `include/`. Header-only boxes contain one or more
+artifacts under `include/`. Windows dynamic-library boxes additionally contain
+one `import_library` artifact under `lib/`. Header-only boxes contain one or more
 `public_header` artifacts and no library artifact.
 
 The manifest determines package identity. The archive filename is only a
@@ -106,7 +107,7 @@ individual compiled artifacts.
 - Absolute paths and parent traversal are forbidden.
 - `bin/` contains executable artifacts.
 - `include/` contains public headers.
-- `lib/` contains static-library artifacts.
+- `lib/` contains static-library artifacts and Windows import libraries.
 - `runtime/` contains dynamic-library runtime artifacts.
 - `dependencies/` contains direct dependency boxes.
 - Future profiles may add `licenses/`.
