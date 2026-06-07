@@ -1,8 +1,8 @@
 # forge
 
 [![release linux](https://github.com/razterizer/forge/actions/workflows/release-linux.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/release-linux.yml)
-
 [![release macos](https://github.com/razterizer/forge/actions/workflows/release-macos.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/release-macos.yml)
+
 
 > Write C++, write a recipe, Forge the rest.
 
