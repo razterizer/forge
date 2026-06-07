@@ -151,9 +151,39 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "public_headers"
+          "public_headers",
+          "compiler",
+          "compiler_version",
+          "cpp_std",
+          "configuration",
+          "runtime"
         ],
         "properties": {
+          "compiler": {
+            "type": "string",
+            "minLength": 1,
+            "description": "CMake compiler identifier used to build the imported binaries."
+          },
+          "compiler_version": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Exact compiler version used to build the imported binaries."
+          },
+          "cpp_std": {
+            "type": "integer",
+            "enum": [11, 14, 17, 20, 23, 26],
+            "description": "C++ language standard used to build the imported binaries."
+          },
+          "configuration": {
+            "type": "string",
+            "enum": ["Debug", "Release", "RelWithDebInfo", "MinSizeRel"],
+            "description": "Build configuration used for the imported binaries."
+          },
+          "runtime": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Compiler runtime identity used by the imported binaries."
+          },
           "public_headers": {
             "$ref": "#/$defs/projectPaths",
             "minItems": 1,

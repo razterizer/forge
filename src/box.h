@@ -26,6 +26,15 @@ namespace forge
     std::string sha256;
   };
 
+  struct ToolchainIdentity
+  {
+    std::string compiler;
+    std::string compiler_version;
+    int cpp_standard = 0;
+    std::string configuration;
+    std::string runtime;
+  };
+
   struct BoxMetadata
   {
     std::string name;
@@ -34,6 +43,7 @@ namespace forge
     std::string type;
     std::string os;
     std::string arch;
+    std::optional<ToolchainIdentity> toolchain;
     std::vector<BoxArtifactMetadata> artifacts;
     std::vector<BoxDependencyMetadata> dependencies;
   };

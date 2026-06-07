@@ -874,6 +874,9 @@ namespace
       "static library box inspect succeeds"
     );
     expect(contains(inspect_output.str(), "type = \"static_library\""), "manifest identifies a static library");
+    expect(contains(inspect_output.str(), "[toolchain]"), "manifest declares the compiled toolchain");
+    expect(contains(inspect_output.str(), "compiler = \""), "manifest declares the compiler");
+    expect(contains(inspect_output.str(), "runtime = \""), "manifest declares the runtime ABI");
     expect(contains(inspect_output.str(), "path = \"include/hello/hello.h\""), "manifest declares the public header");
 #ifdef _WIN32
     expect(contains(inspect_output.str(), "path = \"lib/hello.lib\""), "manifest declares the static library");
@@ -1026,6 +1029,11 @@ namespace
       "version = \"4.2.0\"\n"
       "type = \"imported_library\"\n\n"
       "[import." + current_target() + "]\n"
+      "compiler = \"ExampleCompiler\"\n"
+      "compiler_version = \"1.0\"\n"
+      "cpp_std = 20\n"
+      "configuration = \"Debug\"\n"
+      "runtime = \"default\"\n"
       "public_headers = [\"vendor/include\"]\n"
       "static_libraries = [\"vendor/lib/sdk.a\"]\n"
       "dynamic_libraries = [\"vendor/runtime/sdk.so\"]\n"
@@ -1188,7 +1196,8 @@ namespace
       "version = \"4.2.0\"\n"
       "type = \"imported_library\"\n\n"
       "[import." + current_target() + "]\n"
-      "public_headers = [\"vendor/include\"]\n"
+      + read_file(first / ".forge/build/forge-toolchain.toml")
+      + "public_headers = [\"vendor/include\"]\n"
       "static_libraries = [\"vendor/lib/" + first_library.filename().string()
       + "\", \"vendor/lib/" + second_library.filename().string() + "\"]\n"
       "dynamic_libraries = [\"vendor/runtime/" + third_runtime.filename().string() + "\"]\n";
@@ -1259,6 +1268,24 @@ namespace
     expect(third_error.str().empty(), "imported dynamic library build does not write an error");
     expect(run_error.str().empty(), "imported-library dependency run does not write an error");
     expect(release_error.str().empty(), "imported-library dependency release does not write an error");
+
+    const auto compiler = imported_recipe.find("compiler = ");
+    imported_recipe.replace(
+      compiler,
+      imported_recipe.find('\n', compiler) - compiler,
+      "compiler = \"IncompatibleCompiler\""
+    );
+    write_file(imported / "forge.recipe.toml", imported_recipe);
+    std::ostringstream incompatible_output;
+    std::ostringstream incompatible_error;
+    expect(
+      forge::cli::run(run_arguments, application, incompatible_output, incompatible_error) == 2,
+      "build rejects an ABI-incompatible imported-library dependency"
+    );
+    expect(
+      contains(incompatible_error.str(), "toolchain is incompatible"),
+      "incompatible imported-library toolchain is explained"
+    );
   }
 
   void test_run_with_local_dependencies()

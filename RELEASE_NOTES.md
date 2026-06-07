@@ -6,6 +6,9 @@
   headers and precompiled static, dynamic, and import libraries without
   invoking a compiler, then link and stage every contained artifact when
   consumed as dependencies.
+- Added strict compiled-box toolchain identities covering compiler, exact
+  compiler version, C++ standard, configuration, and runtime ABI, with
+  incompatible dependencies rejected before linking.
 
 ## 0.2.0
 

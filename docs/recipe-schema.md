@@ -44,10 +44,18 @@ version = "4.2.0"
 type = "imported_library"
 
 [import.windows-x86_64]
+compiler = "MSVC"
+compiler_version = "19.40.33811.0"
+cpp_std = 20
+configuration = "Release"
+runtime = "msvc-dynamic"
 public_headers = ["vendor/include"]
 dynamic_libraries = ["vendor/bin/sdk.dll"]
 import_libraries = ["vendor/lib/sdk.lib"]
 ```
+
+The compiler fields are mandatory for imported binaries. Forge compares them
+with the actual toolchain selected by CMake before linking a consumer.
 
 ## Taplo and VS Code
 

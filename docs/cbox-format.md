@@ -59,6 +59,13 @@ type = "executable"
 os = "macos"
 arch = "arm64"
 
+[toolchain]
+compiler = "AppleClang"
+compiler_version = "17.0.0.17000013"
+cpp_std = 20
+configuration = "Debug"
+runtime = "libc++"
+
 [[artifact]]
 path = "bin/hello"
 kind = "executable"
@@ -106,6 +113,14 @@ type = "executable"
 
 This keeps dependency compatibility based on `3.0.0` while distinguishing
 individual compiled artifacts.
+
+Compiled boxes include a `[toolchain]` identity recording the actual compiler,
+exact compiler version, C++ standard, configuration, and runtime ABI selected
+by CMake. Forge rejects compiled dependencies without a matching identity
+before linking. Header-only boxes omit this section. Imported-library recipes
+declare the identity explicitly because their binaries were built outside
+Forge. Legacy compiled boxes without an identity remain inspectable and
+verifiable, but cannot be consumed as compiled dependencies.
 
 ## Paths
 

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <fstream>
 #include <map>
 #include <optional>
@@ -31,6 +32,7 @@ namespace forge
     {
       std::string name;
       std::filesystem::path root;
+      std::optional<ToolchainIdentity> toolchain;
       std::vector<ResolvedLibrary> libraries;
       std::vector<std::filesystem::path> runtimes;
     };
@@ -530,6 +532,16 @@ namespace forge
         return false;
       }
 
+      if (profile->compiler.empty()
+          || profile->compiler_version.empty()
+          || profile->cpp_standard == 0
+          || profile->configuration.empty()
+          || profile->runtime.empty())
+      {
+        error << "forge: imported_library profile requires a complete toolchain identity\n";
+        return false;
+      }
+
       for (const auto& headers : profile->public_headers)
       {
         const auto path = project_directory / headers;
@@ -897,7 +909,29 @@ namespace forge
 
       file
         << "cmake_minimum_required(VERSION 3.25)\n"
-        << "project(forge_project LANGUAGES CXX)\n\n";
+        << "project(forge_project LANGUAGES CXX)\n\n"
+        << "include(CheckCXXSourceCompiles)\n"
+        << "check_cxx_source_compiles(\"#include <string>\\n#ifndef _LIBCPP_VERSION\\n"
+        << "#error\\n#endif\\nint main() {}\" FORGE_USES_LIBCPP)\n"
+        << "check_cxx_source_compiles(\"#include <string>\\n"
+        << "#if !defined(_GLIBCXX_USE_CXX11_ABI) || !_GLIBCXX_USE_CXX11_ABI\\n"
+        << "#error\\n#endif\\nint main() {}\" FORGE_USES_GLIBCXX_CXX11_ABI)\n"
+        << "set(FORGE_RUNTIME \"unknown\")\n"
+        << "if(MSVC)\n"
+        << "  set(FORGE_RUNTIME \"msvc-dynamic\")\n"
+        << "elseif(FORGE_USES_LIBCPP)\n"
+        << "  set(FORGE_RUNTIME \"libc++\")\n"
+        << "elseif(FORGE_USES_GLIBCXX_CXX11_ABI)\n"
+        << "  set(FORGE_RUNTIME \"libstdc++-cxx11\")\n"
+        << "else()\n"
+        << "  set(FORGE_RUNTIME \"libstdc++-legacy\")\n"
+        << "endif()\n"
+        << "file(WRITE \"${CMAKE_BINARY_DIR}/forge-toolchain.toml\" "
+        << "\"compiler = \\\"${CMAKE_CXX_COMPILER_ID}\\\"\\n\" "
+        << "\"compiler_version = \\\"${CMAKE_CXX_COMPILER_VERSION}\\\"\\n\" "
+        << "\"cpp_std = " << recipe.cpp_standard << "\\n\" "
+        << "\"configuration = \\\"${CMAKE_BUILD_TYPE}\\\"\\n\" "
+        << "\"runtime = \\\"${FORGE_RUNTIME}\\\"\\n\")\n\n";
 
       if (recipe.type == "static_library")
       {
@@ -1599,6 +1633,7 @@ namespace forge
         {
           node.recipe.name,
           destination,
+          node.box_metadata ? node.box_metadata->toolchain : std::nullopt,
           {},
           {}
         };
@@ -1729,6 +1764,121 @@ namespace forge
       {
         error << "forge: dependency '" << node.recipe.name << "' box has no runtime library\n";
         return false;
+      }
+
+      return true;
+    }
+
+    bool validate_dependency_toolchains(const std::filesystem::path& build_directory,
+                                        const std::vector<ResolvedDependency>& dependencies,
+                                        std::ostream& error)
+    {
+      const auto has_compiled_dependency = std::any_of(
+        dependencies.begin(),
+        dependencies.end(),
+        [](const ResolvedDependency& dependency)
+        {
+          return !dependency.libraries.empty();
+        }
+      );
+
+      if (!has_compiled_dependency)
+      {
+        return true;
+      }
+
+      ToolchainIdentity project;
+      std::ifstream file { build_directory / "forge-toolchain.toml" };
+      std::string line;
+
+      while (std::getline(file, line))
+      {
+        const auto content = trim(line);
+        const auto equals = content.find('=');
+
+        if (equals == std::string_view::npos)
+        {
+          continue;
+        }
+
+        const auto key = trim(content.substr(0, equals));
+        std::string value;
+
+        if (!parse_lock_string(trim(content.substr(equals + 1)), value))
+        {
+          if (key == "cpp_std")
+          {
+            const auto number = trim(content.substr(equals + 1));
+            const auto parsed = std::from_chars(
+              number.data(),
+              number.data() + number.size(),
+              project.cpp_standard
+            );
+
+            if (parsed.ec == std::errc {} && parsed.ptr == number.data() + number.size())
+            {
+              continue;
+            }
+          }
+
+          error << "forge: could not read configured toolchain identity\n";
+          return false;
+        }
+
+        if (key == "compiler")
+        {
+          project.compiler = std::move(value);
+        }
+        else if (key == "compiler_version")
+        {
+          project.compiler_version = std::move(value);
+        }
+        else if (key == "configuration")
+        {
+          project.configuration = std::move(value);
+        }
+        else if (key == "runtime")
+        {
+          project.runtime = std::move(value);
+        }
+      }
+
+      if (project.compiler.empty()
+          || project.compiler_version.empty()
+          || project.cpp_standard == 0
+          || project.configuration.empty()
+          || project.runtime.empty())
+      {
+        error << "forge: configured build did not report a complete toolchain identity\n";
+        return false;
+      }
+
+      for (const auto& dependency : dependencies)
+      {
+        if (dependency.libraries.empty())
+        {
+          continue;
+        }
+
+        if (!dependency.toolchain)
+        {
+          error << "forge: compiled dependency '" << dependency.name
+                << "' has no toolchain identity\n";
+          return false;
+        }
+
+        const auto& candidate = *dependency.toolchain;
+
+        if (candidate.compiler != project.compiler
+            || candidate.compiler_version != project.compiler_version
+            || candidate.cpp_standard != project.cpp_standard
+            || candidate.configuration != project.configuration
+            || candidate.runtime != project.runtime)
+        {
+          error << "forge: dependency '" << dependency.name
+                << "' toolchain is incompatible with the configured build\n";
+          return false;
+        }
       }
 
       return true;
@@ -2059,6 +2209,11 @@ namespace forge
     if (process_runner(configure_arguments, project_directory, error) != 0)
     {
       error << "forge: CMake configuration failed\n";
+      return 2;
+    }
+
+    if (!validate_dependency_toolchains(build_directory, dependencies, error))
+    {
       return 2;
     }
 

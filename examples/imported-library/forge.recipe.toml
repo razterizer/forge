@@ -6,6 +6,11 @@ version = "4.2.0"
 type = "imported_library"
 
 [import.macos-arm64]
+compiler = "AppleClang"
+compiler_version = "17.0.0.17000013"
+cpp_std = 20
+configuration = "Debug"
+runtime = "libc++"
 public_headers = ["vendor/include"]
 static_libraries = ["vendor/lib/libvendor.a"]
 dynamic_libraries = ["vendor/runtime/libvendor.dylib"]

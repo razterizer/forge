@@ -348,6 +348,26 @@ namespace forge
         {
           valid = parse_sources(value, profile->public_headers);
         }
+        else if (key == "compiler")
+        {
+          valid = parse_string(value, profile->compiler);
+        }
+        else if (key == "compiler_version")
+        {
+          valid = parse_string(value, profile->compiler_version);
+        }
+        else if (key == "configuration")
+        {
+          valid = parse_string(value, profile->configuration);
+        }
+        else if (key == "runtime")
+        {
+          valid = parse_string(value, profile->runtime);
+        }
+        else if (key == "cpp_std")
+        {
+          valid = parse_integer(value, profile->cpp_standard);
+        }
         else if (key == "static_libraries")
         {
           valid = parse_sources(value, profile->static_libraries);

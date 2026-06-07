@@ -198,6 +198,11 @@ version = "4.2.0"
 type = "imported_library"
 
 [import.windows-x86_64]
+compiler = "MSVC"
+compiler_version = "19.40.33811.0"
+cpp_std = 20
+configuration = "Release"
+runtime = "msvc-dynamic"
 public_headers = ["vendor/include"]
 dynamic_libraries = ["vendor/bin/sdk.dll"]
 import_libraries = ["vendor/lib/sdk.lib"]
@@ -208,6 +213,13 @@ contents are mapped under `include/`; static and import libraries are mapped
 under `lib/`; dynamic-library runtimes are mapped under `runtime/`.
 `forge box create` packages the matching current-target profile without
 invoking a compiler.
+
+Compiled boxes record the actual compiler, exact compiler version, C++ standard,
+build configuration, and standard-library/runtime ABI selected by CMake. Forge
+rejects compiled dependencies whose recorded toolchain differs from the
+consuming build. Imported-library profiles declare this identity explicitly
+because Forge cannot infer how vendor binaries were produced. Header-only boxes
+do not require a toolchain identity.
 
 Projects may use local static-library, dynamic-library, imported-library, and
 header-only dependencies:

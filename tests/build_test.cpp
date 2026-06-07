@@ -146,6 +146,8 @@ namespace
 
     const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
     expect(contains(generated, "add_executable(forge_project"), "build generates an executable target");
+    expect(contains(generated, "forge-toolchain.toml"), "build records the selected toolchain identity");
+    expect(contains(generated, "CMAKE_CXX_COMPILER_ID"), "toolchain identity records the compiler");
     expect(contains(generated, "main.cpp"), "build includes recipe sources");
     expect(contains(generated, "cxx_std_20"), "build includes the requested C++ standard");
     expect(error.str().empty(), "successful unit build does not write an error");

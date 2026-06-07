@@ -48,6 +48,7 @@ namespace forge
       std::string type;
       std::string os;
       std::string arch;
+      std::optional<ToolchainIdentity> toolchain;
       std::vector<BoxArtifact> artifacts;
       std::vector<BoxDependency> dependencies;
     };
@@ -83,6 +84,79 @@ namespace forge
       value = trim(value);
       const auto parsed = std::from_chars(value.data(), value.data() + value.size(), result);
       return parsed.ec == std::errc {} && parsed.ptr == value.data() + value.size();
+    }
+
+    bool read_toolchain(const std::filesystem::path& path,
+                        ToolchainIdentity& toolchain,
+                        std::ostream& error)
+    {
+      std::ifstream file { path };
+
+      if (!file)
+      {
+        error << "forge: could not read toolchain identity '" << path.string() << "'\n";
+        return false;
+      }
+
+      std::string line;
+
+      while (std::getline(file, line))
+      {
+        const auto content = trim(line);
+        const auto equals = content.find('=');
+
+        if (content.empty() || content.front() == '#' || equals == std::string_view::npos)
+        {
+          continue;
+        }
+
+        const auto key = trim(content.substr(0, equals));
+        const auto value = trim(content.substr(equals + 1));
+        bool valid = true;
+
+        if (key == "compiler")
+        {
+          valid = parse_string(value, toolchain.compiler);
+        }
+        else if (key == "compiler_version")
+        {
+          valid = parse_string(value, toolchain.compiler_version);
+        }
+        else if (key == "cpp_std")
+        {
+          valid = parse_integer(value, toolchain.cpp_standard);
+        }
+        else if (key == "configuration")
+        {
+          valid = parse_string(value, toolchain.configuration);
+        }
+        else if (key == "runtime")
+        {
+          valid = parse_string(value, toolchain.runtime);
+        }
+        else
+        {
+          valid = false;
+        }
+
+        if (!valid)
+        {
+          error << "forge: invalid toolchain identity\n";
+          return false;
+        }
+      }
+
+      if (toolchain.compiler.empty()
+          || toolchain.compiler_version.empty()
+          || toolchain.cpp_standard == 0
+          || toolchain.configuration.empty()
+          || toolchain.runtime.empty())
+      {
+        error << "forge: incomplete toolchain identity\n";
+        return false;
+      }
+
+      return true;
     }
 
     std::string target_os()
@@ -378,6 +452,7 @@ namespace forge
 
     bool write_manifest(const std::filesystem::path& path,
                         const Recipe& recipe,
+                        const std::optional<ToolchainIdentity>& toolchain,
                         const std::vector<BoxArtifact>& artifacts,
                         const std::vector<BoxDependency>& dependencies,
                         std::ostream& error)
@@ -407,6 +482,17 @@ namespace forge
         << "[target]\n"
         << "os = \"" << target_os() << "\"\n"
         << "arch = \"" << target_arch() << "\"\n";
+
+      if (toolchain)
+      {
+        manifest
+          << "\n[toolchain]\n"
+          << "compiler = \"" << toolchain->compiler << "\"\n"
+          << "compiler_version = \"" << toolchain->compiler_version << "\"\n"
+          << "cpp_std = " << toolchain->cpp_standard << "\n"
+          << "configuration = \"" << toolchain->configuration << "\"\n"
+          << "runtime = \"" << toolchain->runtime << "\"\n";
+      }
 
       for (const auto& artifact : artifacts)
       {
@@ -534,6 +620,7 @@ namespace forge
           if (section != "cbox"
               && section != "package"
               && section != "target"
+              && section != "toolchain"
               && section != "artifact"
               && section != "dependency")
           {
@@ -637,6 +724,46 @@ namespace forge
         {
           valid = parse_string(value, manifest.arch);
         }
+        else if (identity == "toolchain.compiler")
+        {
+          if (!manifest.toolchain)
+          {
+            manifest.toolchain.emplace();
+          }
+          valid = parse_string(value, manifest.toolchain->compiler);
+        }
+        else if (identity == "toolchain.compiler_version")
+        {
+          if (!manifest.toolchain)
+          {
+            manifest.toolchain.emplace();
+          }
+          valid = parse_string(value, manifest.toolchain->compiler_version);
+        }
+        else if (identity == "toolchain.cpp_std")
+        {
+          if (!manifest.toolchain)
+          {
+            manifest.toolchain.emplace();
+          }
+          valid = parse_integer(value, manifest.toolchain->cpp_standard);
+        }
+        else if (identity == "toolchain.configuration")
+        {
+          if (!manifest.toolchain)
+          {
+            manifest.toolchain.emplace();
+          }
+          valid = parse_string(value, manifest.toolchain->configuration);
+        }
+        else if (identity == "toolchain.runtime")
+        {
+          if (!manifest.toolchain)
+          {
+            manifest.toolchain.emplace();
+          }
+          valid = parse_string(value, manifest.toolchain->runtime);
+        }
         else if (section == "artifact" && artifact_index && key == "path")
         {
           std::string artifact_path;
@@ -729,6 +856,17 @@ namespace forge
       if (manifest.format != 1 && manifest.format != 2)
       {
         error << "forge: unsupported box format " << manifest.format << '\n';
+        return false;
+      }
+
+      if (manifest.toolchain
+          && (manifest.toolchain->compiler.empty()
+              || manifest.toolchain->compiler_version.empty()
+              || manifest.toolchain->cpp_standard == 0
+              || manifest.toolchain->configuration.empty()
+              || manifest.toolchain->runtime.empty()))
+      {
+        error << "forge: box manifest contains incomplete toolchain identity\n";
         return false;
       }
 
@@ -1370,7 +1508,62 @@ namespace forge
         });
     }
 
-    if (!write_manifest(staging_directory / "cbox.toml", recipe, artifacts, dependencies, error))
+    std::optional<ToolchainIdentity> toolchain;
+
+    if (recipe.type == "imported_library")
+    {
+      const auto profile = std::find_if(
+        recipe.imports.begin(),
+        recipe.imports.end(),
+        [](const ImportProfile& candidate)
+        {
+          return candidate.target == current_target();
+        }
+      );
+
+      if (profile == recipe.imports.end())
+      {
+        error << "forge: imported_library has no import profile for " << current_target() << '\n';
+        return 2;
+      }
+
+      toolchain =
+        {
+          profile->compiler,
+          profile->compiler_version,
+          profile->cpp_standard,
+          profile->configuration,
+          profile->runtime
+        };
+
+      if (toolchain->compiler.empty()
+          || toolchain->compiler_version.empty()
+          || toolchain->cpp_standard == 0
+          || toolchain->configuration.empty()
+          || toolchain->runtime.empty())
+      {
+        error << "forge: imported_library profile requires a complete toolchain identity\n";
+        return 2;
+      }
+    }
+    else if (recipe.type != "header_only"
+             && !read_toolchain(
+               project_directory / ".forge" / "build" / "forge-toolchain.toml",
+               toolchain.emplace(),
+               error
+             ))
+    {
+      return 2;
+    }
+
+    if (!write_manifest(
+      staging_directory / "cbox.toml",
+      recipe,
+      toolchain,
+      artifacts,
+      dependencies,
+      error
+    ))
     {
       return 2;
     }
@@ -1751,6 +1944,7 @@ namespace forge
         manifest.type,
         manifest.os,
         manifest.arch,
+        manifest.toolchain,
         {},
         {}
       };

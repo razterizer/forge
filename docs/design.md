@@ -95,19 +95,27 @@ The `imported_library` profile packages target-specific local headers and
 precompiled artifacts without invoking a compiler. Consumers link every
 contained static or import library and stage every dynamic-library runtime.
 
+Compiled boxes carry a strict toolchain identity: compiler identifier, exact
+compiler version, C++ standard, build configuration, and standard-library or
+runtime ABI. Builds reject compiled dependencies whose identity differs from
+the actual consuming CMake toolchain. Lockfiles continue to pin the complete
+box checksum, which transitively pins its embedded toolchain identity.
+
 Workflow support will absorb repeated CI and release glue currently maintained
 by projects such as Termin8or. The intended surface includes build/test
 matrices, locked and development dependency modes, release asset selection,
 release-note extraction, version generation, checksums, tags, publication, and
-declarative pre-build and post-build steps with explicit commands and working
-directories.
+declarative runtime asset staging for build, run, and release.
 Actions that modify Git history or publish remotely must remain explicit and
 reviewable.
 
 ## Deferred decisions
 
 - Extended `.cbox` compatibility identity and deterministic archive rules
-- Binary compatibility identity, including compiler and runtime ABI
+- Extended binary compatibility identity beyond the initial strict toolchain
+  fields
 - Version constraint syntax
 - Registry protocol and shared binary cache behavior
 - Vendor SDK redistribution rules
+- Generic pre-build and post-build hooks, if declarative Forge features do not
+  cover the concrete use cases

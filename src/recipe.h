@@ -28,6 +28,11 @@ namespace forge
   struct ImportProfile
   {
     std::string target;
+    std::string compiler;
+    std::string compiler_version;
+    std::string configuration;
+    std::string runtime;
+    int cpp_standard = 0;
     std::vector<std::filesystem::path> public_headers;
     std::vector<std::filesystem::path> static_libraries;
     std::vector<std::filesystem::path> dynamic_libraries;

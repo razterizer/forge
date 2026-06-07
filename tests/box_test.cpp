@@ -75,6 +75,16 @@ namespace
 #endif
   }
 
+  void write_toolchain(const std::filesystem::path& directory)
+  {
+    std::ofstream { directory / ".forge/build/forge-toolchain.toml" }
+      << "compiler = \"ExampleCompiler\"\n"
+      << "compiler_version = \"1.0\"\n"
+      << "cpp_std = 20\n"
+      << "configuration = \"Debug\"\n"
+      << "runtime = \"default\"\n";
+  }
+
   std::filesystem::path write_test_box(const std::filesystem::path& directory)
   {
     const auto staging = directory / "archive-staging";
@@ -142,6 +152,7 @@ namespace
         if (command.size() > 1 && command[1] == "--build")
         {
           std::filesystem::create_directories(directory.path() / ".forge/build");
+          write_toolchain(directory.path());
 #ifdef _WIN32
           std::ofstream executable { directory.path() / ".forge/build/hello.exe" };
 #else
@@ -192,6 +203,7 @@ namespace
         if (command.size() > 1 && command[1] == "--build")
         {
           std::filesystem::create_directories(directory.path() / ".forge/build");
+          write_toolchain(directory.path());
 #ifdef _WIN32
           std::ofstream executable { directory.path() / ".forge/build/hello.exe" };
 #else
@@ -251,6 +263,7 @@ namespace
         if (command.size() > 1 && command[1] == "--build")
         {
           std::filesystem::create_directories(directory.path() / ".forge/build");
+          write_toolchain(directory.path());
           std::ofstream { directory.path() / ".forge/build/hello.dll" };
           std::ofstream { directory.path() / ".forge/build/hello.lib" };
         }
@@ -297,6 +310,11 @@ namespace
       << "version = \"4.2.0\"\n"
       << "type = \"imported_library\"\n\n"
       << "[import." << current_target() << "]\n"
+      << "compiler = \"ExampleCompiler\"\n"
+      << "compiler_version = \"1.0\"\n"
+      << "cpp_std = 20\n"
+      << "configuration = \"Debug\"\n"
+      << "runtime = \"default\"\n"
       << "public_headers = [\"vendor/include\"]\n"
       << "static_libraries = [\"vendor/lib/sdk.a\"]\n"
       << "dynamic_libraries = [\"vendor/runtime/sdk.so\"]\n";
