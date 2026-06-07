@@ -424,6 +424,69 @@ namespace
     expect(contains(build_error.str(), "no source files"), "build explains an empty project");
   }
 
+  void test_build_and_run_named_target()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"suite\"\n"
+      "version = \"0.1.0\"\n"
+      "\n"
+      "[target.examples]\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n"
+      "sources = [\"Examples/examples.cpp\"]\n"
+      "\n"
+      "[target.unit_tests]\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n"
+      "sources = [\"Tests/unit_tests.cpp\"]\n"
+    );
+    write_file(
+      directory.path() / "Examples/examples.cpp",
+      "#include <iostream>\n"
+      "int main() { std::cout << \"examples\\\\n\"; }\n"
+    );
+    write_file(directory.path() / "Tests/unit_tests.cpp", "int main() {}\n");
+    constexpr std::array build_arguments {
+      std::string_view { "build" },
+      std::string_view { "examples" }
+    };
+    constexpr std::array run_arguments {
+      std::string_view { "run" },
+      std::string_view { "examples" },
+      std::string_view { "--" },
+      std::string_view { "--message" }
+    };
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    std::ostringstream run_output;
+    std::ostringstream run_error;
+
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "CLI builds a selected named target"
+    );
+#ifdef _WIN32
+    const auto executable = directory.path() / ".forge/build/examples/examples.exe";
+#else
+    const auto executable = directory.path() / ".forge/build/examples/examples";
+#endif
+    expect(std::filesystem::exists(executable), "named target build creates an isolated executable");
+    expect(
+      !std::filesystem::exists(directory.path() / ".forge/build/examples/unit_tests"),
+      "named target build does not build another target"
+    );
+    expect(
+      forge::cli::run(run_arguments, directory.path(), run_output, run_error) == 0,
+      "CLI runs a selected named target"
+    );
+    expect(contains(run_output.str(), "Running examples"), "CLI reports the selected named target");
+    expect(build_error.str().empty(), "named target CLI build does not write an error");
+    expect(run_error.str().empty(), "named target CLI run does not write an error");
+  }
+
   void test_update_rejects_unknown_dependency()
   {
     TemporaryDirectory directory;
@@ -2028,6 +2091,7 @@ int main()
   test_new_requires_name();
   test_build_new_project();
   test_build_rejects_empty_project();
+  test_build_and_run_named_target();
   test_update_rejects_unknown_dependency();
   test_run_new_project();
   test_release_new_project();

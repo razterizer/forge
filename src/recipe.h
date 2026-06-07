@@ -39,6 +39,16 @@ namespace forge
     std::vector<std::filesystem::path> import_libraries;
   };
 
+  struct RecipeTarget
+  {
+    std::string name;
+    std::string type;
+    int cpp_standard = 0;
+    std::vector<std::filesystem::path> sources;
+    std::vector<std::filesystem::path> public_headers;
+    std::vector<std::filesystem::path> runtime_files;
+  };
+
   struct Recipe
   {
     std::string name;
@@ -52,10 +62,16 @@ namespace forge
     std::vector<Dependency> dependencies;
     std::vector<std::filesystem::path> runtime_files;
     std::vector<std::filesystem::path> release_files;
+    std::vector<RecipeTarget> targets;
+    std::optional<std::string> selected_target;
   };
 
   bool read_recipe(const std::filesystem::path& path,
                    Recipe& recipe,
                    std::ostream& error);
+
+  bool select_recipe_target(Recipe& recipe,
+                            const std::optional<std::string>& target,
+                            std::ostream& error);
 
 } // namespace forge

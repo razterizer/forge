@@ -5,6 +5,7 @@
 #include "clean.h"
 #include "init.h"
 #include "new.h"
+#include "recipe.h"
 #include "release.h"
 #include "run.h"
 
@@ -41,9 +42,10 @@ namespace forge::cli
         << "  forge new <name>\n"
         << "  forge box <create|inspect|verify|extract|publish> [path]\n"
         << "  forge update [dependency]\n"
+        << "  forge build [target]\n"
         << "  forge bump <major|minor|patch>\n"
         << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n"
-        << "  forge run [arguments...]\n"
+        << "  forge run [target] [-- arguments...]\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
         << "Commands:\n"
@@ -158,7 +160,37 @@ namespace forge::cli
 
     if (arguments.front() == "run")
     {
-      return run_project(working_directory, arguments.subspan(1), output, error);
+      Recipe recipe;
+
+      if (!read_recipe(working_directory / "forge.recipe.toml", recipe, error))
+      {
+        return 2;
+      }
+
+      if (recipe.targets.empty())
+      {
+        return run_project(working_directory, arguments.subspan(1), output, error);
+      }
+
+      if (arguments.size() < 2)
+      {
+        return run_project(working_directory, std::nullopt, {}, output, error);
+      }
+
+      auto program_arguments = arguments.subspan(2);
+
+      if (!program_arguments.empty() && program_arguments.front() == "--")
+      {
+        program_arguments = program_arguments.subspan(1);
+      }
+
+      return run_project(
+        working_directory,
+        std::string { arguments[1] },
+        program_arguments,
+        output,
+        error
+      );
     }
 
     if (arguments.front() == "bump")
@@ -238,6 +270,24 @@ namespace forge::cli
       return release_git(working_directory, options, output, error);
     }
 
+    if (arguments.front() == "build")
+    {
+      if (arguments.size() > 2)
+      {
+        error << "forge: usage: forge build [target]\n";
+        return 2;
+      }
+
+      BuildOptions options;
+
+      if (arguments.size() == 2)
+      {
+        options.target = std::string { arguments[1] };
+      }
+
+      return build_project(working_directory, options, output, error);
+    }
+
     if (arguments.size() != 1)
     {
       error << "forge: commands do not accept arguments yet\n";
@@ -247,11 +297,6 @@ namespace forge::cli
     if (arguments.front() == "init")
     {
       return init_project(working_directory, output, error);
-    }
-
-    if (arguments.front() == "build")
-    {
-      return build_project(working_directory, output, error);
     }
 
     if (arguments.front() == "clean")

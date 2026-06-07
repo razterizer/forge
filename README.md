@@ -152,6 +152,37 @@ public_headers = ["include/hello/hello.h"]
 Forge generates CMake infrastructure under `.forge/generated/` and builds into
 `.forge/build/`.
 
+Repositories containing multiple programs can declare named targets:
+
+```toml
+[project]
+name = "hello-suite"
+version = "0.1.0"
+
+[target.examples]
+type = "executable"
+cpp_std = 20
+sources = ["Examples/examples.cpp"]
+runtime_files = ["Examples/background.tx"]
+
+[target.unit_tests]
+type = "executable"
+cpp_std = 20
+sources = ["Tests/unit_tests.cpp"]
+```
+
+Build or run one named target with:
+
+```sh
+forge build examples
+forge run examples -- --help
+```
+
+Named targets use isolated directories under `.forge/generated/<target>` and
+`.forge/build/<target>`. Existing single-target recipes remain supported.
+Target-to-target dependencies, `forge test`, boxing, and releasing named
+targets are planned follow-up slices.
+
 Remove all generated project state, including builds, dependencies, boxes,
 release artifacts, and caches:
 

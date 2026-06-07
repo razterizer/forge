@@ -2077,6 +2077,23 @@ namespace forge
       return 2;
     }
 
+    auto requested_target = is_root_project
+      ? dependency_session->options.target
+      : std::optional<std::string> {};
+
+    if (is_root_project
+        && dependency_session->options.dependencies_only
+        && !requested_target
+        && !recipe.targets.empty())
+    {
+      requested_target = recipe.targets.front().name;
+    }
+
+    if (!select_recipe_target(recipe, requested_target, error))
+    {
+      return 2;
+    }
+
     if (recipe.type != "executable"
         && recipe.type != "static_library"
         && recipe.type != "dynamic_library"
@@ -2160,8 +2177,15 @@ namespace forge
     }
 
     const auto forge_directory = project_directory / ".forge";
-    const auto generated_directory = forge_directory / "generated";
-    const auto build_directory = forge_directory / "build";
+    auto generated_directory = forge_directory / "generated";
+    auto build_directory = forge_directory / "build";
+
+    if (recipe.selected_target)
+    {
+      generated_directory /= *recipe.selected_target;
+      build_directory /= *recipe.selected_target;
+    }
+
     const auto runtime_asset_manifest = build_directory / ".forge" / "runtime-assets.txt";
     std::vector<ResolvedDependency> dependencies;
 

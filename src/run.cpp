@@ -15,7 +15,16 @@ namespace forge
                   std::ostream& output,
                   std::ostream& error)
   {
-    return run_project(project_directory, arguments, run_process, output, error);
+    return run_project(project_directory, std::nullopt, arguments, run_process, output, error);
+  }
+
+  int run_project(const std::filesystem::path& project_directory,
+                  const std::optional<std::string>& target,
+                  std::span<const std::string_view> arguments,
+                  std::ostream& output,
+                  std::ostream& error)
+  {
+    return run_project(project_directory, target, arguments, run_process, output, error);
   }
 
   int run_project(const std::filesystem::path& project_directory,
@@ -24,7 +33,20 @@ namespace forge
                   std::ostream& output,
                   std::ostream& error)
   {
-    if (build_project(project_directory, process_runner, output, error) != 0)
+    return run_project(project_directory, std::nullopt, arguments, process_runner, output, error);
+  }
+
+  int run_project(const std::filesystem::path& project_directory,
+                  const std::optional<std::string>& target,
+                  std::span<const std::string_view> arguments,
+                  const ProcessRunner& process_runner,
+                  std::ostream& output,
+                  std::ostream& error)
+  {
+    BuildOptions options;
+    options.target = target;
+
+    if (build_project(project_directory, options, process_runner, output, error) != 0)
     {
       return 2;
     }
@@ -36,7 +58,25 @@ namespace forge
       return 2;
     }
 
-    auto executable = project_directory / ".forge" / "build" / recipe.name;
+    if (!select_recipe_target(recipe, target, error))
+    {
+      return 2;
+    }
+
+    if (recipe.type != "executable")
+    {
+      error << "forge: target '" << recipe.name << "' is not executable\n";
+      return 2;
+    }
+
+    auto build_directory = project_directory / ".forge" / "build";
+
+    if (recipe.selected_target)
+    {
+      build_directory /= *recipe.selected_target;
+    }
+
+    auto executable = build_directory / recipe.name;
 
 #ifdef _WIN32
     executable += ".exe";

@@ -11,6 +11,8 @@
   incompatible dependencies rejected before linking.
 - Added declarative executable runtime assets that Forge stages for builds and
   runs and includes automatically in executable boxes and releases.
+- Added backward-compatible named targets with `forge build <target>` and
+  `forge run <target> -- [arguments...]`.
 
 ## 0.2.0
 

@@ -13,6 +13,7 @@ namespace forge
   struct BuildOptions
   {
     std::optional<std::string> update_dependency;
+    std::optional<std::string> target;
     bool dependencies_only = false;
     bool update_dependencies = false;
   };

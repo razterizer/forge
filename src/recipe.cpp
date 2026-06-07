@@ -60,6 +60,16 @@ namespace forge
       return parse_result.ec == std::errc {} && parse_result.ptr == value.data() + value.size();
     }
 
+    bool is_safe_name(std::string_view value)
+    {
+      return
+        !value.empty()
+        && value != "."
+        && value != ".."
+        && value.find('/') == std::string_view::npos
+        && value.find('\\') == std::string_view::npos;
+    }
+
     bool parse_sources(std::string_view value, std::vector<std::filesystem::path>& sources)
     {
       value = trim(value);
@@ -324,6 +334,56 @@ namespace forge
       {
         valid = parse_sources(value, recipe.public_headers);
       }
+      else if (section.starts_with("target."))
+      {
+        const auto name = section.substr(std::string_view { "target." }.size());
+        auto target = std::find_if(
+          recipe.targets.begin(),
+          recipe.targets.end(),
+          [&name](const RecipeTarget& candidate)
+          {
+            return candidate.name == name;
+          }
+        );
+
+        if (target == recipe.targets.end())
+        {
+          RecipeTarget declared;
+          declared.name = name;
+          recipe.targets.push_back(std::move(declared));
+          target = std::prev(recipe.targets.end());
+        }
+
+        if (key == "type")
+        {
+          valid = parse_string(value, target->type);
+
+          if (target->type == "shared_library")
+          {
+            target->type = "dynamic_library";
+          }
+        }
+        else if (key == "cpp_std")
+        {
+          valid = parse_integer(value, target->cpp_standard);
+        }
+        else if (key == "sources")
+        {
+          valid = parse_sources(value, target->sources);
+        }
+        else if (key == "public_headers")
+        {
+          valid = parse_sources(value, target->public_headers);
+        }
+        else if (key == "runtime_files")
+        {
+          valid = parse_sources(value, target->runtime_files);
+        }
+        else
+        {
+          valid = false;
+        }
+      }
       else if (section.starts_with("import."))
       {
         const auto target = section.substr(std::string_view { "import." }.size());
@@ -412,15 +472,90 @@ namespace forge
       }
     }
 
-    if (recipe.name.empty()
-        || recipe.version.empty()
-        || recipe.type.empty()
-        || (recipe.type != "imported_library" && recipe.cpp_standard == 0))
+    if (recipe.name.empty() || recipe.version.empty())
     {
       error << "forge: recipe is missing required project fields\n";
       return false;
     }
 
+    const auto legacy_target = !recipe.type.empty() || recipe.cpp_standard != 0
+      || !recipe.sources.empty() || !recipe.public_headers.empty() || !recipe.runtime_files.empty();
+
+    if ((legacy_target && !recipe.targets.empty())
+        || (recipe.targets.empty()
+            && (recipe.type.empty()
+                || (recipe.type != "imported_library" && recipe.cpp_standard == 0))))
+    {
+      error << "forge: recipe must declare either one legacy project target or named targets\n";
+      return false;
+    }
+
+    for (const auto& target : recipe.targets)
+    {
+      if (!is_safe_name(target.name)
+          || target.type.empty()
+          || (target.type != "imported_library" && target.cpp_standard == 0))
+      {
+        error << "forge: named target is missing required fields\n";
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  bool select_recipe_target(Recipe& recipe,
+                            const std::optional<std::string>& requested,
+                            std::ostream& error)
+  {
+    if (recipe.targets.empty())
+    {
+      if (requested && *requested != recipe.name)
+      {
+        error << "forge: recipe has no target named '" << *requested << "'\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    if (!requested && recipe.targets.size() != 1)
+    {
+      error << "forge: recipe contains multiple targets; specify one of:";
+
+      for (const auto& target : recipe.targets)
+      {
+        error << ' ' << target.name;
+      }
+
+      error << '\n';
+      return false;
+    }
+
+    const auto selected = requested
+      ? std::find_if(
+          recipe.targets.begin(),
+          recipe.targets.end(),
+          [&requested](const RecipeTarget& candidate)
+          {
+            return candidate.name == *requested;
+          }
+        )
+      : recipe.targets.begin();
+
+    if (selected == recipe.targets.end())
+    {
+      error << "forge: recipe has no target named '" << *requested << "'\n";
+      return false;
+    }
+
+    recipe.selected_target = selected->name;
+    recipe.name = selected->name;
+    recipe.type = selected->type;
+    recipe.cpp_standard = selected->cpp_standard;
+    recipe.sources = selected->sources;
+    recipe.public_headers = selected->public_headers;
+    recipe.runtime_files = selected->runtime_files;
     return true;
   }
 

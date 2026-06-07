@@ -14,8 +14,7 @@
       "additionalProperties": false,
       "required": [
         "name",
-        "version",
-        "type"
+        "version"
       ],
       "properties": {
         "name": {
@@ -79,6 +78,52 @@
         },
         "public_headers": {
           "$ref": "#/$defs/publicHeaders"
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "description": "Named build targets. Use instead of the legacy project.type and sources sections.",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "cpp_std",
+          "sources"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "executable",
+              "static_library",
+              "dynamic_library",
+              "shared_library",
+              "header_only"
+            ],
+            "description": "Kind of named target Forge builds."
+          },
+          "cpp_std": {
+            "type": "integer",
+            "enum": [11, 14, 17, 20, 23, 26],
+            "description": "C++ language standard Forge uses to build this target."
+          },
+          "sources": {
+            "$ref": "#/$defs/projectPaths",
+            "description": "C++ compilation units belonging to this target."
+          },
+          "public_headers": {
+            "$ref": "#/$defs/publicHeaders"
+          },
+          "runtime_files": {
+            "$ref": "#/$defs/projectPaths",
+            "description": "Project-relative runtime assets copied beside this executable target."
+          }
         }
       }
     },
@@ -244,6 +289,41 @@
       }
     }
   },
+  "oneOf": [
+    {
+      "properties": {
+        "project": {
+          "required": ["type"]
+        }
+      },
+      "not": {
+        "required": ["target"]
+      }
+    },
+    {
+      "required": ["target"],
+      "properties": {
+        "project": {
+          "not": {
+            "required": ["type"]
+          }
+        }
+      },
+      "not": {
+        "anyOf": [
+          {
+            "required": ["sources"]
+          },
+          {
+            "required": ["runtime"]
+          },
+          {
+            "required": ["import"]
+          }
+        ]
+      }
+    }
+  ],
   "allOf": [
     {
       "if": {

@@ -115,6 +115,28 @@ namespace
     std::ofstream { directory / "include/hello/hello.h" } << "inline int hello() { return 42; }\n";
   }
 
+  void write_multi_target_project(const std::filesystem::path& directory)
+  {
+    std::filesystem::create_directories(directory / "Examples");
+    std::filesystem::create_directories(directory / "Tests");
+    std::ofstream recipe { directory / "forge.recipe.toml" };
+    recipe
+      << "[project]\n"
+      << "name = \"hello-suite\"\n"
+      << "version = \"0.1.0\"\n\n"
+      << "[target.examples]\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n"
+      << "sources = [\"Examples/examples.cpp\"]\n\n"
+      << "[target.unit_tests]\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n"
+      << "sources = [\"Tests/unit_tests.cpp\"]\n";
+
+    std::ofstream { directory / "Examples/examples.cpp" } << "int main() {}\n";
+    std::ofstream { directory / "Tests/unit_tests.cpp" } << "int main() {}\n";
+  }
+
   void test_build_generates_cmake_and_commands()
   {
     TemporaryDirectory directory;
@@ -176,6 +198,67 @@ namespace
     );
     expect(invocations == 1, "build stops after configuration failure");
     expect(contains(error.str(), "configuration failed"), "build explains configuration failure");
+  }
+
+  void test_build_selects_named_target()
+  {
+    TemporaryDirectory directory;
+    write_multi_target_project(directory.path());
+    forge::BuildOptions options;
+    options.target = "examples";
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&commands](const std::vector<std::string>& arguments,
+                  const std::filesystem::path&,
+                  std::ostream&)
+      {
+        commands.push_back(arguments);
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), options, runner, output, error) == 0,
+      "build succeeds for a selected named target"
+    );
+    expect(
+      commands.size() == 2
+        && std::filesystem::path { commands[0][4] }.filename() == "examples"
+        && std::filesystem::path { commands[0][4] }.parent_path().filename() == "build",
+      "named target uses an isolated build directory"
+    );
+    const auto generated = read_file(directory.path() / ".forge/generated/examples/CMakeLists.txt");
+    expect(contains(generated, "Examples/examples.cpp"), "named target includes its selected source");
+    expect(!contains(generated, "Tests/unit_tests.cpp"), "named target excludes other target sources");
+    expect(contains(output.str(), "Building examples"), "build reports the selected target");
+    expect(error.str().empty(), "selected named target build does not write an error");
+  }
+
+  void test_build_requires_target_for_multi_target_recipe()
+  {
+    TemporaryDirectory directory;
+    write_multi_target_project(directory.path());
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 2,
+      "build requires a target for a multi-target recipe"
+    );
+    expect(invocations == 0, "ambiguous multi-target build does not invoke external tools");
+    expect(contains(error.str(), "specify one of"), "ambiguous multi-target build lists choices");
   }
 
   void test_build_stages_runtime_assets()
@@ -766,6 +849,8 @@ int main()
   test_build_accepts_legacy_shared_library_alias();
   test_build_validates_header_only_project();
   test_build_stops_after_configuration_failure();
+  test_build_selects_named_target();
+  test_build_requires_target_for_multi_target_recipe();
   test_build_stages_runtime_assets();
   test_build_rejects_runtime_asset_collision();
   test_build_rejects_missing_source_without_running_process();

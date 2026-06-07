@@ -34,6 +34,9 @@ rules:
   resolutions to `forge.lock.toml`; normal builds require those locked entries.
 - Executable projects may declare project-relative `[runtime].files`, which
   Forge stages beside the executable and includes in boxes and releases.
+- Repositories may replace the legacy project target with one or more
+  `[target.<name>]` sections. Each named target declares its own type, C++
+  standard, sources, public headers, and runtime files.
 
 `shared_library` remains accepted as a legacy alias for `dynamic_library`.
 
