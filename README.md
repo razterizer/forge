@@ -311,6 +311,22 @@ Later builds reuse a verified source-dependency box when its package identity,
 target, recipe, sources, public headers, and direct dependency boxes remain
 compatible. Changed inputs rebuild the box and invalidate dependent boxes.
 
+Source projects may also be fetched from Git at an exact full commit ID:
+
+```toml
+[dependencies]
+answer = {
+  git = "https://github.com/example/answer.git",
+  commit = "0123456789abcdef0123456789abcdef01234567"
+}
+```
+
+Forge fetches only the pinned commit into
+`.forge/cache/git/<name>/<commit>/`, checks it out detached, and then treats it
+like a local source dependency. Cached checkouts are verified against the
+declared commit before reuse. The exact commit in the recipe is the source of
+truth, so pinned Git source dependencies do not require a lockfile entry.
+
 Projects may also consume an existing local box directly:
 
 ```toml

@@ -1362,6 +1362,87 @@ namespace forge
       return true;
     }
 
+    bool checkout_git_dependency(const std::filesystem::path& parent_directory,
+                                 const Dependency& dependency,
+                                 const ProcessRunner& process_runner,
+                                 std::filesystem::path& checkout,
+                                 std::ostream& output,
+                                 std::ostream& error)
+    {
+      checkout =
+        dependency_session->root_project
+        / ".forge"
+        / "cache"
+        / "git"
+        / dependency.name
+        / dependency.commit;
+      std::ostringstream cache_error;
+      const auto cached =
+        std::filesystem::is_directory(checkout)
+        && process_runner(
+          { "git", "merge-base", "--is-ancestor", dependency.commit, "HEAD" },
+          checkout,
+          cache_error
+        ) == 0
+        && process_runner(
+          { "git", "merge-base", "--is-ancestor", "HEAD", dependency.commit },
+          checkout,
+          cache_error
+        ) == 0;
+
+      if (cached)
+      {
+        output << "Using cached Git dependency " << dependency.name << '\n';
+        return true;
+      }
+
+      std::error_code filesystem_error;
+      std::filesystem::remove_all(checkout, filesystem_error);
+      filesystem_error.clear();
+      std::filesystem::create_directories(checkout, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not create Git dependency cache\n";
+        return false;
+      }
+
+      output << "Fetching Git dependency " << dependency.name
+             << " at " << dependency.commit << '\n';
+      std::error_code repository_error;
+      const auto local_repository =
+        std::filesystem::weakly_canonical(parent_directory / dependency.git, repository_error);
+      const auto repository =
+        !repository_error && std::filesystem::is_directory(local_repository)
+          ? local_repository.string()
+          : dependency.git;
+
+      if (process_runner({ "git", "init", "--quiet" }, checkout, error) != 0
+          || process_runner(
+            { "git", "remote", "add", "origin", repository },
+            checkout,
+            error
+          ) != 0
+          || process_runner(
+            { "git", "fetch", "--quiet", "--depth", "1", "origin", dependency.commit },
+            checkout,
+            error
+          ) != 0
+          || process_runner(
+            { "git", "checkout", "--quiet", "--detach", dependency.commit },
+            checkout,
+            error
+          ) != 0)
+      {
+        std::filesystem::remove_all(checkout, filesystem_error);
+        error << "forge: could not checkout Git dependency '" << dependency.name
+              << "' at commit '" << dependency.commit << "'\n";
+        return false;
+      }
+
+      return true;
+    }
+
     bool read_dependency_node(const std::filesystem::path& parent_directory,
                               const Dependency& dependency,
                               const ProcessRunner& process_runner,
@@ -1377,6 +1458,7 @@ namespace forge
 
       std::error_code filesystem_error;
       std::filesystem::path downloaded_box;
+      std::filesystem::path git_checkout;
       auto resolved_dependency = dependency;
 
       if (!resolved_dependency.github.empty()
@@ -1403,12 +1485,29 @@ namespace forge
         return false;
       }
 
+      if (!resolved_dependency.git.empty())
+      {
+        if (!checkout_git_dependency(
+          parent_directory,
+          resolved_dependency,
+          process_runner,
+          git_checkout,
+          output,
+          error
+        ))
+        {
+          return false;
+        }
+      }
+
       const auto is_box =
         !resolved_dependency.box.empty()
         || !resolved_dependency.url.empty()
         || !resolved_dependency.github.empty();
       const auto dependency_location =
-        !downloaded_box.empty()
+        !git_checkout.empty()
+          ? git_checkout
+          : !downloaded_box.empty()
           ? downloaded_box
           : (resolved_dependency.box.empty() ? resolved_dependency.path : resolved_dependency.box);
       const auto directory =
@@ -1511,6 +1610,8 @@ namespace forge
                 child.sha256,
                 {},
                 child.version,
+                {},
+                {},
                 child.type
               }
             );

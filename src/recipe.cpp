@@ -254,6 +254,14 @@ namespace forge
         {
           dependency.version = parsed_value;
         }
+        else if (kind == "git" && dependency.git.empty())
+        {
+          dependency.git = parsed_value;
+        }
+        else if (kind == "commit" && dependency.commit.empty())
+        {
+          dependency.commit = parsed_value;
+        }
         else
         {
           return false;
@@ -276,22 +284,45 @@ namespace forge
       }
 
       const auto local_sources = !dependency.path.empty() + !dependency.box.empty();
+      const auto exact_commit =
+        (dependency.commit.size() == 40 || dependency.commit.size() == 64)
+        && std::all_of(
+          dependency.commit.begin(),
+          dependency.commit.end(),
+          [](unsigned char character)
+          {
+            return std::isxdigit(character);
+          }
+        );
       return fields > 0
         && ((local_sources == 1
              && dependency.url.empty()
              && dependency.sha256.empty()
              && dependency.github.empty()
-             && dependency.version.empty())
+             && dependency.version.empty()
+             && dependency.git.empty()
+             && dependency.commit.empty())
             || (local_sources == 0
                 && !dependency.url.empty()
                 && !dependency.sha256.empty()
                 && dependency.github.empty()
-                && dependency.version.empty())
+                && dependency.version.empty()
+                && dependency.git.empty()
+                && dependency.commit.empty())
             || (local_sources == 0
                 && dependency.url.empty()
                 && dependency.sha256.empty()
                 && !dependency.github.empty()
-                && !dependency.version.empty()));
+                && !dependency.version.empty()
+                && dependency.git.empty()
+                && dependency.commit.empty())
+            || (local_sources == 0
+                && dependency.url.empty()
+                && dependency.sha256.empty()
+                && dependency.github.empty()
+                && dependency.version.empty()
+                && !dependency.git.empty()
+                && exact_commit));
     }
 
   } // namespace

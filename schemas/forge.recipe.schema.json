@@ -142,7 +142,7 @@
     },
     "dependencies": {
       "type": "object",
-      "description": "Local project, local cbox, downloadable cbox, or GitHub Release cbox dependencies.",
+      "description": "Local project, pinned Git project, local cbox, downloadable cbox, or GitHub Release cbox dependencies.",
       "propertyNames": {
         "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
       },
@@ -180,6 +180,16 @@
             "type": "string",
             "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+build\\.(0|[1-9][0-9]*))?$",
             "description": "Packaged dependency version to resolve from the GitHub release."
+          },
+          "git": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Git repository URL or path containing a Forge source project."
+          },
+          "commit": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$",
+            "description": "Exact full Git commit ID to checkout."
           }
         },
         "oneOf": [
@@ -194,6 +204,9 @@
           },
           {
             "required": ["github", "version"]
+          },
+          {
+            "required": ["git", "commit"]
           }
         ]
       }

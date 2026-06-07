@@ -28,6 +28,9 @@ rules:
 - Projects may declare local static-library, dynamic-library, imported-library,
   and header-only dependencies using name and either project-path or cbox-path
   inline tables.
+- Pinned Git source dependencies require `git` and an exact full 40- or
+  64-hex-character `commit`. Forge caches the detached checkout and treats it
+  like a local source project.
 - Downloadable cbox dependencies require both `url` and lowercase `sha256`.
 - GitHub Release cbox dependencies require `github = "owner/repository"` and a
   packaged `version`. `forge update` writes their exact target-specific

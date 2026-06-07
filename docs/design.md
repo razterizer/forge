@@ -55,6 +55,12 @@ dependencies, rejects cycles and conflicting project names, links the
 transitive static-library closure in dependency order, and stages dynamic
 libraries for running and releasing applications.
 
+Pinned Git source dependencies use `{ git = "<repository>", commit =
+"<full-commit-id>" }`. Forge fetches only the declared commit into an immutable
+project-local cache, verifies cached HEAD before reuse, and then resolves the
+checkout through the same recursive source-dependency pipeline. The recipe pin
+is already exact, so it is not duplicated in `forge.lock.toml`.
+
 Local `.cbox` dependencies are verified and installed directly without their
 source project. Format-2 boxes embed their direct dependency boxes and Forge
 recursively installs the complete graph. Format-1 boxes remain supported as

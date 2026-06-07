@@ -2,7 +2,9 @@
 
 ## 0.4.0
 
-- Describe changes.
+- Added pinned Git source dependencies using exact full commit IDs, with
+  shallow project-local checkout caching and normal transitive source
+  dependency builds.
 
 ## 0.3.0
 

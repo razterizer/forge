@@ -1655,6 +1655,119 @@ namespace
     expect(changed_error.str().empty(), "cache invalidation run does not write an error");
   }
 
+  void test_run_with_pinned_git_dependency()
+  {
+    TemporaryDirectory directory;
+    const auto answer = directory.path() / "answer";
+    const auto application = directory.path() / "app";
+    write_file(
+      answer / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"answer\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"static_library\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"src/answer.cpp\"]\n"
+      "public_headers = [\"include/answer/answer.h\"]\n"
+    );
+    write_file(answer / "include/answer/answer.h", "int answer();\n");
+    write_file(
+      answer / "src/answer.cpp",
+      "#include <answer/answer.h>\n"
+      "int answer() { return 42; }\n"
+    );
+    std::ostringstream git_error;
+    expect(
+      forge::run_process({ "git", "init", "--quiet", "--initial-branch=main" }, answer, git_error) == 0
+        && forge::run_process({ "git", "config", "user.name", "Forge Tests" }, answer, git_error) == 0
+        && forge::run_process(
+          { "git", "config", "user.email", "forge-tests@example.invalid" },
+          answer,
+          git_error
+        ) == 0
+        && forge::run_process({ "git", "add", "." }, answer, git_error) == 0
+        && forge::run_process(
+          { "git", "commit", "--quiet", "-m", "Add answer library" },
+          answer,
+          git_error
+        ) == 0,
+      "pinned Git dependency fixture is committed"
+    );
+    auto commit = read_file(answer / ".git/refs/heads/main");
+
+    if (!commit.empty() && commit.back() == '\n')
+    {
+      commit.pop_back();
+    }
+
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[dependencies]\n"
+      "answer = { git = \"../answer\", commit = \"" + commit + "\" }\n"
+    );
+    write_file(
+      application / "main.cpp",
+      "#include <answer/answer.h>\n"
+      "int main() { return answer() == 42 ? 0 : 1; }\n"
+    );
+    constexpr std::array run_arguments { std::string_view { "run" } };
+    std::ostringstream first_output;
+    std::ostringstream first_error;
+    expect(
+      forge::cli::run(run_arguments, application, first_output, first_error) == 0,
+      "run succeeds with a pinned Git dependency"
+    );
+    expect(
+      contains(first_output.str(), "Fetching Git dependency answer at " + commit),
+      "first build fetches the exact Git commit"
+    );
+    expect(first_error.str().empty(), "pinned Git dependency run does not write an error");
+
+    std::ostringstream cached_output;
+    std::ostringstream cached_error;
+    expect(
+      forge::cli::run(run_arguments, application, cached_output, cached_error) == 0,
+      "second run succeeds with a cached pinned Git dependency"
+    );
+    expect(
+      contains(cached_output.str(), "Using cached Git dependency answer"),
+      "second build reuses the exact Git checkout"
+    );
+    expect(cached_error.str().empty(), "cached Git dependency run does not write an error");
+
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[dependencies]\n"
+      "answer = { git = \"../answer\", commit = \"deadbeef\" }\n"
+    );
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    std::ostringstream abbreviated_output;
+    std::ostringstream abbreviated_error;
+    expect(
+      forge::cli::run(build_arguments, application, abbreviated_output, abbreviated_error) == 2,
+      "build rejects an abbreviated Git commit"
+    );
+    expect(
+      contains(abbreviated_error.str(), "invalid recipe value"),
+      "abbreviated Git commit rejection is explained"
+    );
+  }
+
   void test_run_with_local_box_dependency()
   {
     TemporaryDirectory directory;
@@ -2255,6 +2368,7 @@ int main()
   test_imported_library_box_round_trip();
   test_run_with_imported_library_dependency();
   test_run_with_local_dependencies();
+  test_run_with_pinned_git_dependency();
   test_run_with_local_box_dependency();
   test_run_with_downloadable_box_dependency();
   test_run_and_release_with_dynamic_dependency();

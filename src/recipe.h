@@ -22,6 +22,8 @@ namespace forge
     std::string sha256;
     std::string github;
     std::string version;
+    std::string git;
+    std::string commit;
     std::string type;
   };
 
