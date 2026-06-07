@@ -10,6 +10,10 @@
   `forge update [dependency]` refreshes for reproducible GitHub dependencies.
 - Added self-contained format-2 boxes that embed and recursively resolve their
   transitive dependency boxes.
+- Added compatible local source-dependency box caching. Forge reuses verified
+  boxes when their package identity, target, declared inputs, and direct
+  dependency checksums still match, while changed dependencies invalidate
+  dependent boxes.
 - Added `forge box publish <box>` for verified local publication and checksum
   generation.
 - Added `forge prepare-release` for type-aware hosted release assets:
