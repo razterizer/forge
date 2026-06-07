@@ -57,6 +57,12 @@ import_libraries = ["vendor/lib/sdk.lib"]
 The compiler fields are mandatory for imported binaries. Forge compares them
 with the actual toolchain selected by CMake before linking a consumer.
 
+For projects built by Forge, `[project].cpp_std` tells Forge which C++ standard
+to use for the build. Forge then records that value as `[toolchain].cpp_std` in
+the compiled box so consumers can check binary compatibility. Imported-library
+profiles declare their toolchain value explicitly because Forge did not build
+those binaries.
+
 ## Taplo and VS Code
 
 `forge new` and `forge init` automatically add the Taplo-compatible schema

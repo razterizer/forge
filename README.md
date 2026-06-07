@@ -236,6 +236,11 @@ consuming build. Imported-library profiles declare this identity explicitly
 because Forge cannot infer how vendor binaries were produced. Header-only boxes
 do not require a toolchain identity.
 
+The two `cpp_std` fields have different roles: `[project].cpp_std` is an input
+that tells Forge which C++ standard to use when building the current project.
+The `[toolchain].cpp_std` stored in its compiled box is generated metadata that
+records the standard used for later compatibility checks.
+
 Projects may use local static-library, dynamic-library, imported-library, and
 header-only dependencies:
 

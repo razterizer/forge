@@ -51,7 +51,7 @@
             23,
             26
           ],
-          "description": "Required C++ language standard."
+          "description": "C++ language standard Forge uses to build this project. Compiled boxes record it separately as toolchain metadata for compatibility checks."
         }
       }
     },

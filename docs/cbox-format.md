@@ -122,6 +122,11 @@ declare the identity explicitly because their binaries were built outside
 Forge. Legacy compiled boxes without an identity remain inspectable and
 verifiable, but cannot be consumed as compiled dependencies.
 
+The `[toolchain].cpp_std` value is recorded package metadata, not a build
+instruction. `[project].cpp_std` in the source recipe instructs Forge how to
+build the project; Forge copies the resulting standard into the compiled box's
+toolchain identity for compatibility checks by consumers.
+
 ## Paths
 
 - Archive paths use `/` separators.
