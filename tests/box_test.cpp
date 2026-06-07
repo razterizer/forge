@@ -138,6 +138,13 @@ namespace
   {
     TemporaryDirectory directory;
     write_project(directory.path());
+    std::filesystem::create_directories(directory.path() / "assets");
+    std::ofstream { directory.path() / "assets/message.txt" } << "hello\n";
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[runtime]\n"
+      << "files = [\"assets\"]\n";
+    recipe.close();
     std::vector<std::vector<std::string>> commands;
     std::ostringstream output;
     std::ostringstream error;
@@ -181,6 +188,14 @@ namespace
     expect(std::filesystem::exists(manifest), "box create stages a manifest");
     expect(!contains(read_file(manifest), "build ="), "box manifest omits an unspecified build number");
     expect(contains(read_file(manifest), "sha256 = \""), "box manifest includes an artifact checksum");
+    expect(
+      contains(read_file(manifest), "path = \"runtime-assets/assets/message.txt\""),
+      "box manifest declares runtime assets"
+    );
+    expect(
+      std::filesystem::exists(manifest.parent_path() / "runtime-assets/assets/message.txt"),
+      "box stages runtime assets"
+    );
     expect(contains(output.str(), "Created"), "box create reports its archive");
     expect(error.str().empty(), "successful box create does not write an error");
   }

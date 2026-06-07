@@ -105,7 +105,7 @@ Workflow support will absorb repeated CI and release glue currently maintained
 by projects such as Termin8or. The intended surface includes build/test
 matrices, locked and development dependency modes, release asset selection,
 release-note extraction, version generation, checksums, tags, publication, and
-declarative runtime asset staging for build, run, and release.
+declarative runtime asset staging for build, run, boxes, and release.
 Actions that modify Git history or publish remotely must remain explicit and
 reviewable.
 

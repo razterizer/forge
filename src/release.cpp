@@ -3,6 +3,7 @@
 #include "box.h"
 #include "build.h"
 #include "recipe.h"
+#include "runtime_assets.h"
 
 #include <array>
 #include <chrono>
@@ -536,6 +537,23 @@ namespace forge
     {
       return 2;
     }
+
+    std::vector<RuntimeAsset> runtime_assets;
+
+    if (!collect_runtime_assets(project_directory, recipe.runtime_files, runtime_assets, error)
+        || (!runtime_assets.empty()
+            && !stage_runtime_assets(
+              runtime_assets,
+              staging_directory,
+              staging_directory / ".forge" / "runtime-assets.txt",
+              error
+            )))
+    {
+      return 2;
+    }
+
+    std::filesystem::remove_all(staging_directory / ".forge", filesystem_error);
+    filesystem_error.clear();
 
     constexpr std::array optional_files {
       std::string_view { "README.md" },

@@ -50,6 +50,7 @@ namespace forge
     std::vector<std::filesystem::path> public_headers;
     std::vector<ImportProfile> imports;
     std::vector<Dependency> dependencies;
+    std::vector<std::filesystem::path> runtime_files;
     std::vector<std::filesystem::path> release_files;
   };
 

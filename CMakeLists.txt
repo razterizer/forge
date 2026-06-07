@@ -22,6 +22,7 @@ add_library(forge_core STATIC
     src/recipe.cpp
     src/release.cpp
     src/run.cpp
+    src/runtime_assets.cpp
     src/sha256.cpp
     src/zip.cpp
 )

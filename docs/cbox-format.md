@@ -135,6 +135,8 @@ toolchain identity for compatibility checks by consumers.
 - `include/` contains public headers.
 - `lib/` contains static-library artifacts and Windows import libraries.
 - `runtime/` contains dynamic-library runtime artifacts.
+- `runtime-assets/` contains executable-owned runtime assets using their
+  original project-relative paths.
 - `dependencies/` contains direct dependency boxes.
 - Future profiles may add `licenses/`.
 - Format 2 boxes contain exactly `cbox.toml`, declared artifacts, and declared

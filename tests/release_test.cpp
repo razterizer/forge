@@ -77,6 +77,8 @@ namespace
       << "cpp_std = 20\n\n"
       << "[sources]\n"
       << "paths = [\"main.cpp\"]\n\n"
+      << "[runtime]\n"
+      << "files = [\"config/default.toml\"]\n\n"
       << "[release]\n"
       << "files = [\"assets\", \"RELEASE_NOTES.md\"]\n";
 
@@ -89,6 +91,8 @@ namespace
     std::ofstream { directory / "assets/background.tx" } << "background\n";
     std::ofstream { directory / "assets/nested/colors.tx" } << "colors\n";
     std::ofstream { directory / "assets/.forge/generated.txt" } << "generated\n";
+    std::filesystem::create_directories(directory / "config");
+    std::ofstream { directory / "config/default.toml" } << "color = \"blue\"\n";
     std::ofstream { directory / "RELEASE_NOTES.md" }
       << "# Release notes\n\n"
       << "## 0.1.0\n\n"
@@ -151,6 +155,12 @@ namespace
         directory.path() / ".forge/release/hello-0.1.0/assets/nested/colors.tx"
       ),
       "release stages a declared directory recursively"
+    );
+    expect(
+      std::filesystem::exists(
+        directory.path() / ".forge/release/hello-0.1.0/config/default.toml"
+      ),
+      "release stages declared runtime assets"
     );
     expect(
       std::filesystem::exists(

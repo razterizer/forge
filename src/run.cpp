@@ -60,8 +60,7 @@ namespace forge
     }
 
     output << "Running " << recipe.name << '\n' << std::flush;
-    return process_runner(process_arguments, project_directory, error);
+    return process_runner(process_arguments, executable.parent_path(), error);
   }
 
 } // namespace forge
-

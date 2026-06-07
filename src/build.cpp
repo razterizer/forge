@@ -3,6 +3,7 @@
 #include "box.h"
 #include "process.h"
 #include "recipe.h"
+#include "runtime_assets.h"
 #include "sha256.h"
 
 #include <algorithm>
@@ -1093,6 +1094,26 @@ namespace forge
         files.push_back(dependency_directory / header);
       }
 
+      for (const auto& runtime : recipe.runtime_files)
+      {
+        const auto path = dependency_directory / runtime;
+
+        if (std::filesystem::is_directory(path))
+        {
+          for (const auto& entry : std::filesystem::recursive_directory_iterator { path })
+          {
+            if (entry.is_regular_file())
+            {
+              files.push_back(entry.path());
+            }
+          }
+        }
+        else
+        {
+          files.push_back(path);
+        }
+      }
+
       for (const auto& profile : recipe.imports)
       {
         const std::array imported_groups {
@@ -2125,10 +2146,29 @@ namespace forge
       }
     }
 
+    if (recipe.type != "executable" && !recipe.runtime_files.empty())
+    {
+      error << "forge: runtime assets are supported only for executable projects\n";
+      return 2;
+    }
+
+    std::vector<RuntimeAsset> runtime_assets;
+
+    if (!collect_runtime_assets(project_directory, recipe.runtime_files, runtime_assets, error))
+    {
+      return 2;
+    }
+
     const auto forge_directory = project_directory / ".forge";
     const auto generated_directory = forge_directory / "generated";
     const auto build_directory = forge_directory / "build";
+    const auto runtime_asset_manifest = build_directory / ".forge" / "runtime-assets.txt";
     std::vector<ResolvedDependency> dependencies;
+
+    if (!clean_runtime_assets(build_directory, runtime_asset_manifest, error))
+    {
+      return 2;
+    }
 
     if (!resolve_dependencies(
       project_directory,
@@ -2228,6 +2268,17 @@ namespace forge
     if (process_runner(build_arguments, project_directory, error) != 0)
     {
       error << "forge: build failed\n";
+      return 2;
+    }
+
+    if (!runtime_assets.empty()
+        && !stage_runtime_assets(
+          runtime_assets,
+          build_directory,
+          runtime_asset_manifest,
+          error
+        ))
+    {
       return 2;
     }
 

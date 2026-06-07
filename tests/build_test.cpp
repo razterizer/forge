@@ -178,6 +178,90 @@ namespace
     expect(contains(error.str(), "configuration failed"), "build explains configuration failure");
   }
 
+  void test_build_stages_runtime_assets()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::filesystem::create_directories(directory.path() / "assets");
+    std::ofstream { directory.path() / "assets/message.txt" } << "hello\n";
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[runtime]\n"
+      << "files = [\"assets\"]\n";
+    recipe.close();
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 0,
+      "build succeeds with runtime assets"
+    );
+    expect(
+      read_file(directory.path() / ".forge/build/assets/message.txt") == "hello\n",
+      "build stages runtime assets beside the executable"
+    );
+
+    std::filesystem::remove(directory.path() / "assets/message.txt");
+    std::ofstream { directory.path() / "assets/replacement.txt" } << "replacement\n";
+    output.str({});
+    error.str({});
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 0,
+      "second build succeeds after runtime assets change"
+    );
+    expect(
+      !std::filesystem::exists(directory.path() / ".forge/build/assets/message.txt"),
+      "build removes stale runtime assets"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / ".forge/build/assets/replacement.txt"),
+      "build stages replacement runtime assets"
+    );
+  }
+
+  void test_build_rejects_runtime_asset_collision()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream { directory.path() / "hello" } << "asset\n";
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[runtime]\n"
+      << "files = [\"hello\"]\n";
+    recipe.close();
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&directory](const std::vector<std::string>& arguments,
+                   const std::filesystem::path&,
+                   std::ostream&)
+      {
+        if (arguments.size() > 1 && arguments[1] == "--build")
+        {
+          std::filesystem::create_directories(directory.path() / ".forge/build");
+          std::ofstream { directory.path() / ".forge/build/hello" } << "executable\n";
+        }
+
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 2,
+      "build rejects a runtime asset that collides with build output"
+    );
+    expect(contains(error.str(), "collides"), "build explains the runtime asset collision");
+  }
+
   void test_build_generates_static_library()
   {
     TemporaryDirectory directory;
@@ -682,6 +766,8 @@ int main()
   test_build_accepts_legacy_shared_library_alias();
   test_build_validates_header_only_project();
   test_build_stops_after_configuration_failure();
+  test_build_stages_runtime_assets();
+  test_build_rejects_runtime_asset_collision();
   test_build_rejects_missing_source_without_running_process();
   test_build_rejects_dependency_name_mismatch();
   test_build_rejects_dependency_cycle();

@@ -32,6 +32,8 @@ rules:
 - GitHub Release cbox dependencies require `github = "owner/repository"` and a
   packaged `version`. `forge update` writes their exact target-specific
   resolutions to `forge.lock.toml`; normal builds require those locked entries.
+- Executable projects may declare project-relative `[runtime].files`, which
+  Forge stages beside the executable and includes in boxes and releases.
 
 `shared_library` remains accepted as a legacy alias for `dynamic_library`.
 

@@ -218,6 +218,20 @@
         ]
       }
     },
+    "runtime": {
+      "type": "object",
+      "description": "Project-owned files and directories staged beside an executable.",
+      "additionalProperties": false,
+      "required": [
+        "files"
+      ],
+      "properties": {
+        "files": {
+          "$ref": "#/$defs/projectPaths",
+          "description": "Project-relative runtime assets copied after builds and included in executable boxes and releases."
+        }
+      }
+    },
     "release": {
       "type": "object",
       "description": "Additional project files and directories included in application releases.",
@@ -231,6 +245,24 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "required": [
+          "runtime"
+        ]
+      },
+      "then": {
+        "properties": {
+          "project": {
+            "properties": {
+              "type": {
+                "const": "executable"
+              }
+            }
+          }
+        }
+      }
+    },
     {
       "if": {
         "properties": {

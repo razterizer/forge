@@ -482,6 +482,18 @@ Forge copies declared entries recursively while preserving their
 project-relative paths. Paths must remain inside the project, and symbolic
 links are rejected.
 
+Executable projects can declare files needed at runtime:
+
+```toml
+[runtime]
+files = ["assets", "config/default.toml"]
+```
+
+`forge build` and `forge run` stage these files beside the executable while
+preserving their project-relative paths. Forge also includes them automatically
+in executable boxes and releases. Runtime asset paths must remain inside the
+project, may not contain symbolic links, and may not collide with build output.
+
 `forge new` and `forge init` create `RELEASE_NOTES.md` and Linux, macOS, and
 Windows release workflows under `.github/workflows`. Pushing a `release-*` or
 `v*` tag builds Forge, runs `forge prepare-release`, and publishes the resulting

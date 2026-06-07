@@ -9,6 +9,8 @@
 - Added strict compiled-box toolchain identities covering compiler, exact
   compiler version, C++ standard, configuration, and runtime ABI, with
   incompatible dependencies rejected before linking.
+- Added declarative executable runtime assets that Forge stages for builds and
+  runs and includes automatically in executable boxes and releases.
 
 ## 0.2.0
 

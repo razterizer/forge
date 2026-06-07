@@ -75,6 +75,7 @@ namespace
     TemporaryDirectory directory;
     write_project(directory.path());
     std::vector<std::vector<std::string>> commands;
+    std::vector<std::filesystem::path> working_directories;
     std::ostringstream output;
     std::ostringstream error;
     constexpr std::array arguments {
@@ -83,11 +84,12 @@ namespace
     };
 
     const forge::ProcessRunner runner =
-      [&commands, &directory](const std::vector<std::string>& command,
-                             const std::filesystem::path&,
-                             std::ostream&)
+      [&commands, &working_directories, &directory](const std::vector<std::string>& command,
+                                                    const std::filesystem::path& working_directory,
+                                                    std::ostream&)
       {
         commands.push_back(command);
+        working_directories.push_back(working_directory);
 
         if (command.size() > 1 && command[1] == "--build")
         {
@@ -115,6 +117,10 @@ namespace
     expect(commands[2].size() == 3, "run forwards program arguments");
     expect(commands[2][1] == "--message", "run forwards the first argument");
     expect(commands[2][2] == "hello world", "run preserves arguments containing spaces");
+    expect(
+      working_directories[2] == directory.path() / ".forge/build",
+      "run launches from the staged runtime directory"
+    );
     expect(contains(output.str(), "Running hello"), "run reports the launched project");
     expect(error.str().empty(), "successful run does not write an error");
   }

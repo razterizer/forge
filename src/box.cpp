@@ -2,6 +2,7 @@
 
 #include "build.h"
 #include "recipe.h"
+#include "runtime_assets.h"
 #include "sha256.h"
 #include "zip.h"
 
@@ -890,6 +891,7 @@ namespace forge
       std::size_t dynamic_library_count = 0;
       std::size_t import_library_count = 0;
       std::size_t header_count = 0;
+      std::size_t runtime_asset_count = 0;
 
       for (std::size_t index = 0; index < manifest.artifacts.size(); ++index)
       {
@@ -928,6 +930,10 @@ namespace forge
         else if (artifact.kind == "public_header" && prefix == "include")
         {
           ++header_count;
+        }
+        else if (artifact.kind == "runtime_asset" && prefix == "runtime-assets")
+        {
+          ++runtime_asset_count;
         }
         else
         {
@@ -974,7 +980,8 @@ namespace forge
       }
 
       if ((manifest.type == "executable"
-           && (executable_count != 1 || manifest.artifacts.size() != 1))
+           && (executable_count != 1
+               || executable_count + runtime_asset_count != manifest.artifacts.size()))
           || (manifest.type == "static_library"
               && (library_count != 1
                   || header_count == 0
@@ -1305,6 +1312,28 @@ namespace forge
       {
         return 2;
       }
+
+      std::vector<RuntimeAsset> runtime_assets;
+
+      if (!collect_runtime_assets(project_directory, recipe.runtime_files, runtime_assets, error))
+      {
+        return 2;
+      }
+
+      for (const auto& asset : runtime_assets)
+      {
+        if (!stage_artifact(
+          asset.source,
+          std::filesystem::path { "runtime-assets" } / asset.path,
+          "runtime_asset",
+          staging_directory,
+          artifacts,
+          error
+        ))
+        {
+          return 2;
+        }
+      }
     }
     else if (recipe.type == "static_library")
     {
@@ -1585,6 +1614,11 @@ namespace forge
     if (recipe.type == "executable")
     {
       archive_arguments.push_back("bin");
+
+      if (std::filesystem::is_directory(staging_directory / "runtime-assets"))
+      {
+        archive_arguments.push_back("runtime-assets");
+      }
     }
     else if (recipe.type == "static_library")
     {
