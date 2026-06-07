@@ -123,6 +123,15 @@
           "runtime_files": {
             "$ref": "#/$defs/projectPaths",
             "description": "Project-relative runtime assets copied beside this executable target."
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
+            },
+            "uniqueItems": true,
+            "description": "Named library targets from this recipe linked into this target."
           }
         }
       }

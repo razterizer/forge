@@ -47,6 +47,7 @@ namespace forge
     std::vector<std::filesystem::path> sources;
     std::vector<std::filesystem::path> public_headers;
     std::vector<std::filesystem::path> runtime_files;
+    std::vector<std::string> dependencies;
   };
 
   struct Recipe
@@ -63,6 +64,8 @@ namespace forge
     std::vector<std::filesystem::path> runtime_files;
     std::vector<std::filesystem::path> release_files;
     std::vector<RecipeTarget> targets;
+    std::vector<RecipeTarget> internal_targets;
+    std::vector<std::string> selected_internal_dependencies;
     std::optional<std::string> selected_target;
   };
 

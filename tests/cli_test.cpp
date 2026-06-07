@@ -433,10 +433,24 @@ namespace
       "name = \"suite\"\n"
       "version = \"0.1.0\"\n"
       "\n"
+      "[target.suite]\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n"
+      "sources = []\n"
+      "public_headers = [\"include/suite/message.h\"]\n"
+      "\n"
+      "[target.math]\n"
+      "type = \"static_library\"\n"
+      "cpp_std = 20\n"
+      "sources = [\"src/math.cpp\"]\n"
+      "public_headers = [\"include/suite/math.h\"]\n"
+      "dependencies = [\"suite\"]\n"
+      "\n"
       "[target.examples]\n"
       "type = \"executable\"\n"
       "cpp_std = 20\n"
       "sources = [\"Examples/examples.cpp\"]\n"
+      "dependencies = [\"math\"]\n"
       "\n"
       "[target.unit_tests]\n"
       "type = \"executable\"\n"
@@ -444,9 +458,26 @@ namespace
       "sources = [\"Tests/unit_tests.cpp\"]\n"
     );
     write_file(
+      directory.path() / "include/suite/message.h",
+      "#pragma once\n"
+      "inline const char* message() { return \"examples\"; }\n"
+    );
+    write_file(
+      directory.path() / "include/suite/math.h",
+      "#pragma once\n"
+      "int answer();\n"
+    );
+    write_file(
+      directory.path() / "src/math.cpp",
+      "#include <suite/math.h>\n"
+      "int answer() { return 42; }\n"
+    );
+    write_file(
       directory.path() / "Examples/examples.cpp",
+      "#include <suite/message.h>\n"
+      "#include <suite/math.h>\n"
       "#include <iostream>\n"
-      "int main() { std::cout << \"examples\\\\n\"; }\n"
+      "int main() { std::cout << message() << answer() << \"\\\\n\"; }\n"
     );
     write_file(directory.path() / "Tests/unit_tests.cpp", "int main() {}\n");
     constexpr std::array build_arguments {

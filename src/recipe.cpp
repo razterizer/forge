@@ -132,6 +132,32 @@ namespace forge
       return true;
     }
 
+    bool parse_names(std::string_view value, std::vector<std::string>& names)
+    {
+      std::vector<std::filesystem::path> paths;
+
+      if (!parse_sources(value, paths))
+      {
+        return false;
+      }
+
+      names.clear();
+
+      for (const auto& path : paths)
+      {
+        const auto name = path.string();
+
+        if (!is_safe_name(name))
+        {
+          return false;
+        }
+
+        names.push_back(name);
+      }
+
+      return true;
+    }
+
     bool parse_dependency(std::string_view value, Dependency& dependency)
     {
       value = trim(value);
@@ -379,6 +405,10 @@ namespace forge
         {
           valid = parse_sources(value, target->runtime_files);
         }
+        else if (key == "dependencies")
+        {
+          valid = parse_names(value, target->dependencies);
+        }
         else
         {
           valid = false;
@@ -549,7 +579,73 @@ namespace forge
       return false;
     }
 
+    std::vector<std::string> active;
+    std::vector<std::string> resolved;
+
+    const auto resolve = [&](const auto& self, const RecipeTarget& target) -> bool
+    {
+      if (std::find(active.begin(), active.end(), target.name) != active.end())
+      {
+        error << "forge: internal target dependency cycle detected at '" << target.name << "'\n";
+        return false;
+      }
+
+      if (std::find(resolved.begin(), resolved.end(), target.name) != resolved.end())
+      {
+        return true;
+      }
+
+      active.push_back(target.name);
+
+      for (const auto& dependency_name : target.dependencies)
+      {
+        const auto dependency = std::find_if(
+          recipe.targets.begin(),
+          recipe.targets.end(),
+          [&dependency_name](const RecipeTarget& candidate)
+          {
+            return candidate.name == dependency_name;
+          }
+        );
+
+        if (dependency == recipe.targets.end())
+        {
+          error << "forge: target '" << target.name << "' depends on missing internal target '"
+                << dependency_name << "'\n";
+          return false;
+        }
+
+        if (dependency->type == "executable")
+        {
+          error << "forge: target '" << target.name << "' cannot depend on executable target '"
+                << dependency_name << "'\n";
+          return false;
+        }
+
+        if (!self(self, *dependency))
+        {
+          return false;
+        }
+      }
+
+      active.pop_back();
+      resolved.push_back(target.name);
+
+      if (target.name != selected->name)
+      {
+        recipe.internal_targets.push_back(target);
+      }
+
+      return true;
+    };
+
+    if (!resolve(resolve, *selected))
+    {
+      return false;
+    }
+
     recipe.selected_target = selected->name;
+    recipe.selected_internal_dependencies = selected->dependencies;
     recipe.name = selected->name;
     recipe.type = selected->type;
     recipe.cpp_standard = selected->cpp_standard;

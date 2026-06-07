@@ -37,6 +37,8 @@ rules:
 - Repositories may replace the legacy project target with one or more
   `[target.<name>]` sections. Each named target declares its own type, C++
   standard, sources, public headers, and runtime files.
+- Named targets may declare internal library target dependencies. Forge builds
+  and links their transitive closure and rejects missing or cyclic targets.
 
 `shared_library` remains accepted as a legacy alias for `dynamic_library`.
 

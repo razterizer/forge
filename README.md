@@ -159,11 +159,18 @@ Repositories containing multiple programs can declare named targets:
 name = "hello-suite"
 version = "0.1.0"
 
+[target.hello]
+type = "header_only"
+cpp_std = 20
+sources = []
+public_headers = ["include/hello/hello.h"]
+
 [target.examples]
 type = "executable"
 cpp_std = 20
 sources = ["Examples/examples.cpp"]
 runtime_files = ["Examples/background.tx"]
+dependencies = ["hello"]
 
 [target.unit_tests]
 type = "executable"
@@ -179,9 +186,11 @@ forge run examples -- --help
 ```
 
 Named targets use isolated directories under `.forge/generated/<target>` and
-`.forge/build/<target>`. Existing single-target recipes remain supported.
-Target-to-target dependencies, `forge test`, boxing, and releasing named
-targets are planned follow-up slices.
+`.forge/build/<target>`. Internal dependencies build and link the required
+named static, dynamic, and header-only library target closure. Missing,
+executable, and cyclic internal dependencies are rejected. Existing
+single-target recipes remain supported. `forge test`, boxing, and releasing
+named targets are planned follow-up slices.
 
 Remove all generated project state, including builds, dependencies, boxes,
 release artifacts, and caches:

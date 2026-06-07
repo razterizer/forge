@@ -934,6 +934,68 @@ namespace forge
         << "\"configuration = \\\"${CMAKE_BUILD_TYPE}\\\"\\n\" "
         << "\"runtime = \\\"${FORGE_RUNTIME}\\\"\\n\")\n\n";
 
+      std::map<std::string, std::string> internal_target_names;
+
+      for (std::size_t index = 0; index < recipe.internal_targets.size(); ++index)
+      {
+        internal_target_names.emplace(
+          recipe.internal_targets[index].name,
+          "forge_internal_" + std::to_string(index)
+        );
+      }
+
+      for (const auto& target : recipe.internal_targets)
+      {
+        const auto& target_name = internal_target_names.at(target.name);
+
+        if (target.type == "header_only")
+        {
+          file << "add_library(" << target_name << " INTERFACE)\n";
+        }
+        else
+        {
+          file
+            << "add_library(" << target_name << ' '
+            << (target.type == "dynamic_library" ? "SHARED" : "STATIC") << "\n";
+
+          for (const auto& source : target.sources)
+          {
+            file << "  \"${FORGE_PROJECT_ROOT}/" << escape_cmake(source.generic_string()) << "\"\n";
+          }
+
+          for (const auto& header : target.public_headers)
+          {
+            file << "  \"${FORGE_PROJECT_ROOT}/" << escape_cmake(header.generic_string()) << "\"\n";
+          }
+
+          file << ")\n";
+        }
+
+        const auto visibility = target.type == "header_only" ? "INTERFACE" : "PUBLIC";
+        file
+          << "target_compile_features(" << target_name << ' ' << visibility
+          << " cxx_std_" << target.cpp_standard << ")\n"
+          << "target_include_directories(" << target_name << ' ' << visibility
+          << " \"${FORGE_PROJECT_ROOT}/include\")\n";
+
+        for (const auto& dependency : target.dependencies)
+        {
+          file << "target_link_libraries(" << target_name << ' ' << visibility
+               << ' ' << internal_target_names.at(dependency) << ")\n";
+        }
+
+#ifdef _WIN32
+        if (target.type == "dynamic_library")
+        {
+          file
+            << "set_target_properties(" << target_name
+            << " PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)\n";
+        }
+#endif
+
+        file << '\n';
+      }
+
       if (recipe.type == "static_library")
       {
         file << "add_library(forge_project STATIC\n";
@@ -975,6 +1037,12 @@ namespace forge
       {
         file
           << "target_include_directories(forge_project PUBLIC \"${FORGE_PROJECT_ROOT}/include\")\n";
+      }
+
+      for (const auto& dependency : recipe.selected_internal_dependencies)
+      {
+        file << "target_link_libraries(forge_project PRIVATE "
+             << internal_target_names.at(dependency) << ")\n";
       }
 
       for (std::size_t index = 0; index < dependencies.size(); ++index)
@@ -1051,7 +1119,7 @@ namespace forge
         << "set_target_properties(forge_project PROPERTIES "
         << "BUILD_WITH_INSTALL_RPATH TRUE "
         << "INSTALL_RPATH \""
-        << (recipe.type == "dynamic_library" ? "@loader_path" : "@loader_path/runtime")
+        << (recipe.type == "dynamic_library" ? "@loader_path" : "@loader_path;@loader_path/runtime")
         << "\")\n";
 
       if (recipe.type == "dynamic_library")
@@ -1064,7 +1132,7 @@ namespace forge
       file
         << "set_target_properties(forge_project PROPERTIES "
         << "BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH \""
-        << (recipe.type == "dynamic_library" ? "$ORIGIN" : "$ORIGIN/runtime")
+        << (recipe.type == "dynamic_library" ? "$ORIGIN" : "$ORIGIN;$ORIGIN/runtime")
         << "\")\n";
 #endif
 
@@ -2092,6 +2160,69 @@ namespace forge
     if (!select_recipe_target(recipe, requested_target, error))
     {
       return 2;
+    }
+
+    for (const auto& target : recipe.internal_targets)
+    {
+      if (target.type != "static_library"
+          && target.type != "dynamic_library"
+          && target.type != "header_only")
+      {
+        error << "forge: unsupported internal dependency target type '" << target.type << "'\n";
+        return 2;
+      }
+
+      if (target.sources.empty() && target.type != "header_only")
+      {
+        error << "forge: internal target '" << target.name << "' contains no source files\n";
+        return 2;
+      }
+
+      if (target.public_headers.empty())
+      {
+        error << "forge: internal library target '" << target.name << "' requires public headers\n";
+        return 2;
+      }
+
+      if (target.type == "header_only" && !target.sources.empty())
+      {
+        error << "forge: internal header-only target '" << target.name
+              << "' cannot declare source files\n";
+        return 2;
+      }
+
+      if (!target.runtime_files.empty())
+      {
+        error << "forge: internal library target '" << target.name
+              << "' cannot declare runtime assets\n";
+        return 2;
+      }
+
+      for (const auto& source : target.sources)
+      {
+        if (source.is_absolute()
+            || source.string().starts_with("..")
+            || !std::filesystem::is_regular_file(project_directory / source))
+        {
+          error << "forge: internal target source '" << source.generic_string()
+                << "' does not exist or leaves the project\n";
+          return 2;
+        }
+      }
+
+      for (const auto& header : target.public_headers)
+      {
+        if (header.is_absolute()
+            || header.string().starts_with("..")
+            || header.begin() == header.end()
+            || header.begin()->string() != "include"
+            || !std::filesystem::is_regular_file(project_directory / header))
+        {
+          error << "forge: internal target public header '" << header.generic_string()
+                << "' must be a file under include/\n";
+          return 2;
+        }
+      }
     }
 
     if (recipe.type != "executable"

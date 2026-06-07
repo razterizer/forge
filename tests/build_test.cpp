@@ -119,22 +119,34 @@ namespace
   {
     std::filesystem::create_directories(directory / "Examples");
     std::filesystem::create_directories(directory / "Tests");
+    std::filesystem::create_directories(directory / "include/hello");
     std::ofstream recipe { directory / "forge.recipe.toml" };
     recipe
       << "[project]\n"
       << "name = \"hello-suite\"\n"
       << "version = \"0.1.0\"\n\n"
+      << "[target.hello]\n"
+      << "type = \"header_only\"\n"
+      << "cpp_std = 20\n"
+      << "sources = []\n"
+      << "public_headers = [\"include/hello/hello.h\"]\n\n"
       << "[target.examples]\n"
       << "type = \"executable\"\n"
       << "cpp_std = 20\n"
-      << "sources = [\"Examples/examples.cpp\"]\n\n"
+      << "sources = [\"Examples/examples.cpp\"]\n"
+      << "dependencies = [\"hello\"]\n\n"
       << "[target.unit_tests]\n"
       << "type = \"executable\"\n"
       << "cpp_std = 20\n"
-      << "sources = [\"Tests/unit_tests.cpp\"]\n";
+      << "sources = [\"Tests/unit_tests.cpp\"]\n"
+      << "dependencies = [\"hello\"]\n";
 
-    std::ofstream { directory / "Examples/examples.cpp" } << "int main() {}\n";
-    std::ofstream { directory / "Tests/unit_tests.cpp" } << "int main() {}\n";
+    std::ofstream { directory / "include/hello/hello.h" }
+      << "inline int hello() { return 42; }\n";
+    std::ofstream { directory / "Examples/examples.cpp" }
+      << "#include <hello/hello.h>\nint main() { return hello() == 42 ? 0 : 1; }\n";
+    std::ofstream { directory / "Tests/unit_tests.cpp" }
+      << "#include <hello/hello.h>\nint main() { return hello() == 42 ? 0 : 1; }\n";
   }
 
   void test_build_generates_cmake_and_commands()
@@ -232,6 +244,14 @@ namespace
     const auto generated = read_file(directory.path() / ".forge/generated/examples/CMakeLists.txt");
     expect(contains(generated, "Examples/examples.cpp"), "named target includes its selected source");
     expect(!contains(generated, "Tests/unit_tests.cpp"), "named target excludes other target sources");
+    expect(
+      contains(generated, "add_library(forge_internal_0 INTERFACE)"),
+      "build generates internal header-only target"
+    );
+    expect(
+      contains(generated, "target_link_libraries(forge_project PRIVATE forge_internal_0)"),
+      "selected target links its internal dependency"
+    );
     expect(contains(output.str(), "Building examples"), "build reports the selected target");
     expect(error.str().empty(), "selected named target build does not write an error");
   }
@@ -259,6 +279,77 @@ namespace
     );
     expect(invocations == 0, "ambiguous multi-target build does not invoke external tools");
     expect(contains(error.str(), "specify one of"), "ambiguous multi-target build lists choices");
+  }
+
+  void test_build_rejects_missing_internal_target()
+  {
+    TemporaryDirectory directory;
+    write_multi_target_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[target.broken]\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n"
+      << "sources = [\"Examples/examples.cpp\"]\n"
+      << "dependencies = [\"missing\"]\n";
+    recipe.close();
+    forge::BuildOptions options;
+    options.target = "broken";
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), options, runner, output, error) == 2,
+      "build rejects a missing internal target"
+    );
+    expect(invocations == 0, "missing internal target does not invoke external tools");
+    expect(contains(error.str(), "missing internal target"), "missing internal target is explained");
+  }
+
+  void test_build_rejects_internal_target_cycle()
+  {
+    TemporaryDirectory directory;
+    std::filesystem::create_directories(directory.path() / "include/suite");
+    std::ofstream { directory.path() / "include/suite/a.h" };
+    std::ofstream { directory.path() / "include/suite/b.h" };
+    std::ofstream { directory.path() / "main.cpp" } << "int main() {}\n";
+    std::ofstream recipe { directory.path() / "forge.recipe.toml" };
+    recipe
+      << "[project]\nname = \"suite\"\nversion = \"0.1.0\"\n\n"
+      << "[target.a]\ntype = \"header_only\"\ncpp_std = 20\nsources = []\n"
+      << "public_headers = [\"include/suite/a.h\"]\ndependencies = [\"b\"]\n\n"
+      << "[target.b]\ntype = \"header_only\"\ncpp_std = 20\nsources = []\n"
+      << "public_headers = [\"include/suite/b.h\"]\ndependencies = [\"a\"]\n\n"
+      << "[target.app]\ntype = \"executable\"\ncpp_std = 20\nsources = [\"main.cpp\"]\n"
+      << "dependencies = [\"a\"]\n";
+    recipe.close();
+    forge::BuildOptions options;
+    options.target = "app";
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), options, runner, output, error) == 2,
+      "build rejects an internal target dependency cycle"
+    );
+    expect(contains(error.str(), "cycle detected"), "internal target cycle is explained");
   }
 
   void test_build_stages_runtime_assets()
@@ -851,6 +942,8 @@ int main()
   test_build_stops_after_configuration_failure();
   test_build_selects_named_target();
   test_build_requires_target_for_multi_target_recipe();
+  test_build_rejects_missing_internal_target();
+  test_build_rejects_internal_target_cycle();
   test_build_stages_runtime_assets();
   test_build_rejects_runtime_asset_collision();
   test_build_rejects_missing_source_without_running_process();

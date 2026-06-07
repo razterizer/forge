@@ -13,6 +13,8 @@
   runs and includes automatically in executable boxes and releases.
 - Added backward-compatible named targets with `forge build <target>` and
   `forge run <target> -- [arguments...]`.
+- Added transitive internal dependencies between named library and executable
+  targets, with missing-target and cycle validation.
 
 ## 0.2.0
 

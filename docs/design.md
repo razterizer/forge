@@ -21,6 +21,8 @@ compilers and build systems rather than replacing them.
   forwarding its arguments and exit status.
 - Named targets use `[target.<name>]` sections and isolated generated and build
   directories. The legacy single-target recipe form remains supported.
+- Named targets may depend on other named library targets in the same recipe.
+  Forge builds and links the internal dependency closure.
 - `forge release` stages an application release and creates a versioned ZIP
   archive. Release archives are distinct from dependency `.cbox` artifacts.
 
