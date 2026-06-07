@@ -2,6 +2,7 @@
 
 [![release linux](https://github.com/razterizer/forge/actions/workflows/release-linux.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/release-linux.yml)
 [![release macos](https://github.com/razterizer/forge/actions/workflows/release-macos.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/release-macos.yml)
+[![release windows](https://github.com/razterizer/forge/actions/workflows/release-windows.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/release-windows.yml)
 
 
 > Write C++, write a recipe, Forge the rest.
