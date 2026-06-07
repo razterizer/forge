@@ -4,7 +4,8 @@
 
 - Added target-specific `imported_library` recipes that package local vendor
   headers and precompiled static, dynamic, and import libraries without
-  invoking a compiler.
+  invoking a compiler, then link and stage every contained artifact when
+  consumed as dependencies.
 
 ## 0.2.0
 

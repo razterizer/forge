@@ -25,8 +25,9 @@ rules:
 - Header-only projects require public headers and an empty source-path array.
 - Public headers must remain under `include/`.
 - Build numbers must be non-negative.
-- Projects may declare local static-library, dynamic-library, and header-only
-  dependencies using name and either project-path or cbox-path inline tables.
+- Projects may declare local static-library, dynamic-library, imported-library,
+  and header-only dependencies using name and either project-path or cbox-path
+  inline tables.
 - Downloadable cbox dependencies require both `url` and lowercase `sha256`.
 - GitHub Release cbox dependencies require `github = "owner/repository"` and a
   packaged `version`. `forge update` writes their exact target-specific

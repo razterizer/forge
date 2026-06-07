@@ -83,7 +83,8 @@ one `import_library` artifact under `lib/`. Header-only boxes contain one or mor
 Imported-library boxes contain one or more `public_header` artifacts and any
 number of `static_library`, `dynamic_library`, and `import_library` artifacts.
 They package an existing target-specific SDK or precompiled binary layout
-without requiring Forge to build it.
+without requiring Forge to build it. Consumers link every contained static or
+import library and stage every contained dynamic-library runtime.
 
 The manifest determines package identity. The archive filename is only a
 human-readable label.

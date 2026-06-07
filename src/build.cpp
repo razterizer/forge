@@ -21,12 +21,18 @@ namespace forge
   namespace
   {
 
+    struct ResolvedLibrary
+    {
+      std::filesystem::path path;
+      std::optional<std::filesystem::path> runtime;
+    };
+
     struct ResolvedDependency
     {
       std::string name;
       std::filesystem::path root;
-      std::optional<std::filesystem::path> library;
-      std::optional<std::filesystem::path> runtime;
+      std::vector<ResolvedLibrary> libraries;
+      std::vector<std::filesystem::path> runtimes;
     };
 
     struct DependencyNode
@@ -943,40 +949,45 @@ namespace forge
           << "target_include_directories(forge_project PRIVATE \""
           << escape_cmake((dependency.root / "include").string()) << "\")\n";
 
-        if (dependency.library)
+        for (std::size_t library_index = 0;
+             library_index < dependency.libraries.size();
+             ++library_index)
         {
+          const auto& library = dependency.libraries[library_index];
+          const auto target = "forge_dependency_" + std::to_string(index)
+            + "_" + std::to_string(library_index);
           file
-            << "add_library(forge_dependency_" << index << ' '
-            << (dependency.runtime ? "SHARED" : "STATIC") << " IMPORTED)\n"
-            << "set_target_properties(forge_dependency_" << index << " PROPERTIES ";
+            << "add_library(" << target << ' '
+            << (library.runtime ? "SHARED" : "STATIC") << " IMPORTED)\n"
+            << "set_target_properties(" << target << " PROPERTIES ";
 
 #ifdef _WIN32
-          if (dependency.runtime)
+          if (library.runtime)
           {
             file
-              << "IMPORTED_IMPLIB \"" << escape_cmake(dependency.library->string()) << "\" "
-              << "IMPORTED_LOCATION \"" << escape_cmake(dependency.runtime->string()) << "\")\n";
+              << "IMPORTED_IMPLIB \"" << escape_cmake(library.path.string()) << "\" "
+              << "IMPORTED_LOCATION \"" << escape_cmake(library.runtime->string()) << "\")\n";
           }
           else
 #endif
           {
             file
-              << "IMPORTED_LOCATION \"" << escape_cmake(dependency.library->string()) << "\")\n";
+              << "IMPORTED_LOCATION \"" << escape_cmake(library.path.string()) << "\")\n";
           }
 
-          file << "target_link_libraries(forge_project PRIVATE forge_dependency_" << index << ")\n";
+          file << "target_link_libraries(forge_project PRIVATE " << target << ")\n";
+        }
 
 #ifdef _WIN32
-          if (dependency.runtime)
-          {
-            file
-              << "add_custom_command(TARGET forge_project POST_BUILD "
-              << "COMMAND ${CMAKE_COMMAND} -E copy_if_different \""
-              << escape_cmake(dependency.runtime->string())
-              << "\" \"$<TARGET_FILE_DIR:forge_project>\")\n";
-          }
-#endif
+        for (const auto& runtime : dependency.runtimes)
+        {
+          file
+            << "add_custom_command(TARGET forge_project POST_BUILD "
+            << "COMMAND ${CMAKE_COMMAND} -E copy_if_different \""
+            << escape_cmake(runtime.string())
+            << "\" \"$<TARGET_FILE_DIR:forge_project>\")\n";
         }
+#endif
       }
 
       file
@@ -1046,6 +1057,39 @@ namespace forge
       for (const auto& header : recipe.public_headers)
       {
         files.push_back(dependency_directory / header);
+      }
+
+      for (const auto& profile : recipe.imports)
+      {
+        const std::array imported_groups {
+          &profile.public_headers,
+          &profile.static_libraries,
+          &profile.dynamic_libraries,
+          &profile.import_libraries
+        };
+
+        for (const auto* group : imported_groups)
+        {
+          for (const auto& imported : *group)
+          {
+            const auto path = dependency_directory / imported;
+
+            if (std::filesystem::is_directory(path))
+            {
+              for (const auto& entry : std::filesystem::recursive_directory_iterator { path })
+              {
+                if (entry.is_regular_file())
+                {
+                  files.push_back(entry.path());
+                }
+              }
+            }
+            else
+            {
+              files.push_back(path);
+            }
+          }
+        }
       }
 
       for (const auto& file : files)
@@ -1365,10 +1409,12 @@ namespace forge
 
         if (dependency_recipe.type != "static_library"
             && dependency_recipe.type != "dynamic_library"
+            && dependency_recipe.type != "imported_library"
             && dependency_recipe.type != "header_only")
         {
           error << "forge: dependency '" << dependency.name
-                << "' must be a static_library, dynamic_library, or header_only project\n";
+                << "' must be a static_library, dynamic_library, imported_library, "
+                << "or header_only project\n";
           return false;
         }
 
@@ -1553,8 +1599,8 @@ namespace forge
         {
           node.recipe.name,
           destination,
-          std::nullopt,
-          std::nullopt
+          {},
+          {}
         };
 
       if (node.recipe.type == "static_library")
@@ -1565,16 +1611,20 @@ namespace forge
           {
             if (artifact.kind == "static_library")
             {
-              resolved.library = destination / artifact.path;
+              resolved.libraries.push_back({ destination / artifact.path, std::nullopt });
             }
           }
         }
         else
         {
 #ifdef _WIN32
-          resolved.library = destination / "lib" / (node.recipe.name + ".lib");
+          resolved.libraries.push_back(
+            { destination / "lib" / (node.recipe.name + ".lib"), std::nullopt }
+          );
 #else
-          resolved.library = destination / "lib" / ("lib" + node.recipe.name + ".a");
+          resolved.libraries.push_back(
+            { destination / "lib" / ("lib" + node.recipe.name + ".a"), std::nullopt }
+          );
 #endif
         }
       }
@@ -1586,37 +1636,96 @@ namespace forge
           {
             if (artifact.kind == "dynamic_library")
             {
-              resolved.runtime = destination / artifact.path;
+              resolved.runtimes.push_back(destination / artifact.path);
             }
             else if (artifact.kind == "import_library")
             {
-              resolved.library = destination / artifact.path;
+              resolved.libraries.push_back({ destination / artifact.path, std::nullopt });
             }
           }
+
+#ifndef _WIN32
+          for (const auto& runtime : resolved.runtimes)
+          {
+            resolved.libraries.push_back({ runtime, runtime });
+          }
+#endif
         }
         else
         {
 #ifdef _WIN32
-          resolved.library = destination / "lib" / import_library_filename(node.recipe.name);
+          resolved.libraries.push_back(
+            { destination / "lib" / import_library_filename(node.recipe.name), std::nullopt }
+          );
 #else
-          resolved.library = destination / "runtime" / dynamic_library_filename(node.recipe.name);
+          resolved.libraries.push_back(
+            {
+              destination / "runtime" / dynamic_library_filename(node.recipe.name),
+              destination / "runtime" / dynamic_library_filename(node.recipe.name)
+            }
+          );
 #endif
-          resolved.runtime = destination / "runtime" / dynamic_library_filename(node.recipe.name);
+          resolved.runtimes.push_back(
+            destination / "runtime" / dynamic_library_filename(node.recipe.name)
+          );
         }
 
+#ifdef _WIN32
+        if (!resolved.libraries.empty() && !resolved.runtimes.empty())
+        {
+          resolved.libraries.front().runtime = resolved.runtimes.front();
+        }
+#endif
+      }
+      else if (node.recipe.type == "imported_library" && node.box_metadata)
+      {
+        for (const auto& artifact : node.box_metadata->artifacts)
+        {
+          const auto path = destination / artifact.path;
+
+          if (artifact.kind == "static_library" || artifact.kind == "import_library")
+          {
+            resolved.libraries.push_back({ path, std::nullopt });
+          }
+          else if (artifact.kind == "dynamic_library")
+          {
+            resolved.runtimes.push_back(path);
 #ifndef _WIN32
-        resolved.library = resolved.runtime;
+            resolved.libraries.push_back({ path, path });
+#endif
+          }
+        }
+
+#ifdef _WIN32
+        for (auto& library : resolved.libraries)
+        {
+          const auto runtime = std::find_if(
+            resolved.runtimes.begin(),
+            resolved.runtimes.end(),
+            [&library](const std::filesystem::path& candidate)
+            {
+              return candidate.stem() == library.path.stem();
+            }
+          );
+
+          if (runtime != resolved.runtimes.end())
+          {
+            library.runtime = *runtime;
+          }
+        }
 #endif
       }
 
-      if ((node.recipe.type == "static_library" || node.recipe.type == "dynamic_library")
-          && !resolved.library)
+      if ((node.recipe.type == "static_library"
+           || node.recipe.type == "dynamic_library"
+           || node.recipe.type == "imported_library")
+          && resolved.libraries.empty())
       {
         error << "forge: dependency '" << node.recipe.name << "' box has no linkable library\n";
         return false;
       }
 
-      if (node.recipe.type == "dynamic_library" && !resolved.runtime)
+      if (node.recipe.type == "dynamic_library" && resolved.runtimes.empty())
       {
         error << "forge: dependency '" << node.recipe.name << "' box has no runtime library\n";
         return false;
@@ -1635,30 +1744,28 @@ namespace forge
 
       for (const auto& dependency : dependencies)
       {
-        if (!dependency.runtime)
+        for (const auto& runtime : dependency.runtimes)
         {
-          continue;
-        }
+          std::filesystem::create_directories(runtime_directory, filesystem_error);
 
-        std::filesystem::create_directories(runtime_directory, filesystem_error);
+          if (filesystem_error)
+          {
+            error << "forge: could not create runtime dependency directory\n";
+            return false;
+          }
 
-        if (filesystem_error)
-        {
-          error << "forge: could not create runtime dependency directory\n";
-          return false;
-        }
+          std::filesystem::copy_file(
+            runtime,
+            runtime_directory / runtime.filename(),
+            std::filesystem::copy_options::overwrite_existing,
+            filesystem_error
+          );
 
-        std::filesystem::copy_file(
-          *dependency.runtime,
-          runtime_directory / dependency.runtime->filename(),
-          std::filesystem::copy_options::overwrite_existing,
-          filesystem_error
-        );
-
-        if (filesystem_error)
-        {
-          error << "forge: could not stage runtime dependency '" << dependency.name << "'\n";
-          return false;
+          if (filesystem_error)
+          {
+            error << "forge: could not stage runtime dependency '" << dependency.name << "'\n";
+            return false;
+          }
         }
       }
 

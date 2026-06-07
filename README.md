@@ -209,8 +209,8 @@ under `lib/`; dynamic-library runtimes are mapped under `runtime/`.
 `forge box create` packages the matching current-target profile without
 invoking a compiler.
 
-Projects may use local static-library, dynamic-library, and header-only
-dependencies:
+Projects may use local static-library, dynamic-library, imported-library, and
+header-only dependencies:
 
 ```toml
 [dependencies]
@@ -218,9 +218,10 @@ answer = { path = "../answer" }
 format = { path = "../format" }
 ```
 
-Forge builds each dependency into a verified box, installs it under
-`.forge/deps/<name>/`, adds its public include directory, and links static
-libraries when present. Dependencies are resolved recursively, shared
+Forge builds or imports each dependency into a verified box, installs it under
+`.forge/deps/<name>/`, adds its public include directory, links every contained
+static or import library, and stages every dynamic-library runtime. Dependencies
+are resolved recursively, shared
 dependencies are built once per command, and dependency cycles are rejected.
 Later builds reuse a verified source-dependency box when its package identity,
 target, recipe, sources, public headers, and direct dependency boxes remain

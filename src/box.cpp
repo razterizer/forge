@@ -818,6 +818,7 @@ namespace forge
             || !is_safe_path_component(dependency.version)
             || (dependency.type != "static_library"
                 && dependency.type != "dynamic_library"
+                && dependency.type != "imported_library"
                 && dependency.type != "header_only")
             || !is_safe_archive_path(dependency.path)
             || dependency.path.parent_path().empty()

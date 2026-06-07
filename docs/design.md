@@ -91,14 +91,16 @@ dynamic libraries, import libraries, and runtime binaries into verified boxes.
 Forge will then assemble the required runtime libraries automatically when
 building, running, and releasing an executable.
 
-The initial `imported_library` profile packages target-specific local headers
-and precompiled artifacts without invoking a compiler. Consumption and
-dependency assembly for imported-library boxes remain a later step.
+The `imported_library` profile packages target-specific local headers and
+precompiled artifacts without invoking a compiler. Consumers link every
+contained static or import library and stage every dynamic-library runtime.
 
 Workflow support will absorb repeated CI and release glue currently maintained
 by projects such as Termin8or. The intended surface includes build/test
 matrices, locked and development dependency modes, release asset selection,
-release-note extraction, version generation, checksums, tags, and publication.
+release-note extraction, version generation, checksums, tags, publication, and
+declarative pre-build and post-build steps with explicit commands and working
+directories.
 Actions that modify Git history or publish remotely must remain explicit and
 reviewable.
 

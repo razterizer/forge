@@ -1078,6 +1078,189 @@ namespace
     expect(verify_error.str().empty(), "imported-library verification does not write an error");
   }
 
+  void test_run_with_imported_library_dependency()
+  {
+    TemporaryDirectory directory;
+    const auto first = directory.path() / "first-source";
+    const auto second = directory.path() / "second-source";
+    const auto third = directory.path() / "third-source";
+    const auto imported = directory.path() / "vendor-sdk";
+    const auto application = directory.path() / "app";
+
+    const auto write_static_project =
+      [](const std::filesystem::path& project,
+         std::string_view name,
+         std::string_view value)
+      {
+        write_file(
+          project / "forge.recipe.toml",
+          "[project]\n"
+          "name = \"" + std::string { name } + "\"\n"
+          "version = \"1.0.0\"\n"
+          "type = \"static_library\"\n"
+          "cpp_std = 20\n\n"
+          "[sources]\n"
+          "paths = [\"src/" + std::string { name } + ".cpp\"]\n"
+          "public_headers = [\"include/" + std::string { name } + "/" + std::string { name } + ".h\"]\n"
+        );
+        write_file(
+          project / "include" / name / (std::string { name } + ".h"),
+          "int " + std::string { name } + "();\n"
+        );
+        write_file(
+          project / "src" / (std::string { name } + ".cpp"),
+          "#include <" + std::string { name } + "/" + std::string { name } + ".h>\n"
+          "int " + std::string { name } + "() { return " + std::string { value } + "; }\n"
+        );
+      };
+
+    write_static_project(first, "first", "20");
+    write_static_project(second, "second", "22");
+    write_file(
+      third / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"third\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"dynamic_library\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"src/third.cpp\"]\n"
+      "public_headers = [\"include/third/third.h\"]\n"
+    );
+    write_file(third / "include/third/third.h", "int third();\n");
+    write_file(
+      third / "src/third.cpp",
+      "#include <third/third.h>\n"
+      "int third() { return 1; }\n"
+    );
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    std::ostringstream first_output;
+    std::ostringstream first_error;
+    std::ostringstream second_output;
+    std::ostringstream second_error;
+    std::ostringstream third_output;
+    std::ostringstream third_error;
+    expect(
+      forge::cli::run(build_arguments, first, first_output, first_error) == 0,
+      "first imported static library builds"
+    );
+    expect(
+      forge::cli::run(build_arguments, second, second_output, second_error) == 0,
+      "second imported static library builds"
+    );
+    expect(
+      forge::cli::run(build_arguments, third, third_output, third_error) == 0,
+      "imported dynamic library builds"
+    );
+
+#ifdef _WIN32
+    const auto first_library = first / ".forge/build/first.lib";
+    const auto second_library = second / ".forge/build/second.lib";
+    const auto third_runtime = third / ".forge/build/third.dll";
+    const auto third_import_library = third / ".forge/build/third.lib";
+#elif __APPLE__
+    const auto first_library = first / ".forge/build/libfirst.a";
+    const auto second_library = second / ".forge/build/libsecond.a";
+    const auto third_runtime = third / ".forge/build/libthird.dylib";
+#else
+    const auto first_library = first / ".forge/build/libfirst.a";
+    const auto second_library = second / ".forge/build/libsecond.a";
+    const auto third_runtime = third / ".forge/build/libthird.so";
+#endif
+
+    std::filesystem::create_directories(imported / "vendor/lib");
+    std::filesystem::create_directories(imported / "vendor/runtime");
+    std::filesystem::copy_file(first_library, imported / "vendor/lib" / first_library.filename());
+    std::filesystem::copy_file(second_library, imported / "vendor/lib" / second_library.filename());
+    std::filesystem::copy_file(third_runtime, imported / "vendor/runtime" / third_runtime.filename());
+#ifdef _WIN32
+    std::filesystem::copy_file(
+      third_import_library,
+      imported / "vendor/lib" / third_import_library.filename()
+    );
+#endif
+    write_file(imported / "vendor/include/first/first.h", "int first();\n");
+    write_file(imported / "vendor/include/second/second.h", "int second();\n");
+    write_file(imported / "vendor/include/third/third.h", "int third();\n");
+    auto imported_recipe =
+      "[project]\n"
+      "name = \"vendor-sdk\"\n"
+      "version = \"4.2.0\"\n"
+      "type = \"imported_library\"\n\n"
+      "[import." + current_target() + "]\n"
+      "public_headers = [\"vendor/include\"]\n"
+      "static_libraries = [\"vendor/lib/" + first_library.filename().string()
+      + "\", \"vendor/lib/" + second_library.filename().string() + "\"]\n"
+      "dynamic_libraries = [\"vendor/runtime/" + third_runtime.filename().string() + "\"]\n";
+#ifdef _WIN32
+    imported_recipe +=
+      "import_libraries = [\"vendor/lib/" + third_import_library.filename().string() + "\"]\n";
+#endif
+    write_file(
+      imported / "forge.recipe.toml",
+      imported_recipe
+    );
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[dependencies]\n"
+      "vendor-sdk = { path = \"../vendor-sdk\" }\n"
+    );
+    write_file(
+      application / "main.cpp",
+      "#include <first/first.h>\n"
+      "#include <second/second.h>\n"
+      "#include <third/third.h>\n"
+      "int main() { return first() + second() + third() == 43 ? 0 : 1; }\n"
+    );
+    constexpr std::array run_arguments { std::string_view { "run" } };
+    std::ostringstream run_output;
+    std::ostringstream run_error;
+
+    expect(
+      forge::cli::run(run_arguments, application, run_output, run_error) == 0,
+      "run links every library from an imported-library dependency"
+    );
+    expect(
+      std::filesystem::exists(application / ".forge/deps/vendor-sdk/include/first/first.h"),
+      "build installs imported-library headers"
+    );
+    expect(
+      std::filesystem::exists(
+        application / ".forge/build/runtime" / third_runtime.filename()
+      ),
+      "build stages every imported dynamic-library runtime"
+    );
+    constexpr std::array release_arguments { std::string_view { "release" } };
+    std::ostringstream release_output;
+    std::ostringstream release_error;
+    expect(
+      forge::cli::run(release_arguments, application, release_output, release_error) == 0,
+      "release succeeds with an imported-library dependency"
+    );
+    expect(
+      std::filesystem::exists(
+#ifdef _WIN32
+        application / ".forge/release/app-1.0.0" / third_runtime.filename()
+#else
+        application / ".forge/release/app-1.0.0/runtime" / third_runtime.filename()
+#endif
+      ),
+      "release stages every imported dynamic-library runtime"
+    );
+    expect(first_error.str().empty(), "first imported static library build does not write an error");
+    expect(second_error.str().empty(), "second imported static library build does not write an error");
+    expect(third_error.str().empty(), "imported dynamic library build does not write an error");
+    expect(run_error.str().empty(), "imported-library dependency run does not write an error");
+    expect(release_error.str().empty(), "imported-library dependency release does not write an error");
+  }
+
   void test_run_with_local_dependencies()
   {
     TemporaryDirectory directory;
@@ -1833,6 +2016,7 @@ int main()
   test_static_library_box_round_trip();
   test_header_only_box_round_trip();
   test_imported_library_box_round_trip();
+  test_run_with_imported_library_dependency();
   test_run_with_local_dependencies();
   test_run_with_local_box_dependency();
   test_run_with_downloadable_box_dependency();
