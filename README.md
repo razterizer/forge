@@ -1,9 +1,19 @@
 # forge
 
+![GitHub License](https://img.shields.io/github/license/razterizer/forge?color=blue)
+![Static Badge](https://img.shields.io/badge/C%2B%2B-20-yellow)
+
 [![release linux](https://github.com/razterizer/forge/actions/workflows/release-linux.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/release-linux.yml)
 [![release macos](https://github.com/razterizer/forge/actions/workflows/release-macos.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/release-macos.yml)
 [![release windows](https://github.com/razterizer/forge/actions/workflows/release-windows.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/release-windows.yml)
 
+![Top Languages](https://img.shields.io/github/languages/top/razterizer/forge)
+![GitHub repo size](https://img.shields.io/github/repo-size/razterizer/forge)
+![Commit Activity](https://img.shields.io/github/commit-activity/t/razterizer/forge)
+![Last Commit](https://img.shields.io/github/last-commit/razterizer/forge?color=blue)
+![Contributors](https://img.shields.io/github/contributors/razterizer/forge?color=blue)
+
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/razterizer/TextUR/total)
 
 > Write C++, write a recipe, Forge the rest.
 
