@@ -53,6 +53,17 @@ namespace forge
                  std::ostream& error);
 
   int create_box(const std::filesystem::path& project_directory,
+                 const std::optional<std::string>& target,
+                 std::ostream& output,
+                 std::ostream& error);
+
+  int create_box(const std::filesystem::path& project_directory,
+                 const ProcessRunner& process_runner,
+                 std::ostream& output,
+                 std::ostream& error);
+
+  int create_box(const std::filesystem::path& project_directory,
+                 const std::optional<std::string>& target,
                  const ProcessRunner& process_runner,
                  std::ostream& output,
                  std::ostream& error);

@@ -40,6 +40,8 @@ rules:
 - Named targets may declare internal library target dependencies. Forge builds
   and links their transitive closure and rejects missing or cyclic targets.
 - Named executable targets marked with `test = true` are run by `forge test`.
+- Named targets may be selected for boxing and release preparation. Internal
+  library target dependencies are recursively packaged as embedded boxes.
 
 `shared_library` remains accepted as a legacy alias for `dynamic_library`.
 

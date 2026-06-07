@@ -2011,6 +2011,49 @@ namespace forge
       return true;
     }
 
+    bool stage_internal_runtime_dependencies(
+      const std::filesystem::path& build_directory,
+      const std::vector<RecipeTarget>& targets,
+      std::ostream& error)
+    {
+      std::error_code filesystem_error;
+
+      for (std::size_t index = 0; index < targets.size(); ++index)
+      {
+        if (targets[index].type != "dynamic_library")
+        {
+          continue;
+        }
+
+        const auto runtime =
+          build_directory / dynamic_library_filename("forge_internal_" + std::to_string(index));
+        const auto runtime_directory = build_directory / "runtime";
+        std::filesystem::create_directories(runtime_directory, filesystem_error);
+
+        if (filesystem_error)
+        {
+          error << "forge: could not create runtime dependency directory\n";
+          return false;
+        }
+
+        std::filesystem::copy_file(
+          runtime,
+          runtime_directory / runtime.filename(),
+          std::filesystem::copy_options::overwrite_existing,
+          filesystem_error
+        );
+
+        if (filesystem_error)
+        {
+          error << "forge: could not stage internal runtime dependency '"
+                << targets[index].name << "'\n";
+          return false;
+        }
+      }
+
+      return true;
+    }
+
     bool resolve_dependencies(const std::filesystem::path& project_directory,
                               const Recipe& recipe,
                               const ProcessRunner& process_runner,
@@ -2423,6 +2466,11 @@ namespace forge
     if (process_runner(build_arguments, project_directory, error) != 0)
     {
       error << "forge: build failed\n";
+      return 2;
+    }
+
+    if (!stage_internal_runtime_dependencies(build_directory, recipe.internal_targets, error))
+    {
       return 2;
     }
 

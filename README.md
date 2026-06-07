@@ -187,6 +187,9 @@ forge build examples
 forge run examples -- --help
 forge test
 forge test unit_tests -- --quick
+forge box create hello
+forge release examples
+forge prepare-release hello
 ```
 
 Named targets use isolated directories under `.forge/generated/<target>` and
@@ -195,8 +198,11 @@ named static, dynamic, and header-only library target closure. Missing,
 executable, and cyclic internal dependencies are rejected. Existing
 single-target recipes remain supported. `forge test` builds and runs every
 executable target marked with `test = true`, continues after failures, and
-reports an aggregate result. Boxing and releasing named targets are planned
-follow-up slices.
+reports an aggregate result. `forge box create <target>` packages a named
+target and recursively embeds boxes for its internal library dependencies.
+`forge release <target>` packages a selected named executable, while
+`forge prepare-release <target>` prepares hosted assets for a selected named
+executable or library.
 
 Remove all generated project state, including builds, dependencies, boxes,
 release artifacts, and caches:
@@ -482,6 +488,7 @@ Create a release archive:
 
 ```sh
 /path/to/forge/build/dev/forge release
+/path/to/forge/build/dev/forge release examples
 ```
 
 `forge release` builds the project, stages the executable with root-level
@@ -554,12 +561,17 @@ Prepare the same hosted release assets locally:
 
 ```sh
 forge prepare-release
+forge prepare-release examples
 ```
 
 The command also writes the focused release notes used by GitHub Actions to
 `.forge/release/RELEASE_NOTES.md`. It performs the necessary build, box
 creation, verification, and local publication steps automatically. You do not
 need to run those commands individually before a release.
+
+Multi-target projects must select a target for local and hosted releases.
+Generated GitHub workflows should likewise call `forge prepare-release
+<target>` for the intended published target.
 
 Trigger the generated GitHub release workflows by creating and pushing an
 annotated Git release tag:
@@ -596,6 +608,7 @@ static-library, dynamic-library, imported-library, or header-only box:
 
 ```sh
 /path/to/forge/build/dev/forge box create
+/path/to/forge/build/dev/forge box create hello
 /path/to/forge/build/dev/forge box inspect .forge/boxes/hello-0.1.0-macos-arm64.cbox
 /path/to/forge/build/dev/forge box verify .forge/boxes/hello-0.1.0-macos-arm64.cbox
 /path/to/forge/build/dev/forge box publish .forge/boxes/hello-0.1.0-macos-arm64.cbox

@@ -25,6 +25,8 @@ compilers and build systems rather than replacing them.
   Forge builds and links the internal dependency closure.
 - `forge test` builds and runs marked named executable targets and summarizes
   all results after continuing through failures.
+- Named target boxes recursively embed boxes for their direct internal library
+  dependencies. Named executable releases stage required dynamic libraries.
 - `forge release` stages an application release and creates a versioned ZIP
   archive. Release archives are distinct from dependency `.cbox` artifacts.
 

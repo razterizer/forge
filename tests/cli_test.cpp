@@ -440,7 +440,7 @@ namespace
       "public_headers = [\"include/suite/message.h\"]\n"
       "\n"
       "[target.math]\n"
-      "type = \"static_library\"\n"
+      "type = \"dynamic_library\"\n"
       "cpp_std = 20\n"
       "sources = [\"src/math.cpp\"]\n"
       "public_headers = [\"include/suite/math.h\"]\n"
@@ -494,12 +494,36 @@ namespace
     constexpr std::array test_arguments {
       std::string_view { "test" }
     };
+    constexpr std::array create_library_box_arguments {
+      std::string_view { "box" },
+      std::string_view { "create" },
+      std::string_view { "math" }
+    };
+    constexpr std::array create_executable_box_arguments {
+      std::string_view { "box" },
+      std::string_view { "create" },
+      std::string_view { "examples" }
+    };
+    constexpr std::array release_arguments {
+      std::string_view { "release" },
+      std::string_view { "examples" }
+    };
+    constexpr std::array prepare_release_arguments {
+      std::string_view { "prepare-release" },
+      std::string_view { "math" }
+    };
     std::ostringstream build_output;
     std::ostringstream build_error;
     std::ostringstream run_output;
     std::ostringstream run_error;
     std::ostringstream test_output;
     std::ostringstream test_error;
+    std::ostringstream box_output;
+    std::ostringstream box_error;
+    std::ostringstream release_output;
+    std::ostringstream release_error;
+    std::ostringstream prepare_output;
+    std::ostringstream prepare_error;
 
     expect(
       forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
@@ -525,9 +549,88 @@ namespace
       "CLI builds and runs marked test targets"
     );
     expect(contains(test_output.str(), "1 passed, 0 failed"), "CLI reports the test summary");
+    expect(
+      forge::cli::run(
+        create_library_box_arguments,
+        directory.path(),
+        box_output,
+        box_error
+      ) == 0,
+      "CLI creates a box for a selected named library target"
+    );
+    const auto math_box = directory.path() / ".forge/boxes"
+      / ("math-0.1.0-" + current_target() + ".cbox");
+    const auto suite_box = directory.path() / ".forge/boxes"
+      / ("suite-0.1.0-" + current_target() + ".cbox");
+    expect(std::filesystem::exists(math_box), "named library box is created");
+    expect(std::filesystem::exists(suite_box), "internal named dependency box is created");
+    const auto math_box_string = math_box.string();
+    const std::array inspect_arguments {
+      std::string_view { "box" },
+      std::string_view { "inspect" },
+      std::string_view { math_box_string }
+    };
+    std::ostringstream inspect_output;
+    std::ostringstream inspect_error;
+    expect(
+      forge::cli::run(inspect_arguments, directory.path(), inspect_output, inspect_error) == 0,
+      "CLI inspects a selected named library box"
+    );
+    expect(
+      contains(inspect_output.str(), "name = \"suite\""),
+      "named library box embeds its internal dependency"
+    );
+    expect(
+      forge::cli::run(
+        create_executable_box_arguments,
+        directory.path(),
+        box_output,
+        box_error
+      ) == 0,
+      "CLI creates a box for a selected named executable target"
+    );
+    expect(
+      forge::cli::run(release_arguments, directory.path(), release_output, release_error) == 0,
+      "CLI releases a selected named executable target"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / ".forge/release/examples-0.1.0.zip"),
+      "named executable release creates an archive"
+    );
+#ifdef _WIN32
+    const auto staged_internal_runtime =
+      directory.path() / ".forge/release/examples-0.1.0/forge_internal_1.dll";
+#elif __APPLE__
+    const auto staged_internal_runtime =
+      directory.path() / ".forge/release/examples-0.1.0/runtime/libforge_internal_1.dylib";
+#else
+    const auto staged_internal_runtime =
+      directory.path() / ".forge/release/examples-0.1.0/runtime/libforge_internal_1.so";
+#endif
+    expect(
+      std::filesystem::exists(staged_internal_runtime),
+      "named executable release stages its internal dynamic library"
+    );
+    expect(
+      forge::cli::run(
+        prepare_release_arguments,
+        directory.path(),
+        prepare_output,
+        prepare_error
+      ) == 0,
+      "CLI prepares hosted assets for a selected named library target"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / "boxes" / math_box.filename()),
+      "named library hosted assets publish its box"
+    );
     expect(build_error.str().empty(), "named target CLI build does not write an error");
     expect(run_error.str().empty(), "named target CLI run does not write an error");
     expect(test_error.str().empty(), "successful CLI test does not write an error");
+    expect(box_error.str().empty(), "successful named target boxes do not write an error");
+    expect(inspect_error.str().empty(), "successful named target box inspection does not write an error");
+    expect(release_error.str().empty(), "successful named target release does not write an error");
+    expect(prepare_error.str().empty(), "successful named target hosted assets do not write an error");
   }
 
   void test_update_rejects_unknown_dependency()

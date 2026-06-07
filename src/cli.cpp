@@ -42,11 +42,14 @@ namespace forge::cli
         << "Usage:\n"
         << "  forge <command>\n"
         << "  forge new <name>\n"
-        << "  forge box <create|inspect|verify|extract|publish> [path]\n"
+        << "  forge box create [target]\n"
+        << "  forge box <inspect|verify|extract|publish> <path>\n"
         << "  forge update [dependency]\n"
         << "  forge build [target]\n"
         << "  forge bump <major|minor|patch>\n"
         << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n"
+        << "  forge release [target]\n"
+        << "  forge prepare-release [target]\n"
         << "  forge run [target] [-- arguments...]\n"
         << "  forge test [target] [-- arguments...]\n"
         << "  forge --help\n"
@@ -133,9 +136,12 @@ namespace forge::cli
 
     if (arguments.front() == "box")
     {
-      if (arguments.size() == 2 && arguments[1] == "create")
+      if ((arguments.size() == 2 || arguments.size() == 3) && arguments[1] == "create")
       {
-        return create_box(working_directory, output, error);
+        const auto target = arguments.size() == 3
+          ? std::optional<std::string> { arguments[2] }
+          : std::nullopt;
+        return create_box(working_directory, target, output, error);
       }
 
       if (arguments.size() == 3 && arguments[1] == "inspect")
@@ -158,7 +164,8 @@ namespace forge::cli
         return publish_box(arguments[2], working_directory, output, error);
       }
 
-      error << "forge: usage: forge box <create|inspect|verify|extract|publish> [path]\n";
+      error << "forge: usage: forge box create [target]\n";
+      error << "forge: usage: forge box <inspect|verify|extract|publish> <path>\n";
       return 2;
     }
 
@@ -311,6 +318,32 @@ namespace forge::cli
       return build_project(working_directory, options, output, error);
     }
 
+    if (arguments.front() == "release" || arguments.front() == "prepare-release")
+    {
+      if (arguments.size() == 2 && arguments[1].starts_with("-"))
+      {
+        error << "forge: commands do not accept arguments yet\n";
+        return 2;
+      }
+
+      if (arguments.size() > 2)
+      {
+        error << "forge: usage: forge " << arguments.front() << " [target]\n";
+        return 2;
+      }
+
+      const auto target = arguments.size() == 2
+        ? std::optional<std::string> { arguments[1] }
+        : std::nullopt;
+
+      if (arguments.front() == "release")
+      {
+        return release_project(working_directory, target, output, error);
+      }
+
+      return prepare_release(working_directory, target, output, error);
+    }
+
     if (arguments.size() != 1)
     {
       error << "forge: commands do not accept arguments yet\n";
@@ -325,16 +358,6 @@ namespace forge::cli
     if (arguments.front() == "clean")
     {
       return clean_project(working_directory, output, error);
-    }
-
-    if (arguments.front() == "release")
-    {
-      return release_project(working_directory, output, error);
-    }
-
-    if (arguments.front() == "prepare-release")
-    {
-      return prepare_release(working_directory, output, error);
     }
 
     error << "forge: '" << arguments.front() << "' is not implemented yet\n";

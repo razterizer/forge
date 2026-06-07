@@ -17,6 +17,8 @@
   targets, with missing-target and cycle validation.
 - Added `forge test [target]` for building and running marked named test
   executables with argument forwarding and aggregate results.
+- Added named-target boxing and release preparation, including recursively
+  embedded internal dependency boxes and staged internal dynamic libraries.
 
 ## 0.2.0
 

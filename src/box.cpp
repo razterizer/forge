@@ -1216,10 +1216,27 @@ namespace forge
                  std::ostream& output,
                  std::ostream& error)
   {
-    return create_box(project_directory, run_process, output, error);
+    return create_box(project_directory, std::nullopt, run_process, output, error);
   }
 
   int create_box(const std::filesystem::path& project_directory,
+                 const std::optional<std::string>& target,
+                 std::ostream& output,
+                 std::ostream& error)
+  {
+    return create_box(project_directory, target, run_process, output, error);
+  }
+
+  int create_box(const std::filesystem::path& project_directory,
+                 const ProcessRunner& process_runner,
+                 std::ostream& output,
+                 std::ostream& error)
+  {
+    return create_box(project_directory, std::nullopt, process_runner, output, error);
+  }
+
+  int create_box(const std::filesystem::path& project_directory,
+                 const std::optional<std::string>& target,
                  const ProcessRunner& process_runner,
                  std::ostream& output,
                  std::ostream& error)
@@ -1231,7 +1248,15 @@ namespace forge
       return 2;
     }
 
-    if (build_project(project_directory, process_runner, output, error) != 0)
+    if (!select_recipe_target(recipe, target, error))
+    {
+      return 2;
+    }
+
+    BuildOptions options;
+    options.target = target;
+
+    if (build_project(project_directory, options, process_runner, output, error) != 0)
     {
       return 2;
     }
@@ -1242,7 +1267,14 @@ namespace forge
       return 2;
     }
 
-    auto built_artifact = project_directory / ".forge" / "build" / recipe.name;
+    auto build_directory = project_directory / ".forge" / "build";
+
+    if (recipe.selected_target)
+    {
+      build_directory /= *recipe.selected_target;
+    }
+
+    auto built_artifact = build_directory / recipe.name;
     std::optional<std::filesystem::path> built_import_library;
 
 #ifdef _WIN32
@@ -1252,9 +1284,8 @@ namespace forge
     }
     else if (recipe.type == "dynamic_library")
     {
-      built_artifact = project_directory / ".forge" / "build" / dynamic_library_filename(recipe.name);
-      built_import_library =
-        project_directory / ".forge" / "build" / import_library_filename(recipe.name);
+      built_artifact = build_directory / dynamic_library_filename(recipe.name);
+      built_import_library = build_directory / import_library_filename(recipe.name);
     }
     else
     {
@@ -1263,11 +1294,11 @@ namespace forge
 #else
     if (recipe.type == "static_library")
     {
-      built_artifact = project_directory / ".forge" / "build" / ("lib" + recipe.name + ".a");
+      built_artifact = build_directory / ("lib" + recipe.name + ".a");
     }
     else if (recipe.type == "dynamic_library")
     {
-      built_artifact = project_directory / ".forge" / "build" / dynamic_library_filename(recipe.name);
+      built_artifact = build_directory / dynamic_library_filename(recipe.name);
     }
 #endif
 
@@ -1507,34 +1538,80 @@ namespace forge
     }
 
     std::vector<BoxDependency> dependencies;
+    std::set<std::string> dependency_names;
+
+    const auto stage_dependency =
+      [&](const std::filesystem::path& source, std::string_view dependency_name) -> bool
+      {
+        if (!dependency_names.insert(std::string { dependency_name }).second)
+        {
+          error << "forge: box dependency name '" << dependency_name << "' is duplicated\n";
+          return false;
+        }
+
+        const auto dependency_path =
+          std::filesystem::path { "dependencies" } / (std::string { dependency_name } + ".cbox");
+        const auto destination = staging_directory / dependency_path;
+        BoxMetadata metadata;
+        std::string checksum;
+        std::error_code dependency_error;
+        std::filesystem::create_directories(destination.parent_path(), dependency_error);
+
+        if (dependency_error
+            || !copy_file(source, destination, error)
+            || !sha256_file(destination, checksum, error)
+            || !read_box_metadata(source, project_directory, process_runner, metadata, error))
+        {
+          error << "forge: could not package dependency '" << dependency_name << "'\n";
+          return false;
+        }
+
+        dependencies.push_back(BoxDependency
+          {
+            metadata.name,
+            metadata.version,
+            metadata.type,
+            dependency_path,
+            checksum
+          });
+        return true;
+      };
+
+    for (const auto& dependency_name : recipe.selected_internal_dependencies)
+    {
+      Recipe dependency_recipe;
+
+      if (!read_recipe(project_directory / "forge.recipe.toml", dependency_recipe, error)
+          || !select_recipe_target(dependency_recipe, dependency_name, error)
+          || create_box(
+            project_directory,
+            dependency_name,
+            process_runner,
+            output,
+            error
+          ) != 0)
+      {
+        return 2;
+      }
+
+      const auto source = project_directory / ".forge" / "boxes"
+        / (dependency_recipe.name + "-" + package_version(dependency_recipe) + "-"
+           + target_os() + "-" + target_arch() + ".cbox");
+
+      if (!stage_dependency(source, dependency_name))
+      {
+        return 2;
+      }
+    }
 
     for (const auto& dependency : recipe.dependencies)
     {
       const auto source = project_directory / ".forge" / "dependency-boxes" / (dependency.name + ".cbox");
-      const auto dependency_path = std::filesystem::path { "dependencies" } / (dependency.name + ".cbox");
-      const auto destination = staging_directory / dependency_path;
-      BoxMetadata metadata;
-      std::string checksum;
-      std::error_code dependency_error;
-      std::filesystem::create_directories(destination.parent_path(), dependency_error);
 
-      if (dependency_error
-          || !copy_file(source, destination, error)
-          || !sha256_file(destination, checksum, error)
-          || !read_box_metadata(source, project_directory, process_runner, metadata, error))
+      if (!stage_dependency(source, dependency.name))
       {
-        error << "forge: could not package dependency '" << dependency.name << "'\n";
         return 2;
       }
-
-      dependencies.push_back(BoxDependency
-        {
-          metadata.name,
-          metadata.version,
-          metadata.type,
-          dependency_path,
-          checksum
-        });
     }
 
     std::optional<ToolchainIdentity> toolchain;
@@ -1577,7 +1654,7 @@ namespace forge
     }
     else if (recipe.type != "header_only"
              && !read_toolchain(
-               project_directory / ".forge" / "build" / "forge-toolchain.toml",
+               build_directory / "forge-toolchain.toml",
                toolchain.emplace(),
                error
              ))

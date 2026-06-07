@@ -250,7 +250,7 @@ namespace forge
       return true;
     }
 
-    std::string target()
+    std::string hosted_target()
     {
       std::string os;
       std::string architecture;
@@ -316,7 +316,7 @@ namespace forge
       replace_placeholder(tag, "<name>", recipe.name);
       replace_placeholder(tag, "<version>", recipe.version);
       replace_placeholder(tag, "<curr-date>", current_date());
-      replace_placeholder(tag, "<target>", target());
+      replace_placeholder(tag, "<target>", hosted_target());
       replace_placeholder(tag, "<configuration>", "release");
 
       if (tag.find("<build-nr>") != std::string::npos)
@@ -462,7 +462,15 @@ namespace forge
                       std::ostream& output,
                       std::ostream& error)
   {
-    return release_project(project_directory, run_process, output, error);
+    return release_project(project_directory, std::nullopt, run_process, output, error);
+  }
+
+  int release_project(const std::filesystem::path& project_directory,
+                      const std::optional<std::string>& target,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    return release_project(project_directory, target, run_process, output, error);
   }
 
   int release_project(const std::filesystem::path& project_directory,
@@ -470,14 +478,37 @@ namespace forge
                       std::ostream& output,
                       std::ostream& error)
   {
-    if (build_project(project_directory, process_runner, output, error) != 0)
+    return release_project(project_directory, std::nullopt, process_runner, output, error);
+  }
+
+  int release_project(const std::filesystem::path& project_directory,
+                      const std::optional<std::string>& target,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    Recipe recipe;
+
+    if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
     {
       return 2;
     }
 
-    Recipe recipe;
+    if (!select_recipe_target(recipe, target, error))
+    {
+      return 2;
+    }
 
-    if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
+    if (recipe.type != "executable")
+    {
+      error << "forge: release target '" << recipe.name << "' is not executable\n";
+      return 2;
+    }
+
+    BuildOptions options;
+    options.target = target;
+
+    if (build_project(project_directory, options, process_runner, output, error) != 0)
     {
       return 2;
     }
@@ -488,7 +519,14 @@ namespace forge
       return 2;
     }
 
-    auto executable = project_directory / ".forge" / "build" / recipe.name;
+    auto build_directory = project_directory / ".forge" / "build";
+
+    if (recipe.selected_target)
+    {
+      build_directory /= *recipe.selected_target;
+    }
+
+    auto executable = build_directory / recipe.name;
 
 #ifdef _WIN32
     executable += ".exe";
@@ -526,7 +564,7 @@ namespace forge
     }
 
     if (!copy_runtime_dependencies(
-      project_directory / ".forge" / "build" / "runtime",
+      build_directory / "runtime",
 #ifdef _WIN32
       staging_directory,
 #else
@@ -636,7 +674,15 @@ namespace forge
                       std::ostream& output,
                       std::ostream& error)
   {
-    return prepare_release(project_directory, run_process, output, error);
+    return prepare_release(project_directory, std::nullopt, run_process, output, error);
+  }
+
+  int prepare_release(const std::filesystem::path& project_directory,
+                      const std::optional<std::string>& target,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    return prepare_release(project_directory, target, run_process, output, error);
   }
 
   int prepare_release(const std::filesystem::path& project_directory,
@@ -644,9 +690,23 @@ namespace forge
                       std::ostream& output,
                       std::ostream& error)
   {
+    return prepare_release(project_directory, std::nullopt, process_runner, output, error);
+  }
+
+  int prepare_release(const std::filesystem::path& project_directory,
+                      const std::optional<std::string>& target,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
+    {
+      return 2;
+    }
+
+    if (!select_recipe_target(recipe, target, error))
     {
       return 2;
     }
@@ -663,14 +723,14 @@ namespace forge
 
     if (recipe.type == "executable")
     {
-      if (release_project(project_directory, process_runner, output, error) != 0)
+      if (release_project(project_directory, target, process_runner, output, error) != 0)
       {
         return 2;
       }
 
       const auto archive = release_directory / (recipe.name + "-" + recipe.version + ".zip");
       const auto hosted_archive =
-        release_directory / (recipe.name + "-" + recipe.version + "-" + target() + ".zip");
+        release_directory / (recipe.name + "-" + recipe.version + "-" + hosted_target() + ".zip");
       std::filesystem::remove(hosted_archive, filesystem_error);
       filesystem_error.clear();
       std::filesystem::rename(archive, hosted_archive, filesystem_error);
@@ -686,7 +746,7 @@ namespace forge
              || recipe.type == "imported_library"
              || recipe.type == "header_only")
     {
-      if (create_box(project_directory, process_runner, output, error) != 0)
+      if (create_box(project_directory, target, process_runner, output, error) != 0)
       {
         return 2;
       }
