@@ -25,6 +25,15 @@ namespace forge
     std::string type;
   };
 
+  struct ImportProfile
+  {
+    std::string target;
+    std::vector<std::filesystem::path> public_headers;
+    std::vector<std::filesystem::path> static_libraries;
+    std::vector<std::filesystem::path> dynamic_libraries;
+    std::vector<std::filesystem::path> import_libraries;
+  };
+
   struct Recipe
   {
     std::string name;
@@ -34,6 +43,7 @@ namespace forge
     std::optional<int> build_number;
     std::vector<std::filesystem::path> sources;
     std::vector<std::filesystem::path> public_headers;
+    std::vector<ImportProfile> imports;
     std::vector<Dependency> dependencies;
     std::vector<std::filesystem::path> release_files;
   };

@@ -111,6 +111,11 @@ namespace forge
 #endif
     }
 
+    std::string current_target()
+    {
+      return target_os() + "-" + target_arch();
+    }
+
     std::filesystem::path dynamic_library_filename(std::string_view name)
     {
 #ifdef __APPLE__
@@ -213,6 +218,161 @@ namespace forge
           std::string { kind },
           checksum
         });
+      return true;
+    }
+
+    bool is_safe_project_path(const std::filesystem::path& path)
+    {
+      if (path.empty() || path.is_absolute() || path.has_root_path())
+      {
+        return false;
+      }
+
+      for (const auto& component : path)
+      {
+        if (component == "..")
+        {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    bool stage_imported_file(const std::filesystem::path& project_directory,
+                             const std::filesystem::path& source_path,
+                             const std::filesystem::path& artifact_path,
+                             std::string_view kind,
+                             const std::filesystem::path& staging_directory,
+                             std::vector<BoxArtifact>& artifacts,
+                             std::ostream& error)
+    {
+      if (!is_safe_project_path(source_path)
+          || std::filesystem::is_symlink(project_directory / source_path)
+          || !std::filesystem::is_regular_file(project_directory / source_path))
+      {
+        error << "forge: imported artifact '" << source_path.generic_string()
+              << "' must be a project-relative file\n";
+        return false;
+      }
+
+      for (const auto& artifact : artifacts)
+      {
+        if (artifact.path == artifact_path)
+        {
+          error << "forge: imported artifacts collide at '" << artifact_path.generic_string()
+                << "'\n";
+          return false;
+        }
+      }
+
+      return stage_artifact(
+        project_directory / source_path,
+        artifact_path,
+        kind,
+        staging_directory,
+        artifacts,
+        error
+      );
+    }
+
+    bool stage_imported_headers(const std::filesystem::path& project_directory,
+                                const std::filesystem::path& source_path,
+                                const std::filesystem::path& staging_directory,
+                                std::vector<BoxArtifact>& artifacts,
+                                std::ostream& error)
+    {
+      if (!is_safe_project_path(source_path))
+      {
+        error << "forge: imported header path '" << source_path.generic_string()
+              << "' must stay inside the project\n";
+        return false;
+      }
+
+      const auto source = project_directory / source_path;
+
+      if (std::filesystem::is_regular_file(source))
+      {
+        return stage_imported_file(
+          project_directory,
+          source_path,
+          std::filesystem::path { "include" } / source_path.filename(),
+          "public_header",
+          staging_directory,
+          artifacts,
+          error
+        );
+      }
+
+      if (!std::filesystem::is_directory(source))
+      {
+        error << "forge: imported header path '" << source_path.generic_string()
+              << "' does not exist\n";
+        return false;
+      }
+
+      for (const auto& entry : std::filesystem::recursive_directory_iterator { source })
+      {
+        if (entry.is_symlink())
+        {
+          error << "forge: imported header directories may contain only regular files\n";
+          return false;
+        }
+
+        if (entry.is_directory())
+        {
+          continue;
+        }
+
+        if (!entry.is_regular_file())
+        {
+          error << "forge: imported header directories may contain only regular files\n";
+          return false;
+        }
+
+        const auto relative = entry.path().lexically_relative(source);
+
+        if (!stage_imported_file(
+          project_directory,
+          entry.path().lexically_relative(project_directory),
+          std::filesystem::path { "include" } / relative,
+          "public_header",
+          staging_directory,
+          artifacts,
+          error
+        ))
+        {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    bool stage_imported_libraries(const std::filesystem::path& project_directory,
+                                  const std::vector<std::filesystem::path>& sources,
+                                  const std::filesystem::path& destination,
+                                  std::string_view kind,
+                                  const std::filesystem::path& staging_directory,
+                                  std::vector<BoxArtifact>& artifacts,
+                                  std::ostream& error)
+    {
+      for (const auto& source : sources)
+      {
+        if (!stage_imported_file(
+          project_directory,
+          source,
+          destination / source.filename(),
+          kind,
+          staging_directory,
+          artifacts,
+          error
+        ))
+        {
+          return false;
+        }
+      }
+
       return true;
     }
 
@@ -577,6 +737,7 @@ namespace forge
           || (manifest.type != "executable"
               && manifest.type != "static_library"
               && manifest.type != "dynamic_library"
+              && manifest.type != "imported_library"
               && manifest.type != "header_only")
           || manifest.artifacts.empty())
       {
@@ -684,6 +845,11 @@ namespace forge
                   || import_library_count != (manifest.os == "windows" ? 1 : 0)
                   || header_count == 0
                   || dynamic_library_count + import_library_count + header_count
+                     != manifest.artifacts.size()))
+          || (manifest.type == "imported_library"
+              && (header_count == 0
+                  || library_count + dynamic_library_count + import_library_count == 0
+                  || library_count + dynamic_library_count + import_library_count + header_count
                      != manifest.artifacts.size()))
           || (manifest.type == "header_only"
               && (header_count == 0 || header_count != manifest.artifacts.size())))
@@ -912,14 +1078,14 @@ namespace forge
                  std::ostream& output,
                  std::ostream& error)
   {
-    if (build_project(project_directory, process_runner, output, error) != 0)
+    Recipe recipe;
+
+    if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
     {
       return 2;
     }
 
-    Recipe recipe;
-
-    if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
+    if (build_project(project_directory, process_runner, output, error) != 0)
     {
       return 2;
     }
@@ -959,7 +1125,9 @@ namespace forge
     }
 #endif
 
-    if (recipe.type != "header_only" && !std::filesystem::is_regular_file(built_artifact))
+    if (recipe.type != "header_only"
+        && recipe.type != "imported_library"
+        && !std::filesystem::is_regular_file(built_artifact))
     {
       error << "forge: built artifact '" << built_artifact.string() << "' does not exist\n";
       return 2;
@@ -1087,6 +1255,83 @@ namespace forge
         }
       }
     }
+    else if (recipe.type == "imported_library")
+    {
+      if (!recipe.dependencies.empty())
+      {
+        error << "forge: imported_library dependencies are not supported yet\n";
+        return 2;
+      }
+
+      const auto profile = std::find_if(
+        recipe.imports.begin(),
+        recipe.imports.end(),
+        [](const ImportProfile& candidate)
+        {
+          return candidate.target == current_target();
+        }
+      );
+
+      if (profile == recipe.imports.end())
+      {
+        error << "forge: imported_library has no import profile for " << current_target() << '\n';
+        return 2;
+      }
+
+      if (profile->public_headers.empty()
+          || (profile->static_libraries.empty()
+              && profile->dynamic_libraries.empty()
+              && profile->import_libraries.empty()))
+      {
+        error << "forge: imported_library profile requires headers and at least one library\n";
+        return 2;
+      }
+
+      for (const auto& headers : profile->public_headers)
+      {
+        if (!stage_imported_headers(
+          project_directory,
+          headers,
+          staging_directory,
+          artifacts,
+          error
+        ))
+        {
+          return 2;
+        }
+      }
+
+      if (!stage_imported_libraries(
+        project_directory,
+        profile->static_libraries,
+        "lib",
+        "static_library",
+        staging_directory,
+        artifacts,
+        error
+      )
+          || !stage_imported_libraries(
+            project_directory,
+            profile->dynamic_libraries,
+            "runtime",
+            "dynamic_library",
+            staging_directory,
+            artifacts,
+            error
+          )
+          || !stage_imported_libraries(
+            project_directory,
+            profile->import_libraries,
+            "lib",
+            "import_library",
+            staging_directory,
+            artifacts,
+            error
+          ))
+      {
+        return 2;
+      }
+    }
     else
     {
       error << "forge: unsupported project type '" << recipe.type << "'\n";
@@ -1160,6 +1405,20 @@ namespace forge
         archive_arguments.push_back("lib");
       }
       archive_arguments.push_back("runtime");
+    }
+    else if (recipe.type == "imported_library")
+    {
+      archive_arguments.push_back("include");
+
+      if (std::filesystem::is_directory(staging_directory / "lib"))
+      {
+        archive_arguments.push_back("lib");
+      }
+
+      if (std::filesystem::is_directory(staging_directory / "runtime"))
+      {
+        archive_arguments.push_back("runtime");
+      }
     }
     else
     {

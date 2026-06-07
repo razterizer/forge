@@ -4,7 +4,7 @@ A `.cbox` is a ZIP archive containing one reusable C++ package for one target.
 It is distinct from an application release archive.
 
 The implemented profiles support executable, static-library, dynamic-library,
-and header-only packages:
+imported-library, and header-only packages:
 
 ```text
 hello-0.1.0-macos-arm64.cbox
@@ -79,6 +79,11 @@ contain one `static_library` artifact under `lib/` and one or more
 artifacts under `include/`. Windows dynamic-library boxes additionally contain
 one `import_library` artifact under `lib/`. Header-only boxes contain one or more
 `public_header` artifacts and no library artifact.
+
+Imported-library boxes contain one or more `public_header` artifacts and any
+number of `static_library`, `dynamic_library`, and `import_library` artifacts.
+They package an existing target-specific SDK or precompiled binary layout
+without requiring Forge to build it.
 
 The manifest determines package identity. The archive filename is only a
 human-readable label.

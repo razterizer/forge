@@ -2,7 +2,9 @@
 
 ## 0.3.0
 
-- Describe changes.
+- Added target-specific `imported_library` recipes that package local vendor
+  headers and precompiled static, dynamic, and import libraries without
+  invoking a compiler.
 
 ## 0.2.0
 

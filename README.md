@@ -188,6 +188,27 @@ Forge generates and compiles one private validation translation unit per public
 header. These temporary sources remain under `.forge/generated/`; header-only
 boxes contain only the declared headers.
 
+Imported-library projects package existing vendor SDKs and precompiled
+artifacts without compiling them:
+
+```toml
+[project]
+name = "vendor-sdk"
+version = "4.2.0"
+type = "imported_library"
+
+[import.windows-x86_64]
+public_headers = ["vendor/include"]
+dynamic_libraries = ["vendor/bin/sdk.dll"]
+import_libraries = ["vendor/lib/sdk.lib"]
+```
+
+Each `[import.<os>-<arch>]` profile is target-specific. Header directory
+contents are mapped under `include/`; static and import libraries are mapped
+under `lib/`; dynamic-library runtimes are mapped under `runtime/`.
+`forge box create` packages the matching current-target profile without
+invoking a compiler.
+
 Projects may use local static-library, dynamic-library, and header-only
 dependencies:
 
@@ -480,7 +501,7 @@ must match one of those patterns, or the generated workflow triggers must be
 customized, to publish hosted artifacts.
 
 Create, inspect, verify, publish locally, and extract an executable,
-static-library, dynamic-library, or header-only box:
+static-library, dynamic-library, imported-library, or header-only box:
 
 ```sh
 /path/to/forge/build/dev/forge box create

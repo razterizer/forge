@@ -20,6 +20,8 @@ rules:
 - Executables require at least one source path.
 - Static libraries require source paths and public headers.
 - Dynamic libraries require source paths and public headers.
+- Imported libraries require a matching target-specific import profile with
+  header roots and at least one precompiled library artifact.
 - Header-only projects require public headers and an empty source-path array.
 - Public headers must remain under `include/`.
 - Build numbers must be non-negative.
@@ -31,6 +33,20 @@ rules:
   resolutions to `forge.lock.toml`; normal builds require those locked entries.
 
 `shared_library` remains accepted as a legacy alias for `dynamic_library`.
+
+Imported-library profiles use `[import.<os>-<arch>]`, for example:
+
+```toml
+[project]
+name = "vendor-sdk"
+version = "4.2.0"
+type = "imported_library"
+
+[import.windows-x86_64]
+public_headers = ["vendor/include"]
+dynamic_libraries = ["vendor/bin/sdk.dll"]
+import_libraries = ["vendor/lib/sdk.lib"]
+```
 
 ## Taplo and VS Code
 

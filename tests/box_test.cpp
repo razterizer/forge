@@ -64,6 +64,17 @@ namespace
     };
   }
 
+  std::string current_target()
+  {
+#ifdef _WIN32
+    return "windows-x86_64";
+#elif __APPLE__
+    return "macos-arm64";
+#else
+    return "linux-x86_64";
+#endif
+  }
+
   std::filesystem::path write_test_box(const std::filesystem::path& directory)
   {
     const auto staging = directory / "archive-staging";
@@ -270,6 +281,63 @@ namespace
     expect(std::filesystem::exists(staging / "lib/hello.lib"), "box stages the import library");
   }
 #endif
+
+  void test_create_imported_library_box_without_building()
+  {
+    TemporaryDirectory directory;
+    std::filesystem::create_directories(directory.path() / "vendor/include/vendor");
+    std::filesystem::create_directories(directory.path() / "vendor/lib");
+    std::filesystem::create_directories(directory.path() / "vendor/runtime");
+    std::ofstream { directory.path() / "vendor/include/vendor/sdk.h" } << "int sdk();\n";
+    std::ofstream { directory.path() / "vendor/lib/sdk.a" };
+    std::ofstream { directory.path() / "vendor/runtime/sdk.so" };
+    std::ofstream { directory.path() / "forge.recipe.toml" }
+      << "[project]\n"
+      << "name = \"vendor-sdk\"\n"
+      << "version = \"4.2.0\"\n"
+      << "type = \"imported_library\"\n\n"
+      << "[import." << current_target() << "]\n"
+      << "public_headers = [\"vendor/include\"]\n"
+      << "static_libraries = [\"vendor/lib/sdk.a\"]\n"
+      << "dynamic_libraries = [\"vendor/runtime/sdk.so\"]\n";
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&commands](const std::vector<std::string>& command,
+                  const std::filesystem::path&,
+                  std::ostream&)
+      {
+        commands.push_back(command);
+        return 0;
+      };
+
+    expect(
+      forge::create_box(directory.path(), runner, output, error) == 0,
+      "imported-library box creation succeeds"
+    );
+    expect(commands.size() == 1, "imported-library box creation skips configure and build");
+
+    std::filesystem::path staging;
+
+    for (const auto& entry : std::filesystem::directory_iterator {
+      directory.path() / ".forge/boxes/staging"
+    })
+    {
+      staging = entry.path();
+    }
+
+    const auto manifest = read_file(staging / "cbox.toml");
+    expect(contains(manifest, "type = \"imported_library\""), "manifest identifies an imported library");
+    expect(contains(manifest, "path = \"include/vendor/sdk.h\""), "manifest declares imported headers");
+    expect(contains(manifest, "path = \"lib/sdk.a\""), "manifest declares imported static libraries");
+    expect(contains(manifest, "path = \"runtime/sdk.so\""), "manifest declares imported runtime libraries");
+    expect(std::filesystem::exists(staging / "include/vendor/sdk.h"), "box stages imported headers");
+    expect(std::filesystem::exists(staging / "lib/sdk.a"), "box stages imported static libraries");
+    expect(std::filesystem::exists(staging / "runtime/sdk.so"), "box stages imported runtime libraries");
+    expect(error.str().empty(), "imported-library box creation does not write an error");
+  }
 
   void test_inspect_prints_manifest()
   {
@@ -524,6 +592,7 @@ int main()
 #ifdef _WIN32
   test_create_windows_dynamic_library_box();
 #endif
+  test_create_imported_library_box_without_building();
   test_inspect_prints_manifest();
   test_verify_rejects_checksum_mismatch();
   test_verify_rejects_unexpected_file();

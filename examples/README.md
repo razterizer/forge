@@ -7,6 +7,8 @@ run:
   to create a recipe with an empty source list.
 - `header-only/` packages and validates a header-only library.
 - `static-library/` builds and packages a static library.
+- `imported-library/` packages local precompiled artifacts for `macos-arm64`
+  without building them.
 - `executable/` builds and runs an executable with multiple source files.
 
 From an example containing a recipe:

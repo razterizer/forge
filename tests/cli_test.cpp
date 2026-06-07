@@ -86,6 +86,17 @@ namespace
     file << contents;
   }
 
+  std::string current_target()
+  {
+#ifdef _WIN32
+    return "windows-x86_64";
+#elif __APPLE__
+    return "macos-arm64";
+#else
+    return "linux-x86_64";
+#endif
+  }
+
   void test_help()
   {
     std::ostringstream output;
@@ -1004,6 +1015,69 @@ namespace
     );
   }
 
+  void test_imported_library_box_round_trip()
+  {
+    TemporaryDirectory directory;
+    const auto project = directory.path() / "vendor-sdk";
+    write_file(
+      project / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"vendor-sdk\"\n"
+      "version = \"4.2.0\"\n"
+      "type = \"imported_library\"\n\n"
+      "[import." + current_target() + "]\n"
+      "public_headers = [\"vendor/include\"]\n"
+      "static_libraries = [\"vendor/lib/sdk.a\"]\n"
+      "dynamic_libraries = [\"vendor/runtime/sdk.so\"]\n"
+    );
+    write_file(project / "vendor/include/vendor/sdk.h", "int sdk();\n");
+    write_file(project / "vendor/lib/sdk.a", "static library\n");
+    write_file(project / "vendor/runtime/sdk.so", "dynamic library\n");
+    constexpr std::array create_arguments {
+      std::string_view { "box" },
+      std::string_view { "create" }
+    };
+    std::ostringstream create_output;
+    std::ostringstream create_error;
+
+    expect(
+      forge::cli::run(create_arguments, project, create_output, create_error) == 0,
+      "box create succeeds for an imported library"
+    );
+    expect(
+      !std::filesystem::exists(project / ".forge/generated/CMakeLists.txt"),
+      "imported-library box creation does not generate a build"
+    );
+
+    std::filesystem::path box;
+
+    for (const auto& entry : std::filesystem::directory_iterator { project / ".forge/boxes" })
+    {
+      if (entry.path().extension() == ".cbox")
+      {
+        box = entry.path();
+      }
+    }
+
+    expect(!box.empty(), "imported-library box creation produces a cbox archive");
+    const auto box_string = box.string();
+    const std::array verify_arguments {
+      std::string_view { "box" },
+      std::string_view { "verify" },
+      std::string_view { box_string }
+    };
+    std::ostringstream verify_output;
+    std::ostringstream verify_error;
+
+    expect(
+      forge::cli::run(verify_arguments, project, verify_output, verify_error) == 0,
+      "imported-library box verifies"
+    );
+    expect(contains(verify_output.str(), "Verified"), "imported-library verification reports success");
+    expect(create_error.str().empty(), "imported-library box creation does not write an error");
+    expect(verify_error.str().empty(), "imported-library verification does not write an error");
+  }
+
   void test_run_with_local_dependencies()
   {
     TemporaryDirectory directory;
@@ -1758,6 +1832,7 @@ int main()
   test_box_round_trip();
   test_static_library_box_round_trip();
   test_header_only_box_round_trip();
+  test_imported_library_box_round_trip();
   test_run_with_local_dependencies();
   test_run_with_local_box_dependency();
   test_run_with_downloadable_box_dependency();

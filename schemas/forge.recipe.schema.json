@@ -2,12 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/razterizer/forge/main/schemas/forge.recipe.schema.json",
   "title": "Forge recipe",
-  "description": "Describes a C++ project built and packaged by Forge.",
+  "description": "Describes a C++ project built, imported, and packaged by Forge.",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "project",
-    "sources"
+    "project"
   ],
   "properties": {
     "project": {
@@ -16,8 +15,7 @@
       "required": [
         "name",
         "version",
-        "type",
-        "cpp_std"
+        "type"
       ],
       "properties": {
         "name": {
@@ -38,9 +36,10 @@
             "static_library",
             "dynamic_library",
             "shared_library",
+            "imported_library",
             "header_only"
           ],
-          "description": "Kind of project Forge builds and packages. shared_library is a legacy alias for dynamic_library."
+          "description": "Kind of project Forge builds or imports and packages. shared_library is a legacy alias for dynamic_library."
         },
         "cpp_std": {
           "type": "integer",
@@ -141,6 +140,54 @@
         ]
       }
     },
+    "import": {
+      "type": "object",
+      "description": "Target-specific local artifacts packaged by an imported_library project.",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^(windows|macos|linux)-(x86|x86_64|arm64)$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "public_headers"
+        ],
+        "properties": {
+          "public_headers": {
+            "$ref": "#/$defs/projectPaths",
+            "minItems": 1,
+            "description": "Project-relative header files or directory roots mapped under include/."
+          },
+          "static_libraries": {
+            "$ref": "#/$defs/projectPaths",
+            "minItems": 1,
+            "description": "Project-relative precompiled static libraries mapped under lib/."
+          },
+          "dynamic_libraries": {
+            "$ref": "#/$defs/projectPaths",
+            "minItems": 1,
+            "description": "Project-relative dynamic-library runtime files mapped under runtime/."
+          },
+          "import_libraries": {
+            "$ref": "#/$defs/projectPaths",
+            "minItems": 1,
+            "description": "Project-relative Windows import libraries mapped under lib/."
+          }
+        },
+        "anyOf": [
+          {
+            "required": ["static_libraries"]
+          },
+          {
+            "required": ["dynamic_libraries"]
+          },
+          {
+            "required": ["import_libraries"]
+          }
+        ]
+      }
+    },
     "release": {
       "type": "object",
       "description": "Additional project files and directories included in application releases.",
@@ -161,6 +208,34 @@
             "type": "object",
             "properties": {
               "type": {
+                "not": {
+                  "const": "imported_library"
+                }
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "project": {
+            "required": [
+              "cpp_std"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "project": {
+            "type": "object",
+            "properties": {
+              "type": {
                 "const": "executable"
               }
             },
@@ -171,6 +246,9 @@
         }
       },
       "then": {
+        "required": [
+          "sources"
+        ],
         "properties": {
           "sources": {
             "type": "object",
@@ -201,6 +279,9 @@
         }
       },
       "then": {
+        "required": [
+          "sources"
+        ],
         "properties": {
           "sources": {
             "type": "object",
@@ -241,6 +322,9 @@
         }
       },
       "then": {
+        "required": [
+          "sources"
+        ],
         "properties": {
           "sources": {
             "type": "object",
@@ -278,6 +362,9 @@
         }
       },
       "then": {
+        "required": [
+          "sources"
+        ],
         "properties": {
           "sources": {
             "type": "object",
@@ -295,6 +382,33 @@
               }
             }
           }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "project": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "imported_library"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "import"
+        ],
+        "not": {
+          "required": [
+            "sources"
+          ]
         }
       }
     }

@@ -1,7 +1,9 @@
 #include "recipe.h"
 
+#include <algorithm>
 #include <charconv>
 #include <fstream>
+#include <iterator>
 #include <string_view>
 
 namespace forge
@@ -322,6 +324,47 @@ namespace forge
       {
         valid = parse_sources(value, recipe.public_headers);
       }
+      else if (section.starts_with("import."))
+      {
+        const auto target = section.substr(std::string_view { "import." }.size());
+        auto profile = std::find_if(
+          recipe.imports.begin(),
+          recipe.imports.end(),
+          [&target](const ImportProfile& candidate)
+          {
+            return candidate.target == target;
+          }
+        );
+
+        if (profile == recipe.imports.end())
+        {
+          ImportProfile imported;
+          imported.target = target;
+          recipe.imports.push_back(std::move(imported));
+          profile = std::prev(recipe.imports.end());
+        }
+
+        if (key == "public_headers")
+        {
+          valid = parse_sources(value, profile->public_headers);
+        }
+        else if (key == "static_libraries")
+        {
+          valid = parse_sources(value, profile->static_libraries);
+        }
+        else if (key == "dynamic_libraries")
+        {
+          valid = parse_sources(value, profile->dynamic_libraries);
+        }
+        else if (key == "import_libraries")
+        {
+          valid = parse_sources(value, profile->import_libraries);
+        }
+        else
+        {
+          valid = false;
+        }
+      }
       else if (section == "dependencies")
       {
         Dependency dependency;
@@ -345,7 +388,10 @@ namespace forge
       }
     }
 
-    if (recipe.name.empty() || recipe.version.empty() || recipe.type.empty() || recipe.cpp_standard == 0)
+    if (recipe.name.empty()
+        || recipe.version.empty()
+        || recipe.type.empty()
+        || (recipe.type != "imported_library" && recipe.cpp_standard == 0))
     {
       error << "forge: recipe is missing required project fields\n";
       return false;

@@ -1,0 +1,11 @@
+#:schema https://raw.githubusercontent.com/razterizer/forge/main/schemas/forge.recipe.schema.json
+
+[project]
+name = "vendor-sdk"
+version = "4.2.0"
+type = "imported_library"
+
+[import.macos-arm64]
+public_headers = ["vendor/include"]
+static_libraries = ["vendor/lib/libvendor.a"]
+dynamic_libraries = ["vendor/runtime/libvendor.dylib"]

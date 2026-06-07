@@ -6,6 +6,7 @@
 #include "sha256.h"
 
 #include <algorithm>
+#include <array>
 #include <fstream>
 #include <map>
 #include <optional>
@@ -468,6 +469,100 @@ namespace forge
     std::string current_target()
     {
       return target_os() + "-" + target_arch();
+    }
+
+    bool is_safe_project_path(const std::filesystem::path& path)
+    {
+      if (path.empty() || path.is_absolute() || path.has_root_path())
+      {
+        return false;
+      }
+
+      for (const auto& component : path)
+      {
+        if (component == "..")
+        {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    bool validate_imported_project(const std::filesystem::path& project_directory,
+                                   const Recipe& recipe,
+                                   std::ostream& output,
+                                   std::ostream& error)
+    {
+      if (!recipe.dependencies.empty())
+      {
+        error << "forge: imported_library dependencies are not supported yet\n";
+        return false;
+      }
+
+      const auto profile = std::find_if(
+        recipe.imports.begin(),
+        recipe.imports.end(),
+        [](const ImportProfile& candidate)
+        {
+          return candidate.target == current_target();
+        }
+      );
+
+      if (profile == recipe.imports.end())
+      {
+        error << "forge: imported_library has no import profile for " << current_target() << '\n';
+        return false;
+      }
+
+      if (profile->public_headers.empty()
+          || (profile->static_libraries.empty()
+              && profile->dynamic_libraries.empty()
+              && profile->import_libraries.empty()))
+      {
+        error << "forge: imported_library profile requires headers and at least one library\n";
+        return false;
+      }
+
+      for (const auto& headers : profile->public_headers)
+      {
+        const auto path = project_directory / headers;
+
+        if (!is_safe_project_path(headers)
+            || std::filesystem::is_symlink(path)
+            || (!std::filesystem::is_regular_file(path) && !std::filesystem::is_directory(path)))
+        {
+          error << "forge: imported header path '" << headers.generic_string()
+                << "' must stay inside the project and contain regular files\n";
+          return false;
+        }
+      }
+
+      const std::array libraries {
+        &profile->static_libraries,
+        &profile->dynamic_libraries,
+        &profile->import_libraries
+      };
+
+      for (const auto* group : libraries)
+      {
+        for (const auto& library : *group)
+        {
+          const auto path = project_directory / library;
+
+          if (!is_safe_project_path(library)
+              || std::filesystem::is_symlink(path)
+              || !std::filesystem::is_regular_file(path))
+          {
+            error << "forge: imported library '" << library.generic_string()
+                  << "' must be a project-relative file\n";
+            return false;
+          }
+        }
+      }
+
+      output << "Validated imported library " << recipe.name << " for " << current_target() << '\n';
+      return true;
     }
 
     bool load_lockfile(const std::filesystem::path& project_directory,
@@ -1707,10 +1802,16 @@ namespace forge
     if (recipe.type != "executable"
         && recipe.type != "static_library"
         && recipe.type != "dynamic_library"
+        && recipe.type != "imported_library"
         && recipe.type != "header_only")
     {
       error << "forge: unsupported project type '" << recipe.type << "'\n";
       return 2;
+    }
+
+    if (recipe.type == "imported_library")
+    {
+      return validate_imported_project(project_directory, recipe, output, error) ? 0 : 2;
     }
 
     if (recipe.sources.empty() && recipe.type != "header_only")
