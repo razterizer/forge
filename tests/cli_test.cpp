@@ -1116,6 +1116,50 @@ namespace
     );
     expect(contains(output.str(), "Running app"), "run launches the linked executable");
     expect(error.str().empty(), "successful dependency build does not write an error");
+
+    std::ostringstream cached_output;
+    std::ostringstream cached_error;
+    expect(
+      forge::cli::run(run_arguments, application, cached_output, cached_error) == 0,
+      "second run succeeds with cached source dependency boxes"
+    );
+    expect(
+      contains(cached_output.str(), "Using cached dependency answer"),
+      "second build reuses a compatible leaf dependency box"
+    );
+    expect(
+      contains(cached_output.str(), "Using cached dependency calculator"),
+      "second build reuses a compatible parent dependency box"
+    );
+    expect(
+      !contains(cached_output.str(), "Resolving dependency"),
+      "second build does not rebuild compatible source dependencies"
+    );
+
+    write_file(
+      answer / "src/answer.cpp",
+      "#include <answer/answer.h>\n"
+      "int answer() { return 43; }\n"
+    );
+    std::ostringstream changed_output;
+    std::ostringstream changed_error;
+    expect(
+      forge::cli::run(run_arguments, application, changed_output, changed_error) == 1,
+      "changed dependency rebuild reaches the updated application result"
+    );
+    expect(
+      contains(changed_output.str(), "Resolving dependency answer"),
+      "changed dependency source rebuilds its box"
+    );
+    expect(
+      contains(changed_output.str(), "Resolving dependency calculator"),
+      "changed dependency box invalidates its dependent parent box"
+    );
+    expect(
+      contains(changed_output.str(), "Using cached dependency doubled"),
+      "unchanged sibling dependency still reuses its cached box"
+    );
+    expect(changed_error.str().empty(), "cache invalidation run does not write an error");
   }
 
   void test_run_with_local_box_dependency()

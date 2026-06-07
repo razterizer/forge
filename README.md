@@ -198,6 +198,9 @@ Forge builds each dependency into a verified box, installs it under
 `.forge/deps/<name>/`, adds its public include directory, and links static
 libraries when present. Dependencies are resolved recursively, shared
 dependencies are built once per command, and dependency cycles are rejected.
+Later builds reuse a verified source-dependency box when its package identity,
+target, recipe, sources, public headers, and direct dependency boxes remain
+compatible. Changed inputs rebuild the box and invalidate dependent boxes.
 
 Projects may also consume an existing local box directly:
 

@@ -38,7 +38,8 @@ directory:
 
 Dependency resolution should prefer a compatible cached box. When no matching
 box exists, Forge fetches or uses source, builds it, creates a box, and caches
-that box.
+that box. Source dependency boxes are reused when their package identity,
+target, declared inputs, and embedded direct dependency checksums still match.
 
 Local path dependencies may be declared by executable, static-library,
 shared-library, and header-only projects. Forge recursively builds library

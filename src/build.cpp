@@ -10,6 +10,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -896,15 +897,103 @@ namespace forge
       return true;
     }
 
-    std::filesystem::path find_dependency_box(const std::filesystem::path& dependency_directory,
-                                              const Recipe& recipe,
-                                              std::ostream& error)
+    bool source_files_are_older(const std::filesystem::path& dependency_directory,
+                                const Recipe& recipe,
+                                const std::filesystem::file_time_type& box_time)
     {
-      const auto boxes_directory = dependency_directory / ".forge" / "boxes";
-      const auto prefix = recipe.name + "-" + recipe.version;
-      std::filesystem::path result;
-      std::filesystem::file_time_type result_time;
       std::error_code filesystem_error;
+      std::vector<std::filesystem::path> files { dependency_directory / "forge.recipe.toml" };
+
+      for (const auto& source : recipe.sources)
+      {
+        files.push_back(dependency_directory / source);
+      }
+
+      for (const auto& header : recipe.public_headers)
+      {
+        files.push_back(dependency_directory / header);
+      }
+
+      for (const auto& file : files)
+      {
+        const auto modified = std::filesystem::last_write_time(file, filesystem_error);
+
+        if (filesystem_error || modified >= box_time)
+        {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    bool dependency_graph_matches(const Recipe& recipe,
+                                  const BoxMetadata& metadata,
+                                  std::ostream& error)
+    {
+      if (recipe.dependencies.size() != metadata.dependencies.size())
+      {
+        return false;
+      }
+
+      for (const auto& dependency : recipe.dependencies)
+      {
+        const auto child_path = dependency_session->names.find(dependency.name);
+
+        if (child_path == dependency_session->names.end())
+        {
+          return false;
+        }
+
+        const auto child = dependency_session->nodes.find(child_path->second);
+
+        if (child == dependency_session->nodes.end() || child->second.box.empty())
+        {
+          return false;
+        }
+
+        std::string checksum;
+
+        if (!sha256_file(child->second.box, checksum, error))
+        {
+          return false;
+        }
+
+        const auto declared = std::find_if(
+          metadata.dependencies.begin(),
+          metadata.dependencies.end(),
+          [&dependency](const BoxDependencyMetadata& candidate)
+          {
+            return candidate.name == dependency.name;
+          }
+        );
+
+        if (declared == metadata.dependencies.end()
+            || declared->version != child->second.recipe.version
+            || declared->type != child->second.recipe.type
+            || declared->sha256 != checksum)
+        {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    bool find_compatible_dependency_box(DependencyNode& node,
+                                        const ProcessRunner& process_runner,
+                                        bool report_reuse,
+                                        std::ostream& output,
+                                        std::ostream& error)
+    {
+      const auto boxes_directory = node.directory / ".forge" / "boxes";
+      const auto prefix = node.recipe.name + "-" + node.recipe.version;
+      std::error_code filesystem_error;
+
+      if (!std::filesystem::is_directory(boxes_directory))
+      {
+        return true;
+      }
 
       for (const auto& entry : std::filesystem::directory_iterator { boxes_directory, filesystem_error })
       {
@@ -932,19 +1021,44 @@ namespace forge
           break;
         }
 
-        if (result.empty() || modified > result_time)
+        BoxMetadata metadata;
+        std::ostringstream metadata_error;
+
+        if (source_files_are_older(node.directory, node.recipe, modified)
+            && read_box_metadata(
+              entry.path(),
+              node.directory,
+              process_runner,
+              metadata,
+              metadata_error
+            )
+            && metadata.name == node.recipe.name
+            && metadata.version == node.recipe.version
+            && metadata.build_number == node.recipe.build_number
+            && metadata.type == node.recipe.type
+            && metadata.os == target_os()
+            && metadata.arch == target_arch()
+            && dependency_graph_matches(node.recipe, metadata, error))
         {
-          result = entry.path();
-          result_time = modified;
+          node.box = entry.path();
+          node.box_metadata = std::move(metadata);
+
+          if (report_reuse)
+          {
+            output << "Using cached dependency " << node.recipe.name << '\n';
+          }
+
+          return true;
         }
       }
 
-      if (filesystem_error || result.empty())
+      if (filesystem_error)
       {
-        error << "forge: could not locate box for dependency '" << recipe.name << "'\n";
+        error << "forge: could not inspect cached boxes for dependency '" << node.recipe.name << "'\n";
+        return false;
       }
 
-      return result;
+      return true;
     }
 
     bool read_dependency_node(const std::filesystem::path& parent_directory,
@@ -1164,6 +1278,16 @@ namespace forge
         return true;
       }
 
+      if (!find_compatible_dependency_box(node, process_runner, true, output, error))
+      {
+        return false;
+      }
+
+      if (!node.box.empty())
+      {
+        return true;
+      }
+
       output << "Resolving dependency " << node.recipe.name << '\n';
 
       if (create_box(node.directory, process_runner, output, error) != 0)
@@ -1171,23 +1295,29 @@ namespace forge
         return false;
       }
 
-      node.box = find_dependency_box(node.directory, node.recipe, error);
-      return !node.box.empty();
+      return find_compatible_dependency_box(node, process_runner, false, output, error)
+        && !node.box.empty();
     }
 
     bool collect_dependency(const std::filesystem::path& parent_directory,
                             const Dependency& dependency,
                             const ProcessRunner& process_runner,
                             std::set<std::filesystem::path>& collected,
+                            std::set<std::filesystem::path>& active,
                             std::vector<DependencyNode*>& ordered,
                             std::ostream& output,
                             std::ostream& error)
     {
       DependencyNode* node = nullptr;
 
-      if (!read_dependency_node(parent_directory, dependency, process_runner, node, output, error)
-          || !ensure_dependency_box(*node, process_runner, output, error))
+      if (!read_dependency_node(parent_directory, dependency, process_runner, node, output, error))
       {
+        return false;
+      }
+
+      if (active.contains(node->directory))
+      {
+        error << "forge: dependency cycle detected at '" << dependency.name << "'\n";
         return false;
       }
 
@@ -1196,6 +1326,8 @@ namespace forge
         return true;
       }
 
+      active.insert(node->directory);
+
       for (const auto& child : node->recipe.dependencies)
       {
         if (!collect_dependency(
@@ -1203,13 +1335,22 @@ namespace forge
           child,
           process_runner,
           collected,
+          active,
           ordered,
           output,
           error
         ))
         {
+          active.erase(node->directory);
           return false;
         }
+      }
+
+      active.erase(node->directory);
+
+      if (!ensure_dependency_box(*node, process_runner, output, error))
+      {
+        return false;
       }
 
       ordered.push_back(node);
@@ -1384,6 +1525,7 @@ namespace forge
       const auto dependency_boxes_directory = project_directory / ".forge" / "dependency-boxes";
       std::set<std::string> direct_names;
       std::set<std::filesystem::path> collected;
+      std::set<std::filesystem::path> active;
       std::vector<DependencyNode*> ordered;
       std::error_code filesystem_error;
       std::filesystem::remove_all(dependency_boxes_directory, filesystem_error);
@@ -1401,6 +1543,7 @@ namespace forge
           dependency,
           process_runner,
           collected,
+          active,
           ordered,
           output,
           error
