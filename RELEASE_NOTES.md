@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.4.0
+
+- Describe changes.
+
 ## 0.3.0
 
 - Added target-specific `imported_library` recipes that package local vendor
