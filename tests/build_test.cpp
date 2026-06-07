@@ -208,7 +208,49 @@ namespace
 #endif
   }
 
-  void test_build_generates_shared_library()
+  void test_build_generates_dynamic_library()
+  {
+#ifndef _WIN32
+    TemporaryDirectory directory;
+    write_library_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml" };
+    recipe
+      << "[project]\n"
+      << "name = \"hello\"\n"
+      << "version = \"0.1.0\"\n"
+      << "type = \"dynamic_library\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = [\"src/hello.cpp\"]\n"
+      << "public_headers = [\"include/hello/hello.h\"]\n";
+    recipe.close();
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 0,
+      "dynamic library build succeeds"
+    );
+
+    const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
+    expect(contains(generated, "add_library(forge_project SHARED"), "build generates a dynamic library target");
+#ifdef __APPLE__
+    expect(contains(generated, "INSTALL_RPATH \"@loader_path\""), "dynamic library searches its own directory");
+#elif defined(__linux__)
+    expect(contains(generated, "INSTALL_RPATH \"$ORIGIN\""), "dynamic library searches its own directory");
+#endif
+#endif
+  }
+
+  void test_build_accepts_legacy_shared_library_alias()
   {
 #ifndef _WIN32
     TemporaryDirectory directory;
@@ -237,16 +279,12 @@ namespace
 
     expect(
       forge::build_project(directory.path(), runner, output, error) == 0,
-      "shared library build succeeds"
+      "build accepts the legacy shared_library alias"
     );
-
-    const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
-    expect(contains(generated, "add_library(forge_project SHARED"), "build generates a shared library target");
-#ifdef __APPLE__
-    expect(contains(generated, "INSTALL_RPATH \"@loader_path\""), "shared library searches its own directory");
-#elif defined(__linux__)
-    expect(contains(generated, "INSTALL_RPATH \"$ORIGIN\""), "shared library searches its own directory");
-#endif
+    expect(
+      contains(read_file(directory.path() / ".forge/generated/CMakeLists.txt"), " SHARED"),
+      "legacy shared_library alias generates a dynamic library"
+    );
 #endif
   }
 
@@ -638,7 +676,8 @@ int main()
 {
   test_build_generates_cmake_and_commands();
   test_build_generates_static_library();
-  test_build_generates_shared_library();
+  test_build_generates_dynamic_library();
+  test_build_accepts_legacy_shared_library_alias();
   test_build_validates_header_only_project();
   test_build_stops_after_configuration_failure();
   test_build_rejects_missing_source_without_running_process();

@@ -14,6 +14,8 @@
   boxes when their package identity, target, declared inputs, and direct
   dependency checksums still match, while changed dependencies invalidate
   dependent boxes.
+- Renamed the public dynamic-linking project type to `dynamic_library`, while
+  preserving `shared_library` as a legacy recipe and box alias.
 - Added `forge box publish <box>` for verified local publication and checksum
   generation.
 - Added `forge prepare-release` for type-aware hosted release assets:

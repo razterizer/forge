@@ -119,7 +119,7 @@ cd path/to/project
 /path/to/forge/build/dev/forge build
 ```
 
-Forge builds executable, static-library, and shared-library projects with
+Forge builds executable, static-library, and dynamic-library projects with
 exact source paths. Libraries declare public headers under `include/`:
 
 ```toml
@@ -147,13 +147,13 @@ forge clean
 For safety, `forge clean` only runs from a directory containing
 `forge.recipe.toml`.
 
-Shared libraries use the same source and public-header layout:
+Dynamic libraries use the same source and public-header layout:
 
 ```toml
 [project]
 name = "hello"
 version = "1.0.0"
-type = "shared_library"
+type = "dynamic_library"
 cpp_std = 20
 
 [sources]
@@ -161,11 +161,14 @@ paths = ["src/hello.cpp"]
 public_headers = ["include/hello/hello.h"]
 ```
 
-Shared-library dependencies are boxed with their runtime artifact, installed
+Dynamic-library dependencies are boxed with their runtime artifact, installed
 under `.forge/deps/`, and copied into `.forge/build/runtime`. Forge-generated
 binaries use an origin-relative runtime search path, and `forge release`
-includes the runtime directory. Shared libraries currently support macOS and
+includes the runtime directory. Dynamic libraries currently support macOS and
 Linux; Windows DLL and import-library support remains planned.
+
+Legacy recipes using `type = "shared_library"` remain accepted as an alias for
+`dynamic_library`.
 
 Header-only projects declare no source files:
 
@@ -185,7 +188,7 @@ Forge generates and compiles one private validation translation unit per public
 header. These temporary sources remain under `.forge/generated/`; header-only
 boxes contain only the declared headers.
 
-Projects may use local static-library, shared-library, and header-only
+Projects may use local static-library, dynamic-library, and header-only
 dependencies:
 
 ```toml
@@ -429,7 +432,7 @@ links are rejected.
 Windows release workflows under `.github/workflows`. Pushing a `release-*` or
 `v*` tag builds Forge, runs `forge prepare-release`, and publishes the resulting
 artifacts to the matching GitHub Release. Executable projects produce a
-target-qualified ZIP archive. Static-library, shared-library, and header-only
+target-qualified ZIP archive. Static-library, dynamic-library, and header-only
 projects produce a target-qualified `.cbox` and its `.sha256` checksum under
 `boxes/`. Existing workflow files and release notes are never overwritten by
 `forge init`. Generated `.gitignore` files exclude Forge build state. Tag
@@ -477,7 +480,7 @@ must match one of those patterns, or the generated workflow triggers must be
 customized, to publish hosted artifacts.
 
 Create, inspect, verify, publish locally, and extract an executable,
-static-library, shared-library, or header-only box:
+static-library, dynamic-library, or header-only box:
 
 ```sh
 /path/to/forge/build/dev/forge box create

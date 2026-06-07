@@ -1414,19 +1414,19 @@ namespace
     );
   }
 
-  void test_run_and_release_with_shared_dependency()
+  void test_run_and_release_with_dynamic_dependency()
   {
 #ifndef _WIN32
     TemporaryDirectory directory;
     const auto answer = directory.path() / "answer";
-    const auto shared_library = directory.path() / "greeting";
+    const auto dynamic_library = directory.path() / "greeting";
     const auto application = directory.path() / "app";
     write_file(
       answer / "forge.recipe.toml",
       "[project]\n"
       "name = \"answer\"\n"
       "version = \"1.0.0\"\n"
-      "type = \"shared_library\"\n"
+      "type = \"dynamic_library\"\n"
       "cpp_std = 20\n\n"
       "[sources]\n"
       "paths = [\"src/answer.cpp\"]\n"
@@ -1439,11 +1439,11 @@ namespace
       "int answer() { return 42; }\n"
     );
     write_file(
-      shared_library / "forge.recipe.toml",
+      dynamic_library / "forge.recipe.toml",
       "[project]\n"
       "name = \"greeting\"\n"
       "version = \"1.0.0\"\n"
-      "type = \"shared_library\"\n"
+      "type = \"dynamic_library\"\n"
       "cpp_std = 20\n\n"
       "[sources]\n"
       "paths = [\"src/greeting.cpp\"]\n"
@@ -1451,9 +1451,9 @@ namespace
       "[dependencies]\n"
       "answer = { path = \"../answer\" }\n"
     );
-    write_file(shared_library / "include/greeting/greeting.h", "int greeting();\n");
+    write_file(dynamic_library / "include/greeting/greeting.h", "int greeting();\n");
     write_file(
-      shared_library / "src/greeting.cpp",
+      dynamic_library / "src/greeting.cpp",
       "#include <answer/answer.h>\n"
       "#include <greeting/greeting.h>\n"
       "int greeting() { return answer(); }\n"
@@ -1481,7 +1481,7 @@ namespace
 
     expect(
       forge::cli::run(run_arguments, application, run_output, run_error) == 0,
-      "run succeeds with a shared-library dependency"
+      "run succeeds with a dynamic-library dependency"
     );
 #ifdef __APPLE__
     constexpr std::string_view runtime_filename = "libgreeting.dylib";
@@ -1492,17 +1492,26 @@ namespace
 #endif
     expect(
       std::filesystem::exists(application / ".forge/build/runtime" / runtime_filename),
-      "build stages the shared-library runtime"
+      "build stages the dynamic-library runtime"
     );
     expect(
       std::filesystem::exists(
         application / ".forge/build/runtime" / transitive_runtime_filename
       ),
-      "build stages the transitive shared-library runtime"
+      "build stages the transitive dynamic-library runtime"
     );
     expect(
       std::filesystem::exists(application / ".forge/deps/greeting/runtime" / runtime_filename),
-      "build installs the shared-library box"
+      "build installs the dynamic-library box"
+    );
+    const auto dynamic_manifest = read_file(application / ".forge/deps/greeting/cbox.toml");
+    expect(
+      contains(dynamic_manifest, "type = \"dynamic_library\""),
+      "new boxes identify dynamic-library packages with the public terminology"
+    );
+    expect(
+      contains(dynamic_manifest, "kind = \"dynamic_library\""),
+      "new boxes identify dynamic-library artifacts with the public terminology"
     );
     constexpr std::array release_arguments { std::string_view { "release" } };
     std::ostringstream release_output;
@@ -1510,19 +1519,19 @@ namespace
 
     expect(
       forge::cli::run(release_arguments, application, release_output, release_error) == 0,
-      "release succeeds with a shared-library dependency"
+      "release succeeds with a dynamic-library dependency"
     );
     expect(
       std::filesystem::exists(
         application / ".forge/release/app-1.0.0/runtime" / runtime_filename
       ),
-      "release stages the shared-library runtime"
+      "release stages the dynamic-library runtime"
     );
     expect(
       std::filesystem::exists(
         application / ".forge/release/app-1.0.0/runtime" / transitive_runtime_filename
       ),
-      "release stages the transitive shared-library runtime"
+      "release stages the transitive dynamic-library runtime"
     );
     const auto released_executable = application / ".forge/release/app-1.0.0/app";
     const std::vector<std::string> released_arguments { released_executable.string() };
@@ -1533,10 +1542,10 @@ namespace
         released_executable.parent_path(),
         released_error
       ) == 0,
-      "released executable loads its shared-library runtime"
+      "released executable loads its dynamic-library runtime"
     );
-    expect(run_error.str().empty(), "shared-library run does not write an error");
-    expect(release_error.str().empty(), "shared-library release does not write an error");
+    expect(run_error.str().empty(), "dynamic-library run does not write an error");
+    expect(release_error.str().empty(), "dynamic-library release does not write an error");
     expect(released_error.str().empty(), "released executable does not write an error");
 #endif
   }
@@ -1726,7 +1735,7 @@ int main()
   test_run_with_local_dependencies();
   test_run_with_local_box_dependency();
   test_run_with_downloadable_box_dependency();
-  test_run_and_release_with_shared_dependency();
+  test_run_and_release_with_dynamic_dependency();
   test_bump_updates_recipe_and_release_notes();
   test_bump_creates_release_notes();
   test_bump_rejects_invalid_or_duplicate_version();

@@ -3,7 +3,7 @@
 A `.cbox` is a ZIP archive containing one reusable C++ package for one target.
 It is distinct from an application release archive.
 
-The implemented profiles support executable, static-library, shared-library,
+The implemented profiles support executable, static-library, dynamic-library,
 and header-only packages:
 
 ```text
@@ -75,7 +75,7 @@ sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 Each `[[artifact]]` entry declares one packaged file. Static-library boxes
 contain one `static_library` artifact under `lib/` and one or more
 `public_header` artifacts under `include/`. Shared-library boxes contain one
-`shared_library` artifact under `runtime/` and one or more `public_header`
+`dynamic_library` artifact under `runtime/` and one or more `public_header`
 artifacts under `include/`. Header-only boxes contain one or more
 `public_header` artifacts and no library artifact.
 
@@ -107,7 +107,7 @@ individual compiled artifacts.
 - `bin/` contains executable artifacts.
 - `include/` contains public headers.
 - `lib/` contains static-library artifacts.
-- `runtime/` contains shared-library runtime artifacts.
+- `runtime/` contains dynamic-library runtime artifacts.
 - `dependencies/` contains direct dependency boxes.
 - Future profiles may add `licenses/`.
 - Format 2 boxes contain exactly `cbox.toml`, declared artifacts, and declared
@@ -145,4 +145,5 @@ build-type, permissions, and deterministic archive rules remain future
 compatibility dimensions.
 
 Forge continues to consume format-1 boxes as self-contained leaf dependencies.
-New boxes are written as format 2.
+New boxes are written as format 2. Legacy boxes using `shared_library` as a
+package type or artifact kind remain accepted as aliases for `dynamic_library`.

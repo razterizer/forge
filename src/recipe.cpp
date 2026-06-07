@@ -294,6 +294,11 @@ namespace forge
       else if (section == "project" && key == "type")
       {
         valid = parse_string(value, recipe.type);
+
+        if (recipe.type == "shared_library")
+        {
+          recipe.type = "dynamic_library";
+        }
       }
       else if (section == "project" && key == "cpp_std")
       {

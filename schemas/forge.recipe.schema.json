@@ -36,10 +36,11 @@
           "enum": [
             "executable",
             "static_library",
+            "dynamic_library",
             "shared_library",
             "header_only"
           ],
-          "description": "Kind of project Forge builds and packages."
+          "description": "Kind of project Forge builds and packages. shared_library is a legacy alias for dynamic_library."
         },
         "cpp_std": {
           "type": "integer",
@@ -227,7 +228,10 @@
             "type": "object",
             "properties": {
               "type": {
-                "const": "shared_library"
+                "enum": [
+                  "dynamic_library",
+                  "shared_library"
+                ]
               }
             },
             "required": [

@@ -112,7 +112,7 @@ namespace forge
     }
 
 #ifndef _WIN32
-    std::filesystem::path shared_library_filename(std::string_view name)
+    std::filesystem::path dynamic_library_filename(std::string_view name)
     {
 #ifdef __APPLE__
       return "lib" + std::string { name } + ".dylib";
@@ -538,6 +538,27 @@ namespace forge
         }
       }
 
+      if (manifest.type == "shared_library")
+      {
+        manifest.type = "dynamic_library";
+      }
+
+      for (auto& artifact : manifest.artifacts)
+      {
+        if (artifact.kind == "shared_library")
+        {
+          artifact.kind = "dynamic_library";
+        }
+      }
+
+      for (auto& dependency : manifest.dependencies)
+      {
+        if (dependency.type == "shared_library")
+        {
+          dependency.type = "dynamic_library";
+        }
+      }
+
       if (manifest.format != 1 && manifest.format != 2)
       {
         error << "forge: unsupported box format " << manifest.format << '\n';
@@ -548,7 +569,7 @@ namespace forge
           || !is_safe_path_component(manifest.version)
           || (manifest.type != "executable"
               && manifest.type != "static_library"
-              && manifest.type != "shared_library"
+              && manifest.type != "dynamic_library"
               && manifest.type != "header_only")
           || manifest.artifacts.empty())
       {
@@ -560,7 +581,7 @@ namespace forge
       std::set<std::string> dependency_names;
       std::size_t executable_count = 0;
       std::size_t library_count = 0;
-      std::size_t shared_library_count = 0;
+      std::size_t dynamic_library_count = 0;
       std::size_t header_count = 0;
 
       for (std::size_t index = 0; index < manifest.artifacts.size(); ++index)
@@ -589,9 +610,9 @@ namespace forge
         {
           ++library_count;
         }
-        else if (artifact.kind == "shared_library" && prefix == "runtime")
+        else if (artifact.kind == "dynamic_library" && prefix == "runtime")
         {
-          ++shared_library_count;
+          ++dynamic_library_count;
         }
         else if (artifact.kind == "public_header" && prefix == "include")
         {
@@ -623,7 +644,7 @@ namespace forge
             || !is_safe_path_component(dependency.name)
             || !is_safe_path_component(dependency.version)
             || (dependency.type != "static_library"
-                && dependency.type != "shared_library"
+                && dependency.type != "dynamic_library"
                 && dependency.type != "header_only")
             || !is_safe_archive_path(dependency.path)
             || dependency.path.parent_path().empty()
@@ -646,10 +667,10 @@ namespace forge
               && (library_count != 1
                   || header_count == 0
                   || library_count + header_count != manifest.artifacts.size()))
-          || (manifest.type == "shared_library"
-              && (shared_library_count != 1
+          || (manifest.type == "dynamic_library"
+              && (dynamic_library_count != 1
                   || header_count == 0
-                  || shared_library_count + header_count != manifest.artifacts.size()))
+                  || dynamic_library_count + header_count != manifest.artifacts.size()))
           || (manifest.type == "header_only"
               && (header_count == 0 || header_count != manifest.artifacts.size())))
       {
@@ -904,9 +925,9 @@ namespace forge
     {
       built_artifact = project_directory / ".forge" / "build" / ("lib" + recipe.name + ".a");
     }
-    else if (recipe.type == "shared_library")
+    else if (recipe.type == "dynamic_library")
     {
-      built_artifact = project_directory / ".forge" / "build" / shared_library_filename(recipe.name);
+      built_artifact = project_directory / ".forge" / "build" / dynamic_library_filename(recipe.name);
     }
 #endif
 
@@ -972,12 +993,12 @@ namespace forge
         }
       }
     }
-    else if (recipe.type == "shared_library")
+    else if (recipe.type == "dynamic_library")
     {
       if (!stage_artifact(
         built_artifact,
         std::filesystem::path { "runtime" } / built_artifact.filename(),
-        "shared_library",
+        "dynamic_library",
         staging_directory,
         artifacts,
         error
@@ -1083,7 +1104,7 @@ namespace forge
       archive_arguments.push_back("include");
       archive_arguments.push_back("lib");
     }
-    else if (recipe.type == "shared_library")
+    else if (recipe.type == "dynamic_library")
     {
       archive_arguments.push_back("include");
       archive_arguments.push_back("runtime");

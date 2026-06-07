@@ -660,7 +660,7 @@ namespace forge
       }
     }
     else if (recipe.type == "static_library"
-             || recipe.type == "shared_library"
+             || recipe.type == "dynamic_library"
              || recipe.type == "header_only")
     {
       if (create_box(project_directory, process_runner, output, error) != 0)

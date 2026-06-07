@@ -42,9 +42,9 @@ that box. Source dependency boxes are reused when their package identity,
 target, declared inputs, and embedded direct dependency checksums still match.
 
 Local path dependencies may be declared by executable, static-library,
-shared-library, and header-only projects. Forge recursively builds library
+dynamic-library, and header-only projects. Forge recursively builds library
 dependencies, rejects cycles and conflicting project names, links the
-transitive static-library closure in dependency order, and stages shared
+transitive static-library closure in dependency order, and stages dynamic
 libraries for running and releasing applications.
 
 Local `.cbox` dependencies are verified and installed directly without their
@@ -70,7 +70,7 @@ without building the current project, while preserving other targets.
    `forge release`
 2. v0.2: local path dependencies
 3. v0.3: `.cbox` creation and consumption
-4. v0.4: shared-library projects and dynamically linked boxes on macOS and
+4. v0.4: dynamic-library projects and dynamically linked boxes on macOS and
    Linux; Windows DLL/import-library support remains
 5. v0.5: compatible local box caching
 6. v0.6: Git dependencies

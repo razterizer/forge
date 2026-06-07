@@ -146,7 +146,7 @@ namespace forge
         && name.find('\\') == std::string_view::npos;
     }
 
-    std::filesystem::path shared_library_filename(std::string_view name)
+    std::filesystem::path dynamic_library_filename(std::string_view name)
     {
 #ifdef __APPLE__
       return "lib" + std::string { name } + ".dylib";
@@ -795,7 +795,7 @@ namespace forge
       {
         file << "add_library(forge_project STATIC\n";
       }
-      else if (recipe.type == "shared_library")
+      else if (recipe.type == "dynamic_library")
       {
         file << "add_library(forge_project SHARED\n";
       }
@@ -871,10 +871,10 @@ namespace forge
         << "set_target_properties(forge_project PROPERTIES "
         << "BUILD_WITH_INSTALL_RPATH TRUE "
         << "INSTALL_RPATH \""
-        << (recipe.type == "shared_library" ? "@loader_path" : "@loader_path/runtime")
+        << (recipe.type == "dynamic_library" ? "@loader_path" : "@loader_path/runtime")
         << "\")\n";
 
-      if (recipe.type == "shared_library")
+      if (recipe.type == "dynamic_library")
       {
         file
           << "set_target_properties(forge_project PROPERTIES "
@@ -884,7 +884,7 @@ namespace forge
       file
         << "set_target_properties(forge_project PROPERTIES "
         << "BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH \""
-        << (recipe.type == "shared_library" ? "$ORIGIN" : "$ORIGIN/runtime")
+        << (recipe.type == "dynamic_library" ? "$ORIGIN" : "$ORIGIN/runtime")
         << "\")\n";
 #endif
 
@@ -1230,11 +1230,11 @@ namespace forge
         }
 
         if (dependency_recipe.type != "static_library"
-            && dependency_recipe.type != "shared_library"
+            && dependency_recipe.type != "dynamic_library"
             && dependency_recipe.type != "header_only")
         {
           error << "forge: dependency '" << dependency.name
-                << "' must be a static_library, shared_library, or header_only project\n";
+                << "' must be a static_library, dynamic_library, or header_only project\n";
           return false;
         }
 
@@ -1444,13 +1444,13 @@ namespace forge
 #endif
         }
       }
-      else if (node.recipe.type == "shared_library")
+      else if (node.recipe.type == "dynamic_library")
       {
         if (node.box_metadata)
         {
           for (const auto& artifact : node.box_metadata->artifacts)
           {
-            if (artifact.kind == "shared_library")
+            if (artifact.kind == "dynamic_library")
             {
               resolved.library = destination / artifact.path;
             }
@@ -1458,13 +1458,13 @@ namespace forge
         }
         else
         {
-          resolved.library = destination / "runtime" / shared_library_filename(node.recipe.name);
+          resolved.library = destination / "runtime" / dynamic_library_filename(node.recipe.name);
         }
 
         resolved.runtime = resolved.library;
       }
 
-      if ((node.recipe.type == "static_library" || node.recipe.type == "shared_library")
+      if ((node.recipe.type == "static_library" || node.recipe.type == "dynamic_library")
           && !resolved.library)
       {
         error << "forge: dependency '" << node.recipe.name << "' box has no linkable library\n";
@@ -1650,7 +1650,7 @@ namespace forge
 
     if (recipe.type != "executable"
         && recipe.type != "static_library"
-        && recipe.type != "shared_library"
+        && recipe.type != "dynamic_library"
         && recipe.type != "header_only")
     {
       error << "forge: unsupported project type '" << recipe.type << "'\n";
@@ -1658,9 +1658,9 @@ namespace forge
     }
 
 #ifdef _WIN32
-    if (recipe.type == "shared_library")
+    if (recipe.type == "dynamic_library")
     {
-      error << "forge: shared_library projects are not supported on Windows yet\n";
+      error << "forge: dynamic_library projects are not supported on Windows yet\n";
       return 2;
     }
 #endif
@@ -1687,7 +1687,7 @@ namespace forge
     }
 
     if ((recipe.type == "static_library"
-         || recipe.type == "shared_library"
+         || recipe.type == "dynamic_library"
          || recipe.type == "header_only")
         && recipe.public_headers.empty())
     {
@@ -1849,9 +1849,9 @@ namespace forge
       artifact = build_directory / ("lib" + recipe.name + ".a");
 #endif
     }
-    else if (recipe.type == "shared_library")
+    else if (recipe.type == "dynamic_library")
     {
-      artifact = build_directory / shared_library_filename(recipe.name);
+      artifact = build_directory / dynamic_library_filename(recipe.name);
     }
 
     output << "Built " << artifact.string() << '\n';
