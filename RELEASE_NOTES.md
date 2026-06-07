@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.3.0
+
+- Describe changes.
+
 ## 0.2.0
 
 - Added verified direct local `.cbox` dependencies through `{ box = "..." }`.
