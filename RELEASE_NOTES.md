@@ -10,6 +10,8 @@
 - Made `forge init` infer executable, multi-executable, static-library, and
   header-only recipes from existing sources, public headers, and `main()`
   entry points.
+- Renamed Forge's process helper to avoid shadowing the Windows system
+  `<process.h>` header.
 
 ## 0.3.0
 
