@@ -5,6 +5,8 @@
 - Added pinned Git source dependencies using exact full commit IDs, with
   shallow project-local checkout caching and normal transitive source
   dependency builds.
+- Added named development and pinned dependency profiles selectable by
+  `forge build`, `forge run`, and `forge test`.
 
 ## 0.3.0
 

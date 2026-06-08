@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <iosfwd>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -64,6 +65,7 @@ namespace forge
     std::vector<std::filesystem::path> public_headers;
     std::vector<ImportProfile> imports;
     std::vector<Dependency> dependencies;
+    std::map<std::string, std::vector<Dependency>> dependency_profiles;
     std::vector<std::filesystem::path> runtime_files;
     std::vector<std::filesystem::path> release_files;
     std::vector<RecipeTarget> targets;
@@ -79,5 +81,10 @@ namespace forge
   bool select_recipe_target(Recipe& recipe,
                             const std::optional<std::string>& target,
                             std::ostream& error);
+
+  bool select_dependency_profile(Recipe& recipe,
+                                 const std::optional<std::string>& profile,
+                                 bool required,
+                                 std::ostream& error);
 
 } // namespace forge

@@ -529,15 +529,40 @@ namespace forge
           valid = false;
         }
       }
-      else if (section == "dependencies")
+      else if (section == "dependencies" || section.starts_with("profile."))
       {
+        const auto profile_prefix = std::string_view { "profile." };
+        const auto profile_suffix = std::string_view { ".dependencies" };
+        const auto is_profile =
+          section.starts_with(profile_prefix)
+          && section.ends_with(profile_suffix)
+          && section.size() > profile_prefix.size() + profile_suffix.size();
         Dependency dependency;
         dependency.name = std::string { key };
-        valid = !dependency.name.empty() && parse_dependency(value, dependency);
+        valid =
+          (section == "dependencies" || is_profile)
+          && !dependency.name.empty()
+          && parse_dependency(value, dependency);
 
         if (valid)
         {
-          recipe.dependencies.push_back(std::move(dependency));
+          if (is_profile)
+          {
+            const auto profile = section.substr(
+              profile_prefix.size(),
+              section.size() - profile_prefix.size() - profile_suffix.size()
+            );
+            valid = is_safe_name(profile);
+
+            if (valid)
+            {
+              recipe.dependency_profiles[profile].push_back(std::move(dependency));
+            }
+          }
+          else
+          {
+            recipe.dependencies.push_back(std::move(dependency));
+          }
         }
       }
       else if (section == "runtime" && key == "files")
@@ -706,6 +731,33 @@ namespace forge
     recipe.sources = selected->sources;
     recipe.public_headers = selected->public_headers;
     recipe.runtime_files = selected->runtime_files;
+    return true;
+  }
+
+  bool select_dependency_profile(Recipe& recipe,
+                                 const std::optional<std::string>& requested,
+                                 bool required,
+                                 std::ostream& error)
+  {
+    if (!requested)
+    {
+      return true;
+    }
+
+    const auto profile = recipe.dependency_profiles.find(*requested);
+
+    if (profile == recipe.dependency_profiles.end())
+    {
+      if (required)
+      {
+        error << "forge: recipe has no dependency profile named '" << *requested << "'\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    recipe.dependencies = profile->second;
     return true;
   }
 

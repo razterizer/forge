@@ -1768,6 +1768,126 @@ namespace
     );
   }
 
+  void test_dependency_profiles()
+  {
+    TemporaryDirectory directory;
+    const auto development = directory.path() / "answer-dev";
+    const auto pinned = directory.path() / "answer-pinned";
+    const auto application = directory.path() / "app";
+    const auto write_answer = [](const std::filesystem::path& project, int value)
+    {
+      write_file(
+        project / "forge.recipe.toml",
+        "[project]\n"
+        "name = \"answer\"\n"
+        "version = \"1.0.0\"\n"
+        "type = \"static_library\"\n"
+        "cpp_std = 20\n\n"
+        "[sources]\n"
+        "paths = [\"src/answer.cpp\"]\n"
+        "public_headers = [\"include/answer/answer.h\"]\n"
+      );
+      write_file(project / "include/answer/answer.h", "int answer();\n");
+      write_file(
+        project / "src/answer.cpp",
+        "#include <answer/answer.h>\n"
+        "int answer() { return " + std::to_string(value) + "; }\n"
+      );
+    };
+    write_answer(development, 7);
+    write_answer(pinned, 42);
+    std::ostringstream git_error;
+    expect(
+      forge::run_process({ "git", "init", "--quiet", "--initial-branch=main" }, pinned, git_error) == 0
+        && forge::run_process({ "git", "config", "user.name", "Forge Tests" }, pinned, git_error) == 0
+        && forge::run_process(
+          { "git", "config", "user.email", "forge-tests@example.invalid" },
+          pinned,
+          git_error
+        ) == 0
+        && forge::run_process({ "git", "add", "." }, pinned, git_error) == 0
+        && forge::run_process(
+          { "git", "commit", "--quiet", "-m", "Add pinned answer" },
+          pinned,
+          git_error
+        ) == 0,
+      "dependency profile Git fixture is committed"
+    );
+    auto commit = read_file(pinned / ".git/refs/heads/main");
+
+    if (!commit.empty() && commit.back() == '\n')
+    {
+      commit.pop_back();
+    }
+
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[profile.dev.dependencies]\n"
+      "answer = { path = \"../answer-dev\" }\n\n"
+      "[profile.pinned.dependencies]\n"
+      "answer = { git = \"../answer-pinned\", commit = \"" + commit + "\" }\n"
+    );
+    constexpr std::array dev_arguments {
+      std::string_view { "run" },
+      std::string_view { "--profile=dev" }
+    };
+    constexpr std::array pinned_arguments {
+      std::string_view { "run" },
+      std::string_view { "--profile=pinned" }
+    };
+    constexpr std::array missing_arguments {
+      std::string_view { "build" },
+      std::string_view { "--profile=missing" }
+    };
+    write_file(
+      application / "main.cpp",
+      "#include <answer/answer.h>\n"
+      "int main() { return answer() == 7 ? 0 : 1; }\n"
+    );
+    std::ostringstream dev_output;
+    std::ostringstream dev_error;
+    expect(
+      forge::cli::run(dev_arguments, application, dev_output, dev_error) == 0,
+      "dev dependency profile uses the local project"
+    );
+    expect(dev_error.str().empty(), "dev dependency profile does not write an error");
+
+    write_file(
+      application / "main.cpp",
+      "#include <answer/answer.h>\n"
+      "int main() { return answer() == 42 ? 0 : 1; }\n"
+    );
+    std::ostringstream pinned_output;
+    std::ostringstream pinned_error;
+    expect(
+      forge::cli::run(pinned_arguments, application, pinned_output, pinned_error) == 0,
+      "pinned dependency profile uses the exact Git project"
+    );
+    expect(
+      contains(pinned_output.str(), "Fetching Git dependency answer at " + commit),
+      "pinned dependency profile fetches its declared commit"
+    );
+    expect(pinned_error.str().empty(), "pinned dependency profile does not write an error");
+
+    std::ostringstream missing_output;
+    std::ostringstream missing_error;
+    expect(
+      forge::cli::run(missing_arguments, application, missing_output, missing_error) == 2,
+      "build rejects a missing dependency profile"
+    );
+    expect(
+      contains(missing_error.str(), "no dependency profile named 'missing'"),
+      "missing dependency profile is explained"
+    );
+  }
+
   void test_run_with_local_box_dependency()
   {
     TemporaryDirectory directory;
@@ -2369,6 +2489,7 @@ int main()
   test_run_with_imported_library_dependency();
   test_run_with_local_dependencies();
   test_run_with_pinned_git_dependency();
+  test_dependency_profiles();
   test_run_with_local_box_dependency();
   test_run_with_downloadable_box_dependency();
   test_run_and_release_with_dynamic_dependency();

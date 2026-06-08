@@ -13,6 +13,7 @@
 #include <array>
 #include <filesystem>
 #include <ostream>
+#include <vector>
 
 namespace forge::cli
 {
@@ -45,13 +46,13 @@ namespace forge::cli
         << "  forge box create [target]\n"
         << "  forge box <inspect|verify|extract|publish> <path>\n"
         << "  forge update [dependency]\n"
-        << "  forge build [target]\n"
+        << "  forge build [target] [--profile=<name>]\n"
         << "  forge bump <major|minor|patch>\n"
         << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n"
         << "  forge release [target]\n"
         << "  forge prepare-release [target]\n"
-        << "  forge run [target] [-- arguments...]\n"
-        << "  forge test [target] [-- arguments...]\n"
+        << "  forge run [target] [--profile=<name>] [-- arguments...]\n"
+        << "  forge test [target] [--profile=<name>] [-- arguments...]\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
         << "Commands:\n"
@@ -80,6 +81,32 @@ namespace forge::cli
       }
 
       return false;
+    }
+
+    bool read_profile_option(std::string_view argument,
+                             std::optional<std::string>& profile,
+                             std::ostream& error)
+    {
+      if (!argument.starts_with("--profile="))
+      {
+        return false;
+      }
+
+      if (profile)
+      {
+        error << "forge: dependency profile may only be specified once\n";
+        return false;
+      }
+
+      profile = std::string { argument.substr(std::string_view { "--profile=" }.size()) };
+
+      if (profile->empty())
+      {
+        error << "forge: dependency profile cannot be empty\n";
+        return false;
+      }
+
+      return true;
     }
 
   } // namespace
@@ -178,26 +205,43 @@ namespace forge::cli
         return 2;
       }
 
-      if (recipe.targets.empty())
+      std::optional<std::string> profile;
+      std::optional<std::string> target;
+      std::vector<std::string_view> program_arguments;
+      bool forwarding = false;
+
+      for (const auto argument : arguments.subspan(1))
       {
-        return run_project(working_directory, arguments.subspan(1), output, error);
+        if (!forwarding && argument == "--")
+        {
+          forwarding = true;
+        }
+        else if (!forwarding && argument.starts_with("--profile="))
+        {
+          if (!read_profile_option(argument, profile, error))
+          {
+            return 2;
+          }
+        }
+        else if (!forwarding && !recipe.targets.empty() && !target)
+        {
+          target = std::string { argument };
+        }
+        else
+        {
+          program_arguments.push_back(argument);
+        }
       }
 
-      if (arguments.size() < 2)
+      if (!recipe.targets.empty() && !target)
       {
-        return run_project(working_directory, std::nullopt, {}, output, error);
-      }
-
-      auto program_arguments = arguments.subspan(2);
-
-      if (!program_arguments.empty() && program_arguments.front() == "--")
-      {
-        program_arguments = program_arguments.subspan(1);
+        return run_project(working_directory, std::nullopt, profile, program_arguments, output, error);
       }
 
       return run_project(
         working_directory,
-        std::string { arguments[1] },
+        target,
+        profile,
         program_arguments,
         output,
         error
@@ -207,20 +251,34 @@ namespace forge::cli
     if (arguments.front() == "test")
     {
       std::optional<std::string> target;
-      auto test_arguments = arguments.subspan(1);
+      std::optional<std::string> profile;
+      std::vector<std::string_view> test_arguments;
+      bool forwarding = false;
 
-      if (!test_arguments.empty() && test_arguments.front() != "--")
+      for (const auto argument : arguments.subspan(1))
       {
-        target = std::string { test_arguments.front() };
-        test_arguments = test_arguments.subspan(1);
+        if (!forwarding && argument == "--")
+        {
+          forwarding = true;
+        }
+        else if (!forwarding && argument.starts_with("--profile="))
+        {
+          if (!read_profile_option(argument, profile, error))
+          {
+            return 2;
+          }
+        }
+        else if (!forwarding && !target)
+        {
+          target = std::string { argument };
+        }
+        else
+        {
+          test_arguments.push_back(argument);
+        }
       }
 
-      if (!test_arguments.empty() && test_arguments.front() == "--")
-      {
-        test_arguments = test_arguments.subspan(1);
-      }
-
-      return test_project(working_directory, target, test_arguments, output, error);
+      return test_project(working_directory, target, profile, test_arguments, output, error);
     }
 
     if (arguments.front() == "bump")
@@ -302,17 +360,26 @@ namespace forge::cli
 
     if (arguments.front() == "build")
     {
-      if (arguments.size() > 2)
-      {
-        error << "forge: usage: forge build [target]\n";
-        return 2;
-      }
-
       BuildOptions options;
 
-      if (arguments.size() == 2)
+      for (const auto argument : arguments.subspan(1))
       {
-        options.target = std::string { arguments[1] };
+        if (argument.starts_with("--profile="))
+        {
+          if (!read_profile_option(argument, options.profile, error))
+          {
+            return 2;
+          }
+        }
+        else if (!options.target)
+        {
+          options.target = std::string { argument };
+        }
+        else
+        {
+          error << "forge: usage: forge build [target] [--profile=<name>]\n";
+          return 2;
+        }
       }
 
       return build_project(working_directory, options, output, error);

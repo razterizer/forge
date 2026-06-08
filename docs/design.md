@@ -61,6 +61,13 @@ project-local cache, verifies cached HEAD before reuse, and then resolves the
 checkout through the same recursive source-dependency pipeline. The recipe pin
 is already exact, so it is not duplicated in `forge.lock.toml`.
 
+Named `[profile.<name>.dependencies]` sections replace the root recipe's normal
+dependency set when selected with `--profile=<name>`. The selected profile
+propagates through the recursive source graph. Child dependencies use a
+matching profile when present and otherwise retain their normal dependencies.
+This supports editable local development graphs and exact pinned CI graphs
+without maintaining separate recipes.
+
 Local `.cbox` dependencies are verified and installed directly without their
 source project. Format-2 boxes embed their direct dependency boxes and Forge
 recursively installs the complete graph. Format-1 boxes remain supported as

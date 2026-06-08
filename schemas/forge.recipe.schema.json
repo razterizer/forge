@@ -211,6 +211,23 @@
         ]
       }
     },
+    "profile": {
+      "type": "object",
+      "description": "Named dependency-set overrides selected with --profile=<name>.",
+      "propertyNames": {
+        "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dependencies"],
+        "properties": {
+          "dependencies": {
+            "$ref": "#/properties/dependencies"
+          }
+        }
+      }
+    },
     "import": {
       "type": "object",
       "description": "Target-specific local artifacts packaged by an imported_library project.",

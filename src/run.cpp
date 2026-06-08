@@ -24,7 +24,17 @@ namespace forge
                   std::ostream& output,
                   std::ostream& error)
   {
-    return run_project(project_directory, target, arguments, run_process, output, error);
+    return run_project(project_directory, target, std::nullopt, arguments, run_process, output, error);
+  }
+
+  int run_project(const std::filesystem::path& project_directory,
+                  const std::optional<std::string>& target,
+                  const std::optional<std::string>& profile,
+                  std::span<const std::string_view> arguments,
+                  std::ostream& output,
+                  std::ostream& error)
+  {
+    return run_project(project_directory, target, profile, arguments, run_process, output, error);
   }
 
   int run_project(const std::filesystem::path& project_directory,
@@ -33,7 +43,15 @@ namespace forge
                   std::ostream& output,
                   std::ostream& error)
   {
-    return run_project(project_directory, std::nullopt, arguments, process_runner, output, error);
+    return run_project(
+      project_directory,
+      std::nullopt,
+      std::nullopt,
+      arguments,
+      process_runner,
+      output,
+      error
+    );
   }
 
   int run_project(const std::filesystem::path& project_directory,
@@ -43,8 +61,28 @@ namespace forge
                   std::ostream& output,
                   std::ostream& error)
   {
+    return run_project(
+      project_directory,
+      target,
+      std::nullopt,
+      arguments,
+      process_runner,
+      output,
+      error
+    );
+  }
+
+  int run_project(const std::filesystem::path& project_directory,
+                  const std::optional<std::string>& target,
+                  const std::optional<std::string>& profile,
+                  std::span<const std::string_view> arguments,
+                  const ProcessRunner& process_runner,
+                  std::ostream& output,
+                  std::ostream& error)
+  {
     BuildOptions options;
     options.target = target;
+    options.profile = profile;
 
     if (build_project(project_directory, options, process_runner, output, error) != 0)
     {

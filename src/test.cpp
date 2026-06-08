@@ -15,11 +15,40 @@ namespace forge
                    std::ostream& output,
                    std::ostream& error)
   {
-    return test_project(project_directory, target, arguments, run_process, output, error);
+    return test_project(project_directory, target, std::nullopt, arguments, run_process, output, error);
   }
 
   int test_project(const std::filesystem::path& project_directory,
                    const std::optional<std::string>& target,
+                   const std::optional<std::string>& profile,
+                   std::span<const std::string_view> arguments,
+                   std::ostream& output,
+                   std::ostream& error)
+  {
+    return test_project(project_directory, target, profile, arguments, run_process, output, error);
+  }
+
+  int test_project(const std::filesystem::path& project_directory,
+                   const std::optional<std::string>& target,
+                   std::span<const std::string_view> arguments,
+                   const ProcessRunner& process_runner,
+                   std::ostream& output,
+                   std::ostream& error)
+  {
+    return test_project(
+      project_directory,
+      target,
+      std::nullopt,
+      arguments,
+      process_runner,
+      output,
+      error
+    );
+  }
+
+  int test_project(const std::filesystem::path& project_directory,
+                   const std::optional<std::string>& target,
+                   const std::optional<std::string>& profile,
                    std::span<const std::string_view> arguments,
                    const ProcessRunner& process_runner,
                    std::ostream& output,
@@ -98,6 +127,7 @@ namespace forge
       const auto result = run_project(
         project_directory,
         test,
+        profile,
         arguments,
         process_runner,
         output,

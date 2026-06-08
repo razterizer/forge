@@ -1624,6 +1624,17 @@ namespace forge
           return false;
         }
 
+        if (!is_box
+            && !select_dependency_profile(
+              dependency_recipe,
+              dependency_session->options.profile,
+              false,
+              error
+            ))
+        {
+          return false;
+        }
+
         if (dependency_recipe.name != dependency.name)
         {
           error << "forge: dependency name '" << dependency.name << "' does not match recipe name '"
@@ -2285,6 +2296,16 @@ namespace forge
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
+    {
+      return 2;
+    }
+
+    if (!select_dependency_profile(
+      recipe,
+      dependency_session->options.profile,
+      is_root_project,
+      error
+    ))
     {
       return 2;
     }

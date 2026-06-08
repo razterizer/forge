@@ -14,6 +14,7 @@ namespace forge
   {
     std::optional<std::string> update_dependency;
     std::optional<std::string> target;
+    std::optional<std::string> profile;
     bool dependencies_only = false;
     bool update_dependencies = false;
   };

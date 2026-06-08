@@ -327,6 +327,33 @@ like a local source dependency. Cached checkouts are verified against the
 declared commit before reuse. The exact commit in the recipe is the source of
 truth, so pinned Git source dependencies do not require a lockfile entry.
 
+Named dependency profiles let development builds use editable local projects
+while reproducible builds use exact Git commits:
+
+```toml
+[profile.dev.dependencies]
+answer = { path = "../answer" }
+
+[profile.pinned.dependencies]
+answer = {
+  git = "https://github.com/example/answer.git",
+  commit = "0123456789abcdef0123456789abcdef01234567"
+}
+```
+
+Select a profile for the complete command:
+
+```sh
+forge build --profile=pinned
+forge run --profile=dev
+forge test --profile=pinned
+```
+
+The root recipe must declare the requested profile. Forge propagates the
+selection through transitive source dependencies; dependencies declaring the
+same profile use it, while dependencies without it retain their normal
+`[dependencies]`.
+
 Projects may also consume an existing local box directly:
 
 ```toml
