@@ -18,7 +18,7 @@ add_library(forge_core STATIC
     src/github.cpp
     src/init.cpp
     src/new.cpp
-    src/process.cpp
+    src/fprocess.cpp
     src/recipe.cpp
     src/release.cpp
     src/run.cpp
