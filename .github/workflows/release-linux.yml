@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build-modern:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,11 +29,76 @@ jobs:
       - name: Prepare hosted release assets
         run: |
           ./build/dev/forge prepare-release
+          mkdir hosted-assets
+          for archive in .forge/release/*.zip; do
+            [ -e "$archive" ] || continue
+            filename=$(basename "${archive%.zip}")
+            cp "$archive" "hosted-assets/${filename}-linux-modern.zip"
+          done
+          cp .forge/release/RELEASE_NOTES.md hosted-assets/
+
+      - name: Upload modern Linux release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-modern
+          path: hosted-assets/
+          retention-days: 1
+
+  build-legacy:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake --preset dev
+
+      - name: Build
+        run: cmake --build --preset dev
+
+      - name: Test
+        run: ctest --preset dev
+
+      - name: Prepare hosted release assets
+        run: |
+          ./build/dev/forge prepare-release
+          mkdir hosted-assets
+          for archive in .forge/release/*.zip; do
+            [ -e "$archive" ] || continue
+            filename=$(basename "${archive%.zip}")
+            cp "$archive" "hosted-assets/${filename}-linux-legacy.zip"
+          done
+          cp .forge/release/RELEASE_NOTES.md hosted-assets/
+
+      - name: Upload legacy Linux release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-legacy
+          path: hosted-assets/
+          retention-days: 1
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-modern, build-legacy]
+
+    steps:
+      - name: Download modern Linux assets
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-modern
+          path: linux-modern
+
+      - name: Download legacy Linux assets
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-legacy
+          path: linux-legacy
 
       - name: Publish GitHub release
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: .forge/release/*.zip,boxes/*.cbox,boxes/*.sha256
-          bodyFile: .forge/release/RELEASE_NOTES.md
+          artifacts: linux-modern/*.zip,linux-legacy/*.zip
+          bodyFile: linux-modern/RELEASE_NOTES.md
           tag: ${{ github.ref_name }}

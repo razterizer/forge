@@ -12,6 +12,8 @@
   entry points.
 - Renamed Forge's process helper to avoid shadowing the Windows system
   `<process.h>` header.
+- Made generated Linux release workflows publish modern and legacy
+  compatibility builds from `ubuntu-latest` and `ubuntu-22.04`.
 
 ## 0.3.0
 

@@ -611,6 +611,12 @@ projects produce a target-qualified `.cbox` and its `.sha256` checksum under
 `forge init`. Generated `.gitignore` files exclude Forge build state. Tag
 creation remains an explicit opt-in action.
 
+The generated Linux workflow builds and publishes two compatibility variants:
+`linux-modern` on `ubuntu-latest` and `linux-legacy` on `ubuntu-22.04`. The
+legacy build uses the older distribution's compiler runtime and glibc baseline,
+making it suitable for older Linux and WSL installations. Both variants are
+published in the same GitHub Release.
+
 Prepare the same hosted release assets locally:
 
 ```sh

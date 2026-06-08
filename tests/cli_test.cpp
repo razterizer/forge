@@ -421,9 +421,23 @@ namespace
     expect(
       contains(
         read_file(directory.path() / "hello/.github/workflows/release-linux.yml"),
-        "boxes/*.cbox,boxes/*.sha256"
+        "for box in boxes/*.cbox"
       ),
       "new workflows publish box assets"
+    );
+    expect(
+      contains(
+        read_file(directory.path() / "hello/.github/workflows/release-linux.yml"),
+        "runs-on: ubuntu-22.04"
+      ),
+      "new Linux workflow builds legacy release assets"
+    );
+    expect(
+      contains(
+        read_file(directory.path() / "hello/.github/workflows/release-linux.yml"),
+        "needs: [build-modern, build-legacy]"
+      ),
+      "new Linux workflow publishes modern and legacy release assets together"
     );
     expect(
       std::filesystem::exists(directory.path() / "hello/RELEASE_NOTES.md"),

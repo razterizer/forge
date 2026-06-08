@@ -97,6 +97,99 @@ namespace forge
       return workflow;
     }
 
+    std::string linux_release_job(std::string_view name,
+                                  std::string_view runner,
+                                  std::string_view compatibility)
+    {
+      return
+        "  " + std::string { name } + ":\n"
+        "    runs-on: " + std::string { runner } + "\n"
+        "\n"
+        "    steps:\n"
+        "      - name: Checkout repository\n"
+        "        uses: actions/checkout@v4\n"
+        "\n"
+        "      - name: Checkout Forge\n"
+        "        uses: actions/checkout@v4\n"
+        "        with:\n"
+        "          repository: razterizer/forge\n"
+        "          path: .forge-bootstrap\n"
+        "\n"
+        "      - name: Build Forge\n"
+        "        run: >-\n"
+        "          cmake -S .forge-bootstrap -B .forge-bootstrap/build -G Ninja\n"
+        "          -DCMAKE_BUILD_TYPE=Release -DFORGE_BUILD_TESTS=OFF\n"
+        "          && cmake --build .forge-bootstrap/build\n"
+        "\n"
+        "      - name: Prepare hosted release assets\n"
+        "        run: |\n"
+        "          ./.forge-bootstrap/build/forge prepare-release\n"
+        "          mkdir hosted-assets\n"
+        "          for archive in .forge/release/*.zip; do\n"
+        "            [ -e \"$archive\" ] || continue\n"
+        "            filename=$(basename \"${archive%.zip}\")\n"
+        "            cp \"$archive\" \"hosted-assets/${filename}-" + std::string { compatibility } + ".zip\"\n"
+        "          done\n"
+        "          for box in boxes/*.cbox; do\n"
+        "            [ -e \"$box\" ] || continue\n"
+        "            filename=$(basename \"${box%.cbox}\")-" + std::string { compatibility } + ".cbox\n"
+        "            cp \"$box\" \"hosted-assets/$filename\"\n"
+        "            (cd hosted-assets && sha256sum \"$filename\" > \"$filename.sha256\")\n"
+        "          done\n"
+        "          cp .forge/release/RELEASE_NOTES.md hosted-assets/\n"
+        "\n"
+        "      - name: Upload Linux release assets\n"
+        "        uses: actions/upload-artifact@v4\n"
+        "        with:\n"
+        "          name: " + std::string { compatibility } + "\n"
+        "          path: hosted-assets/\n"
+        "          retention-days: 1\n"
+        "\n";
+    }
+
+    std::string linux_release_workflow()
+    {
+      return
+        "name: release linux\n"
+        "\n"
+        "on:\n"
+        "  push:\n"
+        "    tags:\n"
+        "      - \"release-*\"\n"
+        "      - \"v*\"\n"
+        "\n"
+        "permissions:\n"
+        "  contents: write\n"
+        "\n"
+        "jobs:\n"
+        + linux_release_job("build-modern", "ubuntu-latest", "linux-modern")
+        + linux_release_job("build-legacy", "ubuntu-22.04", "linux-legacy")
+        + "  release:\n"
+          "    runs-on: ubuntu-latest\n"
+          "    needs: [build-modern, build-legacy]\n"
+          "\n"
+          "    steps:\n"
+          "      - name: Download modern Linux assets\n"
+          "        uses: actions/download-artifact@v4\n"
+          "        with:\n"
+          "          name: linux-modern\n"
+          "          path: linux-modern\n"
+          "\n"
+          "      - name: Download legacy Linux assets\n"
+          "        uses: actions/download-artifact@v4\n"
+          "        with:\n"
+          "          name: linux-legacy\n"
+          "          path: linux-legacy\n"
+          "\n"
+          "      - name: Publish GitHub release\n"
+          "        uses: ncipollo/release-action@v1\n"
+          "        with:\n"
+          "          allowUpdates: true\n"
+          "          artifacts: linux-modern/*.zip,linux-modern/*.cbox,linux-modern/*.sha256,linux-legacy/*.zip,linux-legacy/*.cbox,linux-legacy/*.sha256\n"
+          "          bodyFile: linux-modern/RELEASE_NOTES.md\n"
+          "          tag: ${{ github.ref_name }}\n";
+    }
+
   } // namespace
 
   bool generate_github_release_support(const std::filesystem::path& project_directory,
@@ -115,11 +208,7 @@ namespace forge
     const std::array workflows {
       std::pair {
         "release-linux.yml",
-        release_workflow(
-          "linux",
-          "ubuntu-latest",
-          "./.forge-bootstrap/build/forge"
-        )
+        linux_release_workflow()
       },
       std::pair {
         "release-macos.yml",

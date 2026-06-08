@@ -52,6 +52,15 @@ target-qualified `.cbox` and its `.sha256` checksum under `boxes/`. Existing
 workflow and release-note files are left unchanged. Tag creation remains an
 explicit opt-in action.
 
+The Linux workflow builds two variants before publishing:
+
+- `linux-modern` uses `ubuntu-latest`.
+- `linux-legacy` uses `ubuntu-22.04`.
+
+Building the legacy variant on the older runner gives it an older glibc and
+GNU C++ runtime compatibility baseline. Asset names include the variant so both
+builds can coexist in one GitHub Release.
+
 GitHub releases are explicit and separate from local releases:
 
 ```sh
