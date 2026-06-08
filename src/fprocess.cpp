@@ -1,7 +1,10 @@
-#include "process.h"
+#include "fprocess.h"
 
 #include <cerrno>
 #include <cstring>
+#include <vector>
+#include <filesystem>
+#include <ostream>
 
 #ifdef _WIN32
 #include <process.h>

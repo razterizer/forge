@@ -1,7 +1,7 @@
 #include "build.h"
 
 #include "box.h"
-#include "process.h"
+#include "fprocess.h"
 #include "recipe.h"
 #include "runtime_assets.h"
 #include "sha256.h"
