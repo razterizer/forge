@@ -7,6 +7,9 @@
   dependency builds.
 - Added named development and pinned dependency profiles selectable by
   `forge build`, `forge run`, and `forge test`.
+- Made `forge init` infer executable, multi-executable, static-library, and
+  header-only recipes from existing sources, public headers, and `main()`
+  entry points.
 
 ## 0.3.0
 

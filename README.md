@@ -125,7 +125,18 @@ cd path/to/project
 ```
 
 `forge init` creates only `forge.recipe.toml`. It discovers existing `.cpp`,
-`.cc`, and `.cxx` files without moving or modifying project sources.
+`.cc`, and `.cxx` files and public headers under `include/` without moving or
+modifying project sources. It inspects source files for `main()` entry points
+and infers:
+
+- one entry point: executable project
+- multiple entry points: one named executable target per entry point
+- sources and public headers without an entry point: static-library project
+- public headers without sources: header-only project
+
+For multiple executables, non-entry-point source files are included in every
+generated target. When Forge cannot confidently infer a library interface, it
+generates an executable recipe and reports the ambiguity for manual review.
 
 Build a Forge project:
 

@@ -200,6 +200,126 @@ namespace
     expect(!std::filesystem::exists(directory.path() / "src"), "init does not create source files");
   }
 
+  void test_init_infers_library_projects()
+  {
+    TemporaryDirectory static_directory;
+    TemporaryDirectory header_directory;
+    constexpr std::array arguments { std::string_view { "init" } };
+    std::ostringstream static_output;
+    std::ostringstream static_error;
+    std::ostringstream header_output;
+    std::ostringstream header_error;
+    write_file(
+      static_directory.path() / "src/answer.cpp",
+      "// This library has no main() function.\n"
+      "const char* description = \"main() is not an entry point here\";\n"
+      "int answer() { return 42; }\n"
+    );
+    write_file(static_directory.path() / "include/answer/answer.h", "int answer();\n");
+    write_file(
+      header_directory.path() / "include/answer/answer.h",
+      "#pragma once\ninline int answer() { return 42; }\n"
+    );
+
+    expect(
+      forge::cli::run(arguments, static_directory.path(), static_output, static_error) == 0,
+      "init infers a static-library project"
+    );
+    const auto static_recipe = read_file(static_directory.path() / "forge.recipe.toml");
+    expect(
+      contains(static_recipe, "type = \"static_library\""),
+      "static-library inference writes the project type"
+    );
+    expect(
+      contains(static_recipe, "public_headers = [\"include/answer/answer.h\"]"),
+      "static-library inference discovers public headers"
+    );
+    expect(
+      contains(static_output.str(), "Found 0 main() entry points"),
+      "static-library inference reports no entry points"
+    );
+    expect(static_error.str().empty(), "static-library inference does not write an error");
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    std::ostringstream static_build_output;
+    std::ostringstream static_build_error;
+    expect(
+      forge::cli::run(
+        build_arguments,
+        static_directory.path(),
+        static_build_output,
+        static_build_error
+      ) == 0,
+      "inferred static-library recipe builds"
+    );
+
+    expect(
+      forge::cli::run(arguments, header_directory.path(), header_output, header_error) == 0,
+      "init infers a header-only project"
+    );
+    const auto header_recipe = read_file(header_directory.path() / "forge.recipe.toml");
+    expect(
+      contains(header_recipe, "type = \"header_only\""),
+      "header-only inference writes the project type"
+    );
+    expect(contains(header_recipe, "paths = []"), "header-only inference writes empty sources");
+    expect(header_error.str().empty(), "header-only inference does not write an error");
+    std::ostringstream header_build_output;
+    std::ostringstream header_build_error;
+    expect(
+      forge::cli::run(
+        build_arguments,
+        header_directory.path(),
+        header_build_output,
+        header_build_error
+      ) == 0,
+      "inferred header-only recipe builds"
+    );
+  }
+
+  void test_init_infers_multiple_executables()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "init" } };
+    std::ostringstream output;
+    std::ostringstream error;
+    write_file(directory.path() / "src/common.cpp", "int answer() { return 42; }\n");
+    write_file(directory.path() / "apps/editor.cpp", "int main() { return 0; }\n");
+    write_file(directory.path() / "apps/game.cpp", "int main() { return 0; }\n");
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "init infers multiple executable targets"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(contains(recipe, "[target.editor]"), "init creates the first executable target");
+    expect(contains(recipe, "[target.game]"), "init creates the second executable target");
+    expect(
+      count_occurrences(recipe, "src/common.cpp") == 2,
+      "init assigns common sources to each executable target"
+    );
+    expect(
+      count_occurrences(recipe, "apps/editor.cpp") == 1
+        && count_occurrences(recipe, "apps/game.cpp") == 1,
+      "init keeps each entry point in its own target"
+    );
+    expect(
+      contains(output.str(), "Found 2 main() entry points"),
+      "multiple-executable inference reports its entry points"
+    );
+    expect(error.str().empty(), "multiple-executable inference does not write an error");
+    constexpr std::array build_arguments {
+      std::string_view { "build" },
+      std::string_view { "editor" }
+    };
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "inferred named executable recipe builds"
+    );
+    expect(build_error.str().empty(), "inferred named executable build does not write an error");
+  }
+
   void test_init_refuses_to_overwrite()
   {
     TemporaryDirectory directory;
@@ -2462,6 +2582,8 @@ int main()
   test_init_discovers_existing_sources();
   test_init_ignores_generated_directories();
   test_init_empty_project();
+  test_init_infers_library_projects();
+  test_init_infers_multiple_executables();
   test_init_refuses_to_overwrite();
   test_init_preserves_existing_release_support();
   test_new();

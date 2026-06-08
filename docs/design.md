@@ -12,7 +12,8 @@ compilers and build systems rather than replacing them.
 - A **box** is a packaged C++ artifact stored in a `.cbox` file.
 - Forge starts locally. Remote registries and shared caches come later.
 - `forge init` adopts an existing project and never creates, moves, or modifies
-  source files.
+  source files. It discovers public headers and `main()` entry points to infer
+  executable, multi-executable, static-library, and header-only recipes.
 - `forge new <name>` explicitly creates a new project with a recipe and starter
   source file.
 - `forge build` generates private CMake infrastructure under `.forge/generated`
