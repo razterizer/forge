@@ -7,6 +7,8 @@
   automatically select matching named library targets.
 - Added mapped runtime assets and made adoption infer high-confidence literal
   file dependencies for executable targets.
+- Made adoption preserve the highest C++ standard required by mirrored native
+  and CMake project metadata.
 
 ## 0.5.0
 

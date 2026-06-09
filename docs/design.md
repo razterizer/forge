@@ -33,6 +33,8 @@ compilers and build systems rather than replacing them.
   provides an explicit header-only, static-library, or dynamic-library hint
   when metadata remains ambiguous. Source dependencies automatically select a
   named library target matching the package name.
+- When mirrored native and CMake projects disagree about the C++ standard,
+  adoption preserves the highest declared requirement.
 - `forge new <name>` explicitly creates a new project with a recipe and starter
   source file.
 - `forge build` generates private CMake infrastructure under `.forge/generated`

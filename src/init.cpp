@@ -1737,10 +1737,7 @@ namespace forge
         project.type = additional.type;
       }
 
-      if (project.cpp_standard == 20 && additional.cpp_standard != 20)
-      {
-        project.cpp_standard = additional.cpp_standard;
-      }
+      project.cpp_standard = std::max(project.cpp_standard, additional.cpp_standard);
 
       project.include_directories.insert(
         project.include_directories.end(),
@@ -1761,6 +1758,11 @@ namespace forge
       for (const auto& [name, profile] : additional.profiles)
       {
         project.profiles.try_emplace(name, profile);
+      }
+
+      for (auto& [name, profile] : project.profiles)
+      {
+        profile.cpp_standard = std::max(profile.cpp_standard, project.cpp_standard);
       }
 
       for (auto* values : {

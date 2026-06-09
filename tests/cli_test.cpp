@@ -666,12 +666,14 @@ namespace
       directory.path() / "CMakeLists.txt",
       "project(Mirrored LANGUAGES CXX)\n"
       "add_executable(Mirrored src/main.cpp)\n"
+      "target_compile_features(Mirrored PRIVATE cxx_std_20)\n"
       "target_compile_definitions(Mirrored PRIVATE FROM_CMAKE)\n"
     );
     write_file(
       directory.path() / "Mirrored.vcxproj",
       "<Project><PropertyGroup><ProjectName>MirroredNative</ProjectName>"
-      "<ConfigurationType>Application</ConfigurationType></PropertyGroup>"
+      "<ConfigurationType>Application</ConfigurationType>"
+      "<LanguageStandard>stdcpp17</LanguageStandard></PropertyGroup>"
       "<ItemGroup><ClCompile Include=\"src\\main.cpp\" /></ItemGroup></Project>\n"
     );
     write_file(directory.path() / "src/main.cpp", "int main() {}\n");
@@ -686,6 +688,10 @@ namespace
     expect(
       contains(recipe, "name = \"MirroredNative\""),
       "explicit Visual Studio metadata remains authoritative"
+    );
+    expect(
+      contains(recipe, "cpp_std = 20"),
+      "mirrored adoption keeps the highest required C++ standard"
     );
     expect(contains(recipe, "FROM_CMAKE"), "mirrored CMake metadata fills additional settings");
     expect(
