@@ -11,6 +11,7 @@
 - Made `forge adopt` import common `.vcxproj` metadata and turn supported
   Visual Studio `.sln` files into Forge workspaces with local project
   dependencies.
+- Added concise phase and per-project progress reporting to `forge adopt`.
 
 ## 0.4.0
 

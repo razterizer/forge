@@ -19,6 +19,13 @@
 
 namespace forge
 {
+  static int adopt_project_impl(const std::filesystem::path& project_directory,
+                                const AdoptOptions& options,
+                                const ProcessRunner& process_runner,
+                                bool show_progress,
+                                std::ostream& output,
+                                std::ostream& error);
+
   namespace
   {
 
@@ -38,6 +45,14 @@ namespace forge
       }
 
       return escaped;
+    }
+
+    void report_progress(std::ostream& output,
+                         std::size_t current,
+                         std::size_t total,
+                         std::string_view description)
+    {
+      output << '[' << current << '/' << total << "] " << description << '\n' << std::flush;
     }
 
     bool is_ignored_directory(const std::filesystem::path& path)
@@ -1489,6 +1504,9 @@ namespace forge
 
       std::set<std::filesystem::path> directories;
       std::vector<std::string> relative_directories;
+      const auto progress_total = projects.size() + 2;
+
+      report_progress(output, 1, progress_total, "Reading Visual Studio solution");
 
       for (const auto& project : projects)
       {
@@ -1520,15 +1538,30 @@ namespace forge
         }
       }
 
-      output << "Adopting Visual Studio solution " << solution_path.filename().string() << '\n';
-
-      for (const auto& project : projects)
+      for (std::size_t index = 0; index < projects.size(); ++index)
       {
-        if (adopt_project(project.parent_path(), options, process_runner, output, error) != 0)
+        const auto& project = projects[index];
+        report_progress(
+          output,
+          index + 2,
+          progress_total,
+          "Adopting project " + project.stem().string()
+        );
+
+        if (adopt_project_impl(
+          project.parent_path(),
+          options,
+          process_runner,
+          false,
+          output,
+          error
+        ) != 0)
         {
           return 2;
         }
       }
+
+      report_progress(output, progress_total, progress_total, "Writing workspace");
 
       const std::string workspace =
         "#:schema " + std::string { workspace_schema_url } + "\n"
@@ -1563,6 +1596,23 @@ namespace forge
                     std::ostream& output,
                     std::ostream& error)
   {
+    return adopt_project_impl(
+      project_directory,
+      options,
+      process_runner,
+      true,
+      output,
+      error
+    );
+  }
+
+  static int adopt_project_impl(const std::filesystem::path& project_directory,
+                                const AdoptOptions& options,
+                                const ProcessRunner& process_runner,
+                                bool show_progress,
+                                std::ostream& output,
+                                std::ostream& error)
+  {
     const auto solutions = files_with_extension(project_directory, ".sln");
     const auto visual_studio_projects = files_with_extension(project_directory, ".vcxproj");
 
@@ -1576,6 +1626,11 @@ namespace forge
         output,
         error
       );
+    }
+
+    if (show_progress)
+    {
+      report_progress(output, 1, 6, "Inspecting project");
     }
 
     const auto recipe_path = project_directory / "forge.recipe.toml";
@@ -1600,9 +1655,19 @@ namespace forge
     std::vector<std::string> entry_points;
     std::optional<VisualStudioProject> visual_studio_project;
 
+    if (show_progress)
+    {
+      report_progress(output, 2, 6, "Scanning sources and headers");
+    }
+
     if (!discover_sources(project_directory, sources, public_headers, headers, entry_points, error))
     {
       return 2;
+    }
+
+    if (show_progress)
+    {
+      report_progress(output, 3, 6, "Reading project metadata");
     }
 
     if (visual_studio_projects.size() == 1)
@@ -1636,6 +1701,11 @@ namespace forge
           entry_points.push_back(source);
         }
       }
+    }
+
+    if (show_progress)
+    {
+      report_progress(output, 4, 6, "Resolving dependencies");
     }
 
     auto include_directories = infer_include_directories(project_directory, sources, headers);
@@ -1803,9 +1873,19 @@ namespace forge
       }
     }
 
+    if (show_progress)
+    {
+      report_progress(output, 5, 6, "Writing recipe");
+    }
+
     if (!write_file(recipe_path, recipe, error))
     {
       return 2;
+    }
+
+    if (show_progress)
+    {
+      report_progress(output, 6, 6, "Creating release support");
     }
 
     if (!generate_github_release_support(project_directory, error))

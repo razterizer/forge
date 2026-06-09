@@ -307,6 +307,15 @@ namespace
       std::filesystem::exists(directory.path() / "RELEASE_NOTES.md"),
       "adopt creates release notes"
     );
+    expect(
+      contains(output.str(), "[1/6] Inspecting project")
+        && contains(output.str(), "[2/6] Scanning sources and headers")
+        && contains(output.str(), "[3/6] Reading project metadata")
+        && contains(output.str(), "[4/6] Resolving dependencies")
+        && contains(output.str(), "[5/6] Writing recipe")
+        && contains(output.str(), "[6/6] Creating release support"),
+      "adopt reports project adoption progress"
+    );
     expect(contains(output.str(), "Found 3 C++ source files"), "adopt reports discovered sources");
     expect(error.str().empty(), "adopt does not write an error");
   }
@@ -504,6 +513,14 @@ namespace
     expect(
       contains(output.str(), "Adopted 2 Visual Studio projects"),
       "solution adoption reports imported projects"
+    );
+    expect(
+      contains(output.str(), "[1/4] Reading Visual Studio solution")
+        && contains(output.str(), "[2/4] Adopting project App")
+        && contains(output.str(), "[3/4] Adopting project Core")
+        && contains(output.str(), "[4/4] Writing workspace")
+        && !contains(output.str(), "[1/6] Inspecting project"),
+      "solution adoption reports compact per-project progress"
     );
     std::ostringstream build_output;
     std::ostringstream build_error;

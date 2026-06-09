@@ -131,7 +131,18 @@ cd path/to/project
 `forge adopt` creates only `forge.recipe.toml`. It discovers existing `.cpp`,
 `.cc`, and `.cxx` files and public headers under `include/` without moving or
 modifying project sources. It inspects source files for `main()` entry points
-and infers:
+and reports stable line-based progress suitable for terminals and CI logs:
+
+```text
+[1/6] Inspecting project
+[2/6] Scanning sources and headers
+[3/6] Reading project metadata
+[4/6] Resolving dependencies
+[5/6] Writing recipe
+[6/6] Creating release support
+```
+
+Forge then infers:
 
 - one entry point: executable project
 - multiple entry points: one named executable target per entry point
@@ -155,8 +166,10 @@ inherited `%(...)` placeholders are not copied into the recipe.
 At a solution root containing one `.sln` and no root `.vcxproj`, `forge adopt`
 adopts each C++ project in its distinct subdirectory and creates a
 `forge.workspace.toml`. Visual Studio `ProjectReference` entries become Forge
-local path dependencies. Solutions containing projects outside the solution
-root or multiple projects sharing one directory require manual restructuring.
+local path dependencies. Solution adoption reports one progress step per
+project rather than repeating every inner project phase. Solutions containing
+projects outside the solution root or multiple projects sharing one directory
+require manual restructuring.
 
 `forge init` remains available as a compatibility alias for `forge adopt`.
 
