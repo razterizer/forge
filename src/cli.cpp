@@ -54,8 +54,8 @@ namespace forge::cli
         << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n"
         << "  forge release [target]\n"
         << "  forge prepare-release [target]\n"
-        << "  forge run [target] [--profile=<name>] [-- arguments...]\n"
-        << "  forge test [target] [--profile=<name>] [-- arguments...]\n"
+        << "  forge run [target|project[/target]] [--profile=<name>] [-- arguments...]\n"
+        << "  forge test [target|project[/target]] [--profile=<name>] [-- arguments...]\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
         << "Commands:\n"
@@ -66,8 +66,8 @@ namespace forge::cli
         << "  build           Build the current project or workspace\n"
         << "  bump            Bump the project version and prepare release notes\n"
         << "  clean           Remove generated project state\n"
-        << "  run             Run the current project\n"
-        << "  test            Build and run named test targets\n"
+        << "  run             Run a project or workspace project\n"
+        << "  test            Build and run project or workspace tests\n"
         << "  update          Refresh locked GitHub dependencies\n"
         << "  release         Create a local release artifact\n"
         << "  prepare-release Prepare hosted release assets\n"
@@ -202,9 +202,12 @@ namespace forge::cli
 
     if (arguments.front() == "run")
     {
+      const auto workspace =
+        !std::filesystem::exists(working_directory / "forge.recipe.toml")
+        && std::filesystem::exists(working_directory / "forge.workspace.toml");
       Recipe recipe;
 
-      if (!read_recipe(working_directory / "forge.recipe.toml", recipe, error))
+      if (!workspace && !read_recipe(working_directory / "forge.recipe.toml", recipe, error))
       {
         return 2;
       }
@@ -227,7 +230,7 @@ namespace forge::cli
             return 2;
           }
         }
-        else if (!forwarding && !recipe.targets.empty() && !target)
+        else if (!forwarding && (workspace || !recipe.targets.empty()) && !target)
         {
           target = std::string { argument };
         }
@@ -235,6 +238,24 @@ namespace forge::cli
         {
           program_arguments.push_back(argument);
         }
+      }
+
+      if (workspace)
+      {
+        if (!target)
+        {
+          error << "forge: workspace run requires <project> or <project>/<target>\n";
+          return 2;
+        }
+
+        return run_workspace(
+          working_directory,
+          *target,
+          profile,
+          program_arguments,
+          output,
+          error
+        );
       }
 
       if (!recipe.targets.empty() && !target)
@@ -280,6 +301,19 @@ namespace forge::cli
         {
           test_arguments.push_back(argument);
         }
+      }
+
+      if (!std::filesystem::exists(working_directory / "forge.recipe.toml")
+          && std::filesystem::exists(working_directory / "forge.workspace.toml"))
+      {
+        return test_workspace(
+          working_directory,
+          target,
+          profile,
+          test_arguments,
+          output,
+          error
+        );
       }
 
       return test_project(working_directory, target, profile, test_arguments, output, error);

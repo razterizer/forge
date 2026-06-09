@@ -588,6 +588,19 @@ projects and their local dependency graph, rejects cycles, and delegates
 dependency builds to the existing project build machinery. See
 [`docs/workspaces.md`](docs/workspaces.md) for the format.
 
+Run a selected workspace project or named target, and run tests across the
+workspace:
+
+```sh
+forge run Termin8or
+forge run Termin8or/examples -- --help
+forge test
+forge test Termin8or/unit_tests -- --quick
+```
+
+Workspace-wide tests skip projects without marked tests and aggregate results
+across the projects that do contain tests.
+
 Create a release archive:
 
 ```sh

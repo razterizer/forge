@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <iosfwd>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -43,5 +44,35 @@ namespace forge
                       const ProcessRunner& process_runner,
                       std::ostream& output,
                       std::ostream& error);
+
+  int run_workspace(const std::filesystem::path& workspace_directory,
+                    std::string_view selection,
+                    const std::optional<std::string>& profile,
+                    std::span<const std::string_view> arguments,
+                    std::ostream& output,
+                    std::ostream& error);
+
+  int run_workspace(const std::filesystem::path& workspace_directory,
+                    std::string_view selection,
+                    const std::optional<std::string>& profile,
+                    std::span<const std::string_view> arguments,
+                    const ProcessRunner& process_runner,
+                    std::ostream& output,
+                    std::ostream& error);
+
+  int test_workspace(const std::filesystem::path& workspace_directory,
+                     const std::optional<std::string>& selection,
+                     const std::optional<std::string>& profile,
+                     std::span<const std::string_view> arguments,
+                     std::ostream& output,
+                     std::ostream& error);
+
+  int test_workspace(const std::filesystem::path& workspace_directory,
+                     const std::optional<std::string>& selection,
+                     const std::optional<std::string>& profile,
+                     std::span<const std::string_view> arguments,
+                     const ProcessRunner& process_runner,
+                     std::ostream& output,
+                     std::ostream& error);
 
 } // namespace forge

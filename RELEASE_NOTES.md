@@ -4,7 +4,8 @@
 
 - Added the first multi-project workspace milestone: `forge.workspace.toml`
   groups independent Forge projects, validates their local dependency graph,
-  and supports workspace-wide or selected-project builds.
+  and supports workspace-wide or selected-project builds, selected project
+  runs, and aggregated workspace tests.
 
 ## 0.4.0
 

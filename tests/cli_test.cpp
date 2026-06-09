@@ -135,6 +135,79 @@ namespace
     expect(error.str().empty(), "successful CLI workspace build does not write an error");
   }
 
+  void test_cli_runs_and_tests_workspace()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.workspace.toml",
+      "[workspace]\nname = \"suite\"\nprojects = [\"app\", \"tests\"]\n"
+    );
+    write_file(
+      directory.path() / "app/forge.recipe.toml",
+      "[project]\nname = \"app\"\nversion = \"0.1.0\"\n"
+      "type = \"executable\"\ncpp_std = 20\n\n[sources]\npaths = [\"main.cpp\"]\n"
+    );
+    write_file(
+      directory.path() / "app/main.cpp",
+      "#include <string_view>\nint main(int argc, char** argv) { "
+      "return argc == 2 && std::string_view { argv[1] } == \"ok\" ? 0 : 1; }\n"
+    );
+    write_file(
+      directory.path() / "tests/forge.recipe.toml",
+      "[project]\nname = \"tests\"\nversion = \"0.1.0\"\n\n"
+      "[target.unit_tests]\ntype = \"executable\"\ncpp_std = 20\n"
+      "sources = [\"unit_tests.cpp\"]\ntest = true\n"
+    );
+    write_file(directory.path() / "tests/unit_tests.cpp", "int main() { return 0; }\n");
+    constexpr std::array run_arguments {
+      std::string_view { "run" },
+      std::string_view { "app" },
+      std::string_view { "--" },
+      std::string_view { "ok" }
+    };
+    constexpr std::array test_arguments { std::string_view { "test" } };
+    constexpr std::array selected_test_arguments {
+      std::string_view { "test" },
+      std::string_view { "tests/unit_tests" }
+    };
+    std::ostringstream run_output;
+    std::ostringstream run_error;
+    std::ostringstream test_output;
+    std::ostringstream test_error;
+    std::ostringstream selected_output;
+    std::ostringstream selected_error;
+
+    expect(
+      forge::cli::run(run_arguments, directory.path(), run_output, run_error) == 0,
+      "CLI runs a selected workspace project"
+    );
+    expect(contains(run_output.str(), "Running app"), "CLI workspace run reports its project");
+    expect(run_error.str().empty(), "successful CLI workspace run does not write an error");
+    expect(
+      forge::cli::run(test_arguments, directory.path(), test_output, test_error) == 0,
+      "CLI tests every workspace project with marked tests"
+    );
+    expect(
+      contains(test_output.str(), "Workspace tests: 1 project passed, 0 failed"),
+      "CLI workspace test reports aggregate results"
+    );
+    expect(test_error.str().empty(), "successful CLI workspace test does not write an error");
+    expect(
+      forge::cli::run(
+        selected_test_arguments,
+        directory.path(),
+        selected_output,
+        selected_error
+      ) == 0,
+      "CLI tests a selected workspace project target"
+    );
+    expect(
+      contains(selected_output.str(), "Testing unit_tests"),
+      "CLI selected workspace test reports its target"
+    );
+    expect(selected_error.str().empty(), "selected CLI workspace test does not write an error");
+  }
+
   void test_version()
   {
     constexpr std::array arguments { std::string_view { "--version" } };
@@ -3015,6 +3088,7 @@ int main()
 {
   test_help();
   test_cli_builds_workspace();
+  test_cli_runs_and_tests_workspace();
   test_version();
   test_init_alias_adopts_existing_project();
   test_init_discovers_existing_sources();

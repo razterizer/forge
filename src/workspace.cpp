@@ -1,6 +1,8 @@
 #include "workspace.h"
 
 #include "recipe.h"
+#include "run.h"
+#include "test.h"
 
 #include <algorithm>
 #include <fstream>
@@ -252,6 +254,77 @@ namespace forge
       return true;
     }
 
+    bool load_workspace(const std::filesystem::path& workspace_directory,
+                        Workspace& workspace,
+                        std::map<std::filesystem::path, Recipe>& recipes,
+                        std::ostream& error)
+    {
+      return read_workspace(workspace_directory / "forge.workspace.toml", workspace, error)
+        && resolve_projects(workspace_directory, workspace, recipes, error);
+    }
+
+    bool parse_selection(std::string_view selection,
+                         std::string& project,
+                         std::optional<std::string>& target,
+                         std::ostream& error)
+    {
+      const auto slash = selection.find('/');
+
+      if (slash == std::string_view::npos)
+      {
+        project = selection;
+      }
+      else
+      {
+        project = selection.substr(0, slash);
+        target = selection.substr(slash + 1);
+      }
+
+      if (project.empty()
+          || (target && target->empty())
+          || (target && target->find('/') != std::string::npos))
+      {
+        error << "forge: workspace selection must be <project> or <project>/<target>\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    const WorkspaceProject* find_project(const Workspace& workspace,
+                                         std::string_view name,
+                                         std::ostream& error)
+    {
+      const auto project = std::find_if(
+        workspace.projects.begin(),
+        workspace.projects.end(),
+        [name](const WorkspaceProject& candidate)
+        {
+          return candidate.name == name;
+        }
+      );
+
+      if (project == workspace.projects.end())
+      {
+        error << "forge: workspace has no project named '" << name << "'\n";
+        return nullptr;
+      }
+
+      return &*project;
+    }
+
+    bool has_tests(const Recipe& recipe)
+    {
+      return std::any_of(
+        recipe.targets.begin(),
+        recipe.targets.end(),
+        [](const RecipeTarget& target)
+        {
+          return target.test;
+        }
+      );
+    }
+
   } // namespace
 
   bool read_workspace(const std::filesystem::path& path,
@@ -347,14 +420,9 @@ namespace forge
   {
     Workspace workspace;
 
-    if (!read_workspace(workspace_directory / "forge.workspace.toml", workspace, error))
-    {
-      return 2;
-    }
-
     std::map<std::filesystem::path, Recipe> recipes;
 
-    if (!resolve_projects(workspace_directory, workspace, recipes, error))
+    if (!load_workspace(workspace_directory, workspace, recipes, error))
     {
       return 2;
     }
@@ -435,6 +503,185 @@ namespace forge
 
     output << "Built workspace " << workspace.name << '\n';
     return 0;
+  }
+
+  int run_workspace(const std::filesystem::path& workspace_directory,
+                    std::string_view selection,
+                    const std::optional<std::string>& profile,
+                    std::span<const std::string_view> arguments,
+                    std::ostream& output,
+                    std::ostream& error)
+  {
+    return run_workspace(
+      workspace_directory,
+      selection,
+      profile,
+      arguments,
+      run_process,
+      output,
+      error
+    );
+  }
+
+  int run_workspace(const std::filesystem::path& workspace_directory,
+                    std::string_view selection,
+                    const std::optional<std::string>& profile,
+                    std::span<const std::string_view> arguments,
+                    const ProcessRunner& process_runner,
+                    std::ostream& output,
+                    std::ostream& error)
+  {
+    Workspace workspace;
+    std::map<std::filesystem::path, Recipe> recipes;
+
+    if (!load_workspace(workspace_directory, workspace, recipes, error))
+    {
+      return 2;
+    }
+
+    std::string project_name;
+    std::optional<std::string> target;
+
+    if (!parse_selection(selection, project_name, target, error))
+    {
+      return 2;
+    }
+
+    const auto* project = find_project(workspace, project_name, error);
+
+    if (!project)
+    {
+      return 2;
+    }
+
+    return run_project(
+      project->path,
+      target,
+      profile,
+      arguments,
+      process_runner,
+      output,
+      error
+    );
+  }
+
+  int test_workspace(const std::filesystem::path& workspace_directory,
+                     const std::optional<std::string>& selection,
+                     const std::optional<std::string>& profile,
+                     std::span<const std::string_view> arguments,
+                     std::ostream& output,
+                     std::ostream& error)
+  {
+    return test_workspace(
+      workspace_directory,
+      selection,
+      profile,
+      arguments,
+      run_process,
+      output,
+      error
+    );
+  }
+
+  int test_workspace(const std::filesystem::path& workspace_directory,
+                     const std::optional<std::string>& selection,
+                     const std::optional<std::string>& profile,
+                     std::span<const std::string_view> arguments,
+                     const ProcessRunner& process_runner,
+                     std::ostream& output,
+                     std::ostream& error)
+  {
+    Workspace workspace;
+    std::map<std::filesystem::path, Recipe> recipes;
+
+    if (!load_workspace(workspace_directory, workspace, recipes, error))
+    {
+      return 2;
+    }
+
+    if (selection)
+    {
+      std::string project_name;
+      std::optional<std::string> target;
+
+      if (!parse_selection(*selection, project_name, target, error))
+      {
+        return 2;
+      }
+
+      const auto* project = find_project(workspace, project_name, error);
+
+      if (!project)
+      {
+        return 2;
+      }
+
+      return test_project(
+        project->path,
+        target,
+        profile,
+        arguments,
+        process_runner,
+        output,
+        error
+      );
+    }
+
+    std::size_t passed = 0;
+    std::size_t failed = 0;
+    bool command_failed = false;
+
+    for (const auto& project : workspace.projects)
+    {
+      if (!has_tests(recipes.at(project.path)))
+      {
+        continue;
+      }
+
+      output << "Testing project " << project.name << '\n';
+      const auto result = test_project(
+        project.path,
+        std::nullopt,
+        profile,
+        arguments,
+        process_runner,
+        output,
+        error
+      );
+
+      if (result == 0)
+      {
+        ++passed;
+      }
+      else
+      {
+        ++failed;
+        command_failed = command_failed || result == 2;
+      }
+    }
+
+    if (passed + failed == 0)
+    {
+      error << "forge: workspace contains no projects with named test targets\n";
+      return 2;
+    }
+
+    output << "Workspace tests: " << passed << " project";
+
+    if (passed != 1)
+    {
+      output << 's';
+    }
+
+    output << " passed, "
+           << failed << " failed\n";
+
+    if (failed == 0)
+    {
+      return 0;
+    }
+
+    return command_failed ? 2 : 1;
   }
 
 } // namespace forge

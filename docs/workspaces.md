@@ -39,6 +39,29 @@ forge build Termin8or --profile=dev
 Dependency profiles are applied while determining the workspace graph and are
 forwarded to project builds.
 
-This first workspace milestone intentionally keeps releases, tests, runs,
-adoption, and workspace generation project-scoped. Those commands can become
-workspace-aware without changing the workspace format.
+Run a workspace project, or a named executable target within it:
+
+```sh
+forge run Termin8or
+forge run Termin8or/examples -- --help
+```
+
+The project selection is mandatory for `forge run` because a workspace may
+contain several executable projects. Use `<project>/<target>` when selecting a
+named target.
+
+Run every marked test target across the workspace:
+
+```sh
+forge test
+forge test Termin8or
+forge test Termin8or/unit_tests -- --quick
+```
+
+Workspace-wide tests skip projects that contain no marked test targets,
+continue through project test failures, and report an aggregate project
+summary.
+
+Releases, adoption, clean, and workspace generation remain project-scoped.
+Those commands can become workspace-aware without changing the workspace
+format.
