@@ -155,6 +155,20 @@ shared between generated targets. When Forge cannot confidently infer a
 library interface, it generates an executable recipe and reports the ambiguity
 for manual review.
 
+Use an explicit library hint when project metadata cannot express the intended
+library interface:
+
+```sh
+forge adopt --library-type=header_only
+forge adopt --library-type=static_library
+forge adopt --library-type=dynamic_library
+```
+
+When a library project also contains examples or tests with `main()`, Forge
+preserves the library as a named target and makes the inferred executable
+targets depend on it. Plain path and Git dependencies automatically select a
+named library target matching the package name.
+
 When a project directory contains one `.vcxproj`, `forge adopt` imports its
 project name, source and header items, output type, C++ standard, project
 references, and concrete project-relative include paths. Preprocessor

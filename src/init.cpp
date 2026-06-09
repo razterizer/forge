@@ -778,6 +778,13 @@ namespace forge
         else if ((command.name == "add_executable" || command.name == "add_library")
                  && !command.arguments.empty())
         {
+          if (command.name == "add_library"
+              && command.arguments.size() > 1
+              && command.arguments[1] == "ALIAS")
+          {
+            continue;
+          }
+
           targets.insert(command.arguments.front());
 
           if (targets.size() == 1)
@@ -1989,10 +1996,10 @@ namespace forge
     bool looks_like_dependency_include(std::string_view include)
     {
       static const std::set<std::string_view> system_headers {
-        "assert.h", "complex.h", "ctype.h", "errno.h", "fenv.h", "float.h",
+        "assert.h", "complex.h", "conio.h", "ctype.h", "errno.h", "fenv.h", "float.h",
         "inttypes.h", "limits.h", "locale.h", "math.h", "process.h", "setjmp.h",
         "signal.h", "stdarg.h", "stdbool.h", "stddef.h", "stdint.h", "stdio.h",
-        "stdlib.h", "string.h", "time.h", "uchar.h", "unistd.h", "wchar.h",
+        "stdlib.h", "string.h", "termios.h", "time.h", "uchar.h", "unistd.h", "wchar.h",
         "wctype.h", "windows.h",
         "algorithm", "any", "array", "atomic", "barrier", "bit", "bitset",
         "cassert", "ccomplex", "cctype", "cerrno", "cfenv", "cfloat", "charconv",
@@ -2119,11 +2126,36 @@ namespace forge
 
     bool provides_include(const Recipe& recipe, std::string_view include)
     {
-      if (!recipe.targets.empty()
-          || (recipe.type != "static_library"
+      if (!recipe.targets.empty())
+      {
+        return std::ranges::any_of(
+          recipe.targets,
+          [include](const RecipeTarget& target)
+          {
+            if (target.type != "static_library"
+                && target.type != "dynamic_library"
+                && target.type != "header_only"
+                && target.type != "imported_library")
+            {
+              return false;
+            }
+
+            return std::ranges::any_of(
+              target.public_headers,
+              [include](const std::filesystem::path& header)
+              {
+                const auto generic = header.generic_string();
+                return generic.starts_with("include/") && generic.substr(8) == include;
+              }
+            );
+          }
+        );
+      }
+
+      if (recipe.type != "static_library"
               && recipe.type != "dynamic_library"
               && recipe.type != "header_only"
-              && recipe.type != "imported_library"))
+              && recipe.type != "imported_library")
       {
         return false;
       }
@@ -3082,7 +3114,8 @@ namespace forge
 
     if (has_cmake_project
         && !cmake_subdirectories.empty()
-        && !cmake_defines_target(cmake_path))
+        && !cmake_defines_target(cmake_path)
+        && !options.library_type)
     {
       return adopt_cmake_workspace(
         project_directory,
@@ -3313,6 +3346,54 @@ namespace forge
       std::set<std::string> target_names;
       const auto inferred_target_sources =
         infer_target_sources(project_directory, sources, headers, entry_points);
+      const auto library_type =
+        options.library_type
+          ? *options.library_type
+          : visual_studio_project
+          && (visual_studio_project->type == "header_only"
+              || visual_studio_project->type == "static_library"
+              || visual_studio_project->type == "dynamic_library")
+          ? visual_studio_project->type
+          : std::string {};
+      std::string library_target;
+
+      if (!library_type.empty())
+      {
+        library_target = target_name(project_name, 0);
+        target_names.insert(library_target);
+        std::vector<std::string> library_sources;
+
+        for (const auto& source : sources)
+        {
+          if (!std::binary_search(entry_points.begin(), entry_points.end(), source))
+          {
+            library_sources.push_back(source);
+          }
+        }
+
+        recipe
+          += "\n[target." + library_target + "]\n"
+          "type = \"" + library_type + "\"\n"
+          "cpp_std = " + std::to_string(
+            visual_studio_project ? visual_studio_project->cpp_standard : 20
+          ) + "\n"
+          "sources = " + format_sources(library_sources) + "\n";
+
+        if (!public_headers.empty())
+        {
+          recipe += "public_headers = " + formatted_headers + "\n";
+        }
+
+        if (!include_directories.empty())
+        {
+          recipe += "include_dirs = " + formatted_include_directories + "\n";
+        }
+
+        if (visual_studio_project && !visual_studio_project->definitions.empty())
+        {
+          recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
+        }
+      }
 
       for (std::size_t index = 0; index < entry_points.size(); ++index)
       {
@@ -3332,26 +3413,40 @@ namespace forge
           ) + "\n"
           "sources = " + format_sources(inferred_target_sources[index]) + "\n";
 
-        if (!public_headers.empty())
+        if (!library_target.empty())
         {
-          recipe += "public_headers = " + formatted_headers + "\n";
+          recipe += "dependencies = [\"" + escape_toml_string(library_target) + "\"]\n";
+        }
+        else
+        {
+          if (!public_headers.empty())
+          {
+            recipe += "public_headers = " + formatted_headers + "\n";
+          }
+
+          if (!include_directories.empty())
+          {
+            recipe += "include_dirs = " + formatted_include_directories + "\n";
+          }
+
+          if (visual_studio_project && !visual_studio_project->definitions.empty())
+          {
+            recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
+          }
         }
 
-        if (!include_directories.empty())
+        if (std::filesystem::path { entry_points[index] }.begin()->string() == "Tests")
         {
-          recipe += "include_dirs = " + formatted_include_directories + "\n";
-        }
-
-        if (visual_studio_project && !visual_studio_project->definitions.empty())
-        {
-          recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
+          recipe += "test = true\n";
         }
       }
     }
     else
     {
       const auto type =
-        visual_studio_project && !visual_studio_project->type.empty()
+        options.library_type
+          ? *options.library_type
+          : visual_studio_project && !visual_studio_project->type.empty()
           ? visual_studio_project->type
           : sources.empty() && !public_headers.empty()
           ? "header_only"

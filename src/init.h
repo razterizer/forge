@@ -4,6 +4,8 @@
 
 #include <filesystem>
 #include <iosfwd>
+#include <optional>
+#include <string>
 
 namespace forge
 {
@@ -11,6 +13,7 @@ namespace forge
   struct AdoptOptions
   {
     bool github = false;
+    std::optional<std::string> library_type;
   };
 
   int adopt_project(const std::filesystem::path& project_directory,

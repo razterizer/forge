@@ -44,7 +44,7 @@ namespace forge::cli
         << "Forge - a project workflow system for C++\n\n"
         << "Usage:\n"
         << "  forge <command>\n"
-        << "  forge adopt [--github]\n"
+        << "  forge adopt [--github] [--library-type=<type>]\n"
         << "  forge new <name>\n"
         << "  forge box create [target]\n"
         << "  forge box <inspect|verify|extract|publish> <path>\n"
@@ -478,14 +478,32 @@ namespace forge::cli
     {
       AdoptOptions options;
 
-      if (arguments.size() == 2 && arguments[1] == "--github")
+      for (const auto argument : arguments.subspan(1))
       {
-        options.github = true;
-      }
-      else if (arguments.size() != 1)
-      {
-        error << "forge: usage: forge adopt [--github]\n";
-        return 2;
+        if (argument == "--github")
+        {
+          options.github = true;
+        }
+        else if (argument.starts_with("--library-type="))
+        {
+          const auto type = argument.substr(std::string_view { "--library-type=" }.size());
+
+          if (options.library_type
+              || (type != "header_only"
+                  && type != "static_library"
+                  && type != "dynamic_library"))
+          {
+            error << "forge: library type must be header_only, static_library, or dynamic_library\n";
+            return 2;
+          }
+
+          options.library_type = std::string { type };
+        }
+        else
+        {
+          error << "forge: usage: forge adopt [--github] [--library-type=<type>]\n";
+          return 2;
+        }
       }
 
       return adopt_project(working_directory, options, run_process, output, error);

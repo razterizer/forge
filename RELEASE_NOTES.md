@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.6.0
+
+- Made adoption preserve library targets alongside inferred examples and tests,
+  added explicit `--library-type` hints, and made source dependencies
+  automatically select matching named library targets.
+
 ## 0.5.0
 
 - Added the first multi-project workspace milestone: `forge.workspace.toml`

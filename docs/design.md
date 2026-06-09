@@ -28,6 +28,11 @@ compilers and build systems rather than replacing them.
   remain authoritative and receive additional concrete CMake settings.
   Concrete target-free CMake superprojects become Forge workspaces containing
   their `add_subdirectory(...)` projects.
+- Library projects containing examples or tests retain a named library target,
+  and inferred executable targets depend on it. `forge adopt --library-type`
+  provides an explicit header-only, static-library, or dynamic-library hint
+  when metadata remains ambiguous. Source dependencies automatically select a
+  named library target matching the package name.
 - `forge new <name>` explicitly creates a new project with a recipe and starter
   source file.
 - `forge build` generates private CMake infrastructure under `.forge/generated`

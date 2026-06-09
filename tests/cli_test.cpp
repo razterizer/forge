@@ -558,6 +558,106 @@ namespace
     expect(build_error.str().empty(), "imported CMake build does not write an error");
   }
 
+  void test_adopt_preserves_cmake_interface_library_with_programs()
+  {
+    TemporaryDirectory directory;
+    const auto library = directory.path() / "Headers";
+    const auto application = directory.path() / "App";
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      library / "CMakeLists.txt",
+      "project(Headers)\n"
+      "add_library(Headers INTERFACE)\n"
+      "add_library(Headers::Headers ALIAS Headers)\n"
+      "target_compile_features(Headers INTERFACE cxx_std_20)\n"
+      "target_include_directories(Headers INTERFACE "
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)\n"
+    );
+    write_file(
+      library / "include/Headers/answer.h",
+      "#pragma once\ninline int answer() { return 42; }\n"
+    );
+    write_file(
+      library / "Examples/examples.cpp",
+      "#include <Headers/answer.h>\nint main() { return answer() == 42 ? 0 : 1; }\n"
+    );
+    write_file(
+      library / "Tests/unit_tests.cpp",
+      "#include <Headers/answer.h>\nint main() { return answer() == 42 ? 0 : 1; }\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, library, output, error) == 0,
+      "adopt preserves a CMake interface library with auxiliary programs"
+    );
+    const auto recipe = read_file(library / "forge.recipe.toml");
+    expect(
+      contains(recipe, "[target.Headers]")
+        && contains(recipe, "type = \"header_only\"")
+        && contains(recipe, "[target.examples]")
+        && contains(recipe, "dependencies = [\"Headers\"]")
+        && contains(recipe, "[target.unit_tests]")
+        && contains(recipe, "test = true"),
+      "adopt generates a library target used by examples and tests"
+    );
+    write_file(
+      application / "main.cpp",
+      "#include <Headers/answer.h>\nint main() { return answer() == 42 ? 0 : 1; }\n"
+    );
+    std::ostringstream app_adopt_output;
+    std::ostringstream app_adopt_error;
+    expect(
+      forge::cli::run(adopt_arguments, application, app_adopt_output, app_adopt_error) == 0,
+      "adopt infers a named-target sibling library dependency"
+    );
+    expect(
+      contains(read_file(application / "forge.recipe.toml"), "Headers = { path = \"../Headers\" }"),
+      "adopt writes the named-target sibling dependency"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    const auto build_result = forge::cli::run(
+      build_arguments,
+      application,
+      build_output,
+      build_error
+    );
+    expect(
+      build_result == 0,
+      "a path dependency automatically selects the adopted library target: " + build_error.str()
+    );
+    expect(build_error.str().empty(), "adopted multi-target dependency build does not write an error");
+  }
+
+  void test_adopt_accepts_library_type_hint()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments {
+      std::string_view { "adopt" },
+      std::string_view { "--library-type=header_only" }
+    };
+    write_file(directory.path() / "include/Headers/answer.h", "#pragma once\n");
+    write_file(directory.path() / "Examples/examples.cpp", "int main() {}\n");
+    write_file(directory.path() / "Tests/unit_tests.cpp", "int main() {}\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt accepts an explicit library type hint"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "type = \"header_only\"")
+        && contains(recipe, "dependencies = [\"" + directory.path().filename().string() + "\"]"),
+      "library type hint preserves a library target beside inferred programs"
+    );
+    expect(error.str().empty(), "valid library type hint does not write an error");
+  }
+
   void test_adopt_merges_mirrored_cmake_and_visual_studio_projects()
   {
     TemporaryDirectory directory;
@@ -847,6 +947,8 @@ namespace
       directory.path() / "main.cpp",
       "#include <iostream>\n"
       "#include <sys/wait.h>\n"
+      "#include <conio.h>\n"
+      "#include <termios.h>\n"
       "#include <imgui.h>\n"
       "#include <Core/core.h>\n"
       "int main() { return 0; }\n"
@@ -871,7 +973,9 @@ namespace
     );
     expect(
       !contains(output.str(), "<iostream>")
-        && !contains(output.str(), "<sys/wait.h>"),
+        && !contains(output.str(), "<sys/wait.h>")
+        && !contains(output.str(), "<conio.h>")
+        && !contains(output.str(), "<termios.h>"),
       "adopt excludes known system headers from dependency candidates"
     );
     expect(error.str().empty(), "unresolved dependency includes do not fail adoption");
@@ -3584,6 +3688,8 @@ int main()
   test_init_infers_local_include_directories();
   test_adopt_imports_visual_studio_project();
   test_adopt_imports_cmake_project();
+  test_adopt_preserves_cmake_interface_library_with_programs();
+  test_adopt_accepts_library_type_hint();
   test_adopt_merges_mirrored_cmake_and_visual_studio_projects();
   test_adopt_prefers_cmake_over_generated_solution();
   test_adopt_imports_xcode_project();

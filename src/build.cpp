@@ -42,6 +42,7 @@ namespace forge
     {
       std::filesystem::path directory;
       Recipe recipe;
+      std::optional<std::string> target;
       std::filesystem::path box;
       std::optional<BoxMetadata> box_metadata;
     };
@@ -1532,6 +1533,7 @@ namespace forge
       std::filesystem::path downloaded_box;
       std::filesystem::path git_checkout;
       auto resolved_dependency = dependency;
+      std::optional<std::string> dependency_target;
 
       if (!resolved_dependency.github.empty()
           && !use_locked_github_dependency(
@@ -1707,6 +1709,37 @@ namespace forge
           return false;
         }
 
+        if (!is_box && dependency_recipe.type.empty() && !dependency_recipe.targets.empty())
+        {
+          const auto package_name = dependency_recipe.name;
+          const auto preferred = std::find_if(
+            dependency_recipe.targets.begin(),
+            dependency_recipe.targets.end(),
+            [&dependency](const RecipeTarget& target)
+            {
+              return target.name == dependency.name
+                && (target.type == "static_library"
+                    || target.type == "dynamic_library"
+                    || target.type == "imported_library"
+                    || target.type == "header_only");
+            }
+          );
+          if (preferred == dependency_recipe.targets.end())
+          {
+            error << "forge: dependency '" << dependency.name
+                  << "' has no library target named '" << dependency.name << "'\n";
+            return false;
+          }
+
+          if (!select_recipe_target(dependency_recipe, preferred->name, error))
+          {
+            return false;
+          }
+
+          dependency_recipe.name = package_name;
+          dependency_target = preferred->name;
+        }
+
         if (dependency_recipe.name != dependency.name)
         {
           error << "forge: dependency name '" << dependency.name << "' does not match recipe name '"
@@ -1732,6 +1765,7 @@ namespace forge
             {
               directory,
               std::move(dependency_recipe),
+              dependency_target,
               is_box ? directory : std::filesystem::path {},
               std::move(box_metadata)
             }
@@ -1777,7 +1811,7 @@ namespace forge
 
       output << "Resolving dependency " << node.recipe.name << '\n';
 
-      if (create_box(node.directory, process_runner, output, error) != 0)
+      if (create_box(node.directory, node.target, process_runner, output, error) != 0)
       {
         return false;
       }
@@ -2382,9 +2416,11 @@ namespace forge
       return 2;
     }
 
-    auto requested_target = is_root_project
-      ? dependency_session->options.target
-      : std::optional<std::string> {};
+    auto requested_target = options.target
+      ? options.target
+      : is_root_project
+        ? dependency_session->options.target
+        : std::optional<std::string> {};
 
     if (is_root_project
         && dependency_session->options.dependencies_only
