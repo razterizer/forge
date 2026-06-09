@@ -22,6 +22,8 @@
   files into inferred executable targets.
 - Made `forge adopt` report unresolved library-looking includes as dependency
   candidates while excluding known standard and platform headers.
+- Made `forge adopt` infer unambiguous local path dependencies from sibling
+  single-target Forge libraries.
 
 ## 0.3.0
 

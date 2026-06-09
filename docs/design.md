@@ -17,7 +17,8 @@ compilers and build systems rather than replacing them.
   multi-executable projects, unambiguous local include relationships guide
   source ownership while uncertain sources remain shared. `forge init` remains
   a compatibility alias. Remaining library-looking includes are reported as
-  dependency candidates without modifying the generated dependency graph.
+  dependency candidates. Unambiguous public-header matches from sibling
+  single-target Forge libraries are added as local path dependencies.
 - `forge new <name>` explicitly creates a new project with a recipe and starter
   source file.
 - `forge build` generates private CMake infrastructure under `.forge/generated`

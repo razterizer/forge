@@ -181,6 +181,11 @@ references each one. Known standard and platform headers are omitted. Adoption
 still succeeds so the generated recipe can be reviewed before dependencies are
 added.
 
+Forge also inspects sibling directories containing `forge.recipe.toml`. When
+exactly one single-target sibling library exposes a matching public header,
+`forge adopt` adds it as a local path dependency. Ambiguous matches and
+multi-target siblings remain unresolved for manual review.
+
 Forge generates CMake infrastructure under `.forge/generated/` and builds into
 `.forge/build/`.
 

@@ -10,6 +10,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -351,6 +352,143 @@ namespace forge
       return unresolved;
     }
 
+    struct SiblingDependency
+    {
+      std::string name;
+      std::string path;
+    };
+
+    bool provides_include(const Recipe& recipe, std::string_view include)
+    {
+      if (!recipe.targets.empty()
+          || (recipe.type != "static_library"
+              && recipe.type != "dynamic_library"
+              && recipe.type != "header_only"
+              && recipe.type != "imported_library"))
+      {
+        return false;
+      }
+
+      for (const auto& header : recipe.public_headers)
+      {
+        const auto generic = header.generic_string();
+
+        if (generic.starts_with("include/") && generic.substr(8) == include)
+        {
+          return true;
+        }
+      }
+
+      for (const auto& profile : recipe.imports)
+      {
+        for (const auto& header : profile.public_headers)
+        {
+          const auto generic = header.generic_string();
+
+          if (generic == include || generic.ends_with('/' + std::string { include }))
+          {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    }
+
+    std::vector<SiblingDependency> infer_sibling_dependencies(
+      const std::filesystem::path& project_directory,
+      std::map<std::string, std::string>& unresolved)
+    {
+      const auto parent = project_directory.parent_path();
+      std::error_code filesystem_error;
+      std::map<std::string, std::vector<SiblingDependency>> matches;
+
+      for (const auto& entry : std::filesystem::directory_iterator { parent, filesystem_error })
+      {
+        if (filesystem_error)
+        {
+          break;
+        }
+
+        if (!entry.is_directory(filesystem_error)
+            || std::filesystem::equivalent(entry.path(), project_directory, filesystem_error)
+            || !std::filesystem::is_regular_file(
+              entry.path() / "forge.recipe.toml",
+              filesystem_error
+            ))
+        {
+          filesystem_error.clear();
+          continue;
+        }
+
+        Recipe sibling;
+        std::ostringstream ignored_error;
+
+        if (!read_recipe(entry.path() / "forge.recipe.toml", sibling, ignored_error))
+        {
+          continue;
+        }
+
+        const auto relative =
+          std::filesystem::relative(entry.path(), project_directory, filesystem_error);
+
+        if (filesystem_error)
+        {
+          filesystem_error.clear();
+          continue;
+        }
+
+        for (const auto& [include, source] : unresolved)
+        {
+          if (provides_include(sibling, include))
+          {
+            matches[include].push_back(SiblingDependency {
+              sibling.name,
+              relative.generic_string()
+            });
+          }
+        }
+      }
+
+      std::map<std::string, std::vector<std::pair<std::string, SiblingDependency>>> by_name;
+
+      for (const auto& [include, candidates] : matches)
+      {
+        if (candidates.size() == 1)
+        {
+          by_name[candidates.front().name].emplace_back(include, candidates.front());
+        }
+      }
+
+      std::vector<SiblingDependency> result;
+
+      for (const auto& [name, candidates] : by_name)
+      {
+        const auto path = candidates.front().second.path;
+        const auto same_project = std::ranges::all_of(
+          candidates,
+          [&path](const auto& candidate)
+          {
+            return candidate.second.path == path;
+          }
+        );
+
+        if (!same_project)
+        {
+          continue;
+        }
+
+        result.push_back(candidates.front().second);
+
+        for (const auto& [include, dependency] : candidates)
+        {
+          unresolved.erase(include);
+        }
+      }
+
+      return result;
+    }
+
     std::vector<std::string> infer_include_directories(
       const std::filesystem::path& project_directory,
       const std::vector<std::string>& sources,
@@ -624,7 +762,8 @@ namespace forge
     }
 
     const auto include_directories = infer_include_directories(project_directory, sources, headers);
-    const auto unresolved = unresolved_includes(project_directory, sources, headers);
+    auto unresolved = unresolved_includes(project_directory, sources, headers);
+    const auto sibling_dependencies = infer_sibling_dependencies(project_directory, unresolved);
     const auto project_name = project_directory.filename().string();
     const auto escaped_project_name = escape_toml_string(project_name);
     const auto formatted_sources = format_sources(sources);
@@ -696,6 +835,17 @@ namespace forge
       }
     }
 
+    if (!sibling_dependencies.empty())
+    {
+      recipe += "\n[dependencies]\n";
+
+      for (const auto& dependency : sibling_dependencies)
+      {
+        recipe += dependency.name + " = { path = \""
+          + escape_toml_string(dependency.path) + "\" }\n";
+      }
+    }
+
     if (!write_file(recipe_path, recipe, error))
     {
       return 2;
@@ -740,6 +890,17 @@ namespace forge
       for (const auto& [include, source] : unresolved)
       {
         output << "  <" << include << "> from " << source << '\n';
+      }
+    }
+
+    if (!sibling_dependencies.empty())
+    {
+      output << "Inferred " << sibling_dependencies.size() << " sibling project dependenc";
+      output << (sibling_dependencies.size() == 1 ? "y:\n" : "ies:\n");
+
+      for (const auto& dependency : sibling_dependencies)
+      {
+        output << "  " << dependency.name << " = " << dependency.path << '\n';
       }
     }
 

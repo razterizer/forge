@@ -291,6 +291,106 @@ namespace
     expect(error.str().empty(), "unresolved dependency includes do not fail adoption");
   }
 
+  void test_adopt_infers_sibling_project_dependencies()
+  {
+    TemporaryDirectory directory;
+    const auto application = directory.path() / "app";
+    const auto answer = directory.path() / "answer";
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      answer / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"answer\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/answer/answer.h\"]\n"
+    );
+    write_file(
+      answer / "include/answer/answer.h",
+      "#pragma once\n"
+      "inline int answer() { return 42; }\n"
+    );
+    write_file(
+      application / "main.cpp",
+      "#include <answer/answer.h>\n"
+      "int main() { return answer() == 42 ? 0 : 1; }\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, application, output, error) == 0,
+      "adopt infers a sibling Forge dependency"
+    );
+    const auto recipe = read_file(application / "forge.recipe.toml");
+    expect(
+      contains(recipe, "[dependencies]\nanswer = { path = \"../answer\" }"),
+      "adopt writes the inferred sibling dependency"
+    );
+    expect(
+      contains(output.str(), "Inferred 1 sibling project dependency:")
+        && contains(output.str(), "answer = ../answer"),
+      "adopt reports the inferred sibling dependency"
+    );
+    expect(
+      !contains(output.str(), "unresolved dependency include"),
+      "matched sibling includes are no longer unresolved"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, application, build_output, build_error) == 0,
+      "adopted project builds with its inferred sibling dependency"
+    );
+    expect(build_error.str().empty(), "inferred sibling dependency build does not write an error");
+  }
+
+  void test_adopt_preserves_ambiguous_sibling_includes()
+  {
+    TemporaryDirectory directory;
+    const auto application = directory.path() / "app";
+    constexpr std::array arguments { std::string_view { "adopt" } };
+
+    for (const auto sibling : { std::string_view { "first" }, std::string_view { "second" } })
+    {
+      const auto project = directory.path() / sibling;
+      write_file(
+        project / "forge.recipe.toml",
+        "[project]\n"
+        "name = \"" + std::string { sibling } + "\"\n"
+        "version = \"1.0.0\"\n"
+        "type = \"header_only\"\n"
+        "cpp_std = 20\n\n"
+        "[sources]\n"
+        "paths = []\n"
+        "public_headers = [\"include/common/common.h\"]\n"
+      );
+      write_file(project / "include/common/common.h", "#pragma once\n");
+    }
+
+    write_file(application / "main.cpp", "#include <common/common.h>\nint main() {}\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, application, output, error) == 0,
+      "adopt accepts ambiguous sibling matches"
+    );
+    expect(
+      !contains(read_file(application / "forge.recipe.toml"), "[dependencies]"),
+      "adopt does not guess between ambiguous sibling projects"
+    );
+    expect(
+      contains(output.str(), "<common/common.h> from main.cpp"),
+      "ambiguous sibling include remains unresolved"
+    );
+    expect(error.str().empty(), "ambiguous sibling matches do not fail adoption");
+  }
+
   void test_init_empty_project()
   {
     TemporaryDirectory directory;
@@ -2771,6 +2871,8 @@ int main()
   test_init_ignores_generated_directories();
   test_init_infers_local_include_directories();
   test_adopt_reports_unresolved_dependency_includes();
+  test_adopt_infers_sibling_project_dependencies();
+  test_adopt_preserves_ambiguous_sibling_includes();
   test_init_empty_project();
   test_init_infers_library_projects();
   test_init_infers_multiple_executables();
