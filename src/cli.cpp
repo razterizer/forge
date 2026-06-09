@@ -22,6 +22,7 @@ namespace forge::cli
 
     constexpr std::array commands {
       std::string_view { "box" },
+      std::string_view { "adopt" },
       std::string_view { "init" },
       std::string_view { "new" },
       std::string_view { "build" },
@@ -42,6 +43,7 @@ namespace forge::cli
         << "Forge - a project workflow system for C++\n\n"
         << "Usage:\n"
         << "  forge <command>\n"
+        << "  forge adopt\n"
         << "  forge new <name>\n"
         << "  forge box create [target]\n"
         << "  forge box <inspect|verify|extract|publish> <path>\n"
@@ -56,8 +58,9 @@ namespace forge::cli
         << "  forge --help\n"
         << "  forge --version\n\n"
         << "Commands:\n"
+        << "  adopt           Adopt the current project\n"
         << "  box             Create, inspect, verify, publish locally, or extract boxes\n"
-        << "  init            Adopt the current project\n"
+        << "  init            Alias for adopt\n"
         << "  new             Create a new project\n"
         << "  build           Build the current project\n"
         << "  bump            Bump the project version and prepare release notes\n"
@@ -415,6 +418,11 @@ namespace forge::cli
     {
       error << "forge: commands do not accept arguments yet\n";
       return 2;
+    }
+
+    if (arguments.front() == "adopt")
+    {
+      return adopt_project(working_directory, output, error);
     }
 
     if (arguments.front() == "init")

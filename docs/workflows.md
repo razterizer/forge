@@ -38,7 +38,7 @@ build, tag, or publish anything.
 to `.forge/release/RELEASE_NOTES.md` for GitHub release publication. A present
 notes file without a matching version section causes release to fail.
 
-`forge new` and `forge init` generate thin GitHub Actions adapters:
+`forge new` and `forge adopt` generate thin GitHub Actions adapters:
 
 - `.github/workflows/release-linux.yml`
 - `.github/workflows/release-macos.yml`

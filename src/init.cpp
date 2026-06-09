@@ -527,9 +527,9 @@ namespace forge
 
   } // namespace
 
-  int init_project(const std::filesystem::path& project_directory,
-                   std::ostream& output,
-                   std::ostream& error)
+  int adopt_project(const std::filesystem::path& project_directory,
+                    std::ostream& output,
+                    std::ostream& error)
   {
     const auto recipe_path = project_directory / "forge.recipe.toml";
 
@@ -640,6 +640,7 @@ namespace forge
     }
 
     output
+      << "Adopted project '" << project_name << "'\n"
       << "Created " << recipe_path.string() << '\n'
       << "Found " << sources.size() << " C++ source file";
 
@@ -670,6 +671,13 @@ namespace forge
     }
 
     return 0;
+  }
+
+  int init_project(const std::filesystem::path& project_directory,
+                   std::ostream& output,
+                   std::ostream& error)
+  {
+    return adopt_project(project_directory, output, error);
   }
 
 } // namespace forge

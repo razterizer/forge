@@ -104,6 +104,8 @@ namespace
 
     expect(forge::cli::run({}, output, error) == 0, "empty arguments show help");
     expect(contains(output.str(), "forge <command>"), "help includes usage");
+    expect(contains(output.str(), "forge adopt"), "help presents adopt as the primary command");
+    expect(contains(output.str(), "init            Alias for adopt"), "help documents the init alias");
     expect(error.str().empty(), "help does not write an error");
   }
 
@@ -117,10 +119,33 @@ namespace
     expect(contains(output.str(), forge::cli::version), "version reports the current version");
   }
 
-  void test_init_discovers_existing_sources()
+  void test_init_alias_adopts_existing_project()
   {
     TemporaryDirectory directory;
     constexpr std::array arguments { std::string_view { "init" } };
+    std::ostringstream output;
+    std::ostringstream error;
+    write_file(directory.path() / "main.cpp", "int main() {}\n");
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "init alias adopts an existing project"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / "forge.recipe.toml"),
+      "init alias creates the adopted recipe"
+    );
+    expect(
+      contains(output.str(), "Adopted project"),
+      "init alias reports adoption"
+    );
+    expect(error.str().empty(), "init alias does not write an error");
+  }
+
+  void test_init_discovers_existing_sources()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
     std::ostringstream output;
     std::ostringstream error;
 
@@ -131,12 +156,13 @@ namespace
 
     expect(
       forge::cli::run(arguments, directory.path(), output, error) == 0,
-      "init succeeds"
+      "adopt succeeds"
     );
     expect(
       std::filesystem::exists(directory.path() / "forge.recipe.toml"),
-      "init creates a recipe"
+      "adopt creates a recipe"
     );
+    expect(contains(output.str(), "Adopted project"), "adopt reports the adopted project");
     expect(
       contains(read_file(directory.path() / "forge.recipe.toml"), "main.cpp"),
       "recipe contains a root source"
@@ -147,24 +173,24 @@ namespace
     );
     expect(
       read_file(directory.path() / "forge.recipe.toml").starts_with("#:schema https://"),
-      "init recipe declares its schema"
+      "adopt recipe declares its schema"
     );
     expect(
       std::filesystem::exists(directory.path() / ".github/workflows/release-linux.yml"),
-      "init creates GitHub release workflows"
+      "adopt creates GitHub release workflows"
     );
     expect(
       std::filesystem::exists(directory.path() / "RELEASE_NOTES.md"),
-      "init creates release notes"
+      "adopt creates release notes"
     );
-    expect(contains(output.str(), "Found 3 C++ source files"), "init reports discovered sources");
-    expect(error.str().empty(), "init does not write an error");
+    expect(contains(output.str(), "Found 3 C++ source files"), "adopt reports discovered sources");
+    expect(error.str().empty(), "adopt does not write an error");
   }
 
   void test_init_ignores_generated_directories()
   {
     TemporaryDirectory directory;
-    constexpr std::array arguments { std::string_view { "init" } };
+    constexpr std::array arguments { std::string_view { "adopt" } };
     std::ostringstream output;
     std::ostringstream error;
 
@@ -178,14 +204,14 @@ namespace
     forge::cli::run(arguments, directory.path(), output, error);
     const auto recipe = read_file(directory.path() / "forge.recipe.toml");
 
-    expect(contains(recipe, "app.cpp"), "init discovers project sources");
-    expect(!contains(recipe, "generated.cpp"), "init ignores generated directories");
+    expect(contains(recipe, "app.cpp"), "adopt discovers project sources");
+    expect(!contains(recipe, "generated.cpp"), "adopt ignores generated directories");
   }
 
   void test_init_infers_local_include_directories()
   {
     TemporaryDirectory directory;
-    constexpr std::array init_arguments { std::string_view { "init" } };
+    constexpr std::array init_arguments { std::string_view { "adopt" } };
     constexpr std::array build_arguments { std::string_view { "build" } };
     std::ostringstream output;
     std::ostringstream error;
@@ -200,16 +226,16 @@ namespace
 
     expect(
       forge::cli::run(init_arguments, directory.path(), output, error) == 0,
-      "init infers local include directories"
+      "adopt infers local include directories"
     );
     const auto recipe = read_file(directory.path() / "forge.recipe.toml");
     expect(
       contains(recipe, "include_dirs = [\".\", \"vendor/imgui\"]"),
-      "init writes unambiguous local include roots"
+      "adopt writes unambiguous local include roots"
     );
     expect(
       contains(output.str(), "Inferred 2 local include directories"),
-      "init reports inferred local include roots"
+      "adopt reports inferred local include roots"
     );
     std::ostringstream build_output;
     std::ostringstream build_error;
@@ -228,26 +254,26 @@ namespace
   void test_init_empty_project()
   {
     TemporaryDirectory directory;
-    constexpr std::array arguments { std::string_view { "init" } };
+    constexpr std::array arguments { std::string_view { "adopt" } };
     std::ostringstream output;
     std::ostringstream error;
 
     expect(
       forge::cli::run(arguments, directory.path(), output, error) == 0,
-      "init accepts an empty project"
+      "adopt accepts an empty project"
     );
     expect(
       contains(read_file(directory.path() / "forge.recipe.toml"), "paths = []"),
       "empty project has an empty source list"
     );
-    expect(!std::filesystem::exists(directory.path() / "src"), "init does not create source files");
+    expect(!std::filesystem::exists(directory.path() / "src"), "adopt does not create source files");
   }
 
   void test_init_infers_library_projects()
   {
     TemporaryDirectory static_directory;
     TemporaryDirectory header_directory;
-    constexpr std::array arguments { std::string_view { "init" } };
+    constexpr std::array arguments { std::string_view { "adopt" } };
     std::ostringstream static_output;
     std::ostringstream static_error;
     std::ostringstream header_output;
@@ -266,7 +292,7 @@ namespace
 
     expect(
       forge::cli::run(arguments, static_directory.path(), static_output, static_error) == 0,
-      "init infers a static-library project"
+      "adopt infers a static-library project"
     );
     const auto static_recipe = read_file(static_directory.path() / "forge.recipe.toml");
     expect(
@@ -297,7 +323,7 @@ namespace
 
     expect(
       forge::cli::run(arguments, header_directory.path(), header_output, header_error) == 0,
-      "init infers a header-only project"
+      "adopt infers a header-only project"
     );
     const auto header_recipe = read_file(header_directory.path() / "forge.recipe.toml");
     expect(
@@ -322,7 +348,7 @@ namespace
   void test_init_infers_multiple_executables()
   {
     TemporaryDirectory directory;
-    constexpr std::array arguments { std::string_view { "init" } };
+    constexpr std::array arguments { std::string_view { "adopt" } };
     std::ostringstream output;
     std::ostringstream error;
     write_file(directory.path() / "src/common.cpp", "int answer() { return 42; }\n");
@@ -331,19 +357,19 @@ namespace
 
     expect(
       forge::cli::run(arguments, directory.path(), output, error) == 0,
-      "init infers multiple executable targets"
+      "adopt infers multiple executable targets"
     );
     const auto recipe = read_file(directory.path() / "forge.recipe.toml");
-    expect(contains(recipe, "[target.editor]"), "init creates the first executable target");
-    expect(contains(recipe, "[target.game]"), "init creates the second executable target");
+    expect(contains(recipe, "[target.editor]"), "adopt creates the first executable target");
+    expect(contains(recipe, "[target.game]"), "adopt creates the second executable target");
     expect(
       count_occurrences(recipe, "src/common.cpp") == 2,
-      "init assigns common sources to each executable target"
+      "adopt assigns common sources to each executable target"
     );
     expect(
       count_occurrences(recipe, "apps/editor.cpp") == 1
         && count_occurrences(recipe, "apps/game.cpp") == 1,
-      "init keeps each entry point in its own target"
+      "adopt keeps each entry point in its own target"
     );
     expect(
       contains(output.str(), "Found 2 main() entry points"),
@@ -366,7 +392,7 @@ namespace
   void test_init_groups_sources_by_local_include_graph()
   {
     TemporaryDirectory directory;
-    constexpr std::array init_arguments { std::string_view { "init" } };
+    constexpr std::array init_arguments { std::string_view { "adopt" } };
     std::ostringstream output;
     std::ostringstream error;
     write_file(
@@ -395,20 +421,20 @@ namespace
 
     expect(
       forge::cli::run(init_arguments, directory.path(), output, error) == 0,
-      "init groups multi-executable sources"
+      "adopt groups multi-executable sources"
     );
     const auto recipe = read_file(directory.path() / "forge.recipe.toml");
     expect(
       count_occurrences(recipe, "src/editor.cpp") == 1,
-      "init assigns editor implementation only to editor"
+      "adopt assigns editor implementation only to editor"
     );
     expect(
       count_occurrences(recipe, "src/game.cpp") == 1,
-      "init assigns game implementation only to game"
+      "adopt assigns game implementation only to game"
     );
     expect(
       count_occurrences(recipe, "src/unclassified.cpp") == 2,
-      "init conservatively shares unclassified sources"
+      "adopt conservatively shares unclassified sources"
     );
 
     for (const auto target : { std::string_view { "editor" }, std::string_view { "game" } })
@@ -430,7 +456,7 @@ namespace
   void test_init_refuses_to_overwrite()
   {
     TemporaryDirectory directory;
-    constexpr std::array arguments { std::string_view { "init" } };
+    constexpr std::array arguments { std::string_view { "adopt" } };
     std::ostringstream first_output;
     std::ostringstream first_error;
     std::ostringstream second_output;
@@ -441,19 +467,19 @@ namespace
 
     expect(
       forge::cli::run(arguments, directory.path(), second_output, second_error) == 2,
-      "init refuses to overwrite an existing recipe"
+      "adopt refuses to overwrite an existing recipe"
     );
     expect(
       read_file(directory.path() / "forge.recipe.toml") == original_recipe,
-      "init preserves an existing recipe"
+      "adopt preserves an existing recipe"
     );
-    expect(contains(second_error.str(), "already exists"), "init explains overwrite refusal");
+    expect(contains(second_error.str(), "already exists"), "adopt explains overwrite refusal");
   }
 
   void test_init_preserves_existing_release_support()
   {
     TemporaryDirectory directory;
-    constexpr std::array arguments { std::string_view { "init" } };
+    constexpr std::array arguments { std::string_view { "adopt" } };
     std::ostringstream output;
     std::ostringstream error;
     write_file(directory.path() / "main.cpp", "int main() {}\n");
@@ -467,16 +493,16 @@ namespace
 
     expect(
       read_file(directory.path() / "RELEASE_NOTES.md") == "# Existing notes\n",
-      "init preserves existing release notes"
+      "adopt preserves existing release notes"
     );
     expect(
       read_file(directory.path() / ".github/workflows/release-linux.yml")
         == "name: custom release\n",
-      "init preserves existing GitHub workflows"
+      "adopt preserves existing GitHub workflows"
     );
     expect(
       std::filesystem::exists(directory.path() / ".github/workflows/release-windows.yml"),
-      "init creates missing GitHub workflows"
+      "adopt creates missing GitHub workflows"
     );
   }
 
@@ -649,7 +675,7 @@ namespace
   void test_build_rejects_empty_project()
   {
     TemporaryDirectory directory;
-    constexpr std::array init_arguments { std::string_view { "init" } };
+    constexpr std::array init_arguments { std::string_view { "adopt" } };
     constexpr std::array build_arguments { std::string_view { "build" } };
     std::ostringstream init_output;
     std::ostringstream init_error;
@@ -2700,6 +2726,7 @@ int main()
 {
   test_help();
   test_version();
+  test_init_alias_adopts_existing_project();
   test_init_discovers_existing_sources();
   test_init_ignores_generated_directories();
   test_init_infers_local_include_directories();

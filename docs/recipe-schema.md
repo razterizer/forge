@@ -25,7 +25,7 @@ rules:
 - Header-only projects require public headers and an empty source-path array.
 - Public headers must remain under `include/`.
 - Source and named-target `include_dirs` declare private project-relative
-  include search directories. `forge init` infers these when local headers
+  include search directories. `forge adopt` infers these when local headers
   unambiguously satisfy source `#include` directives.
 - Build numbers must be non-negative.
 - Projects may declare local static-library, dynamic-library, imported-library,
@@ -84,7 +84,7 @@ those binaries.
 
 ## Taplo and VS Code
 
-`forge new` and `forge init` automatically add the Taplo-compatible schema
+`forge new` and `forge adopt` automatically add the Taplo-compatible schema
 directive at the start of generated recipes:
 
 ```toml

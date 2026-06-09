@@ -2,21 +2,23 @@
 
 ## 0.4.0
 
+- Made `forge adopt` the primary command for adopting existing projects while
+  retaining `forge init` as a compatibility alias.
 - Added pinned Git source dependencies using exact full commit IDs, with
   shallow project-local checkout caching and normal transitive source
   dependency builds.
 - Added named development and pinned dependency profiles selectable by
   `forge build`, `forge run`, and `forge test`.
-- Made `forge init` infer executable, multi-executable, static-library, and
+- Made `forge adopt` infer executable, multi-executable, static-library, and
   header-only recipes from existing sources, public headers, and `main()`
   entry points.
 - Renamed Forge's process helper to avoid shadowing the Windows system
   `<process.h>` header.
 - Made generated Linux release workflows publish modern and legacy
   compatibility builds from `ubuntu-latest` and `ubuntu-22.04`.
-- Made `forge init` infer local include search roots from resolvable
+- Made `forge adopt` infer local include search roots from resolvable
   `#include` directives.
-- Made `forge init` use local include relationships to group implementation
+- Made `forge adopt` use local include relationships to group implementation
   files into inferred executable targets.
 
 ## 0.3.0

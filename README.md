@@ -121,10 +121,10 @@ Adopt an existing C++ project:
 
 ```sh
 cd path/to/project
-/path/to/forge/build/dev/forge init
+/path/to/forge/build/dev/forge adopt
 ```
 
-`forge init` creates only `forge.recipe.toml`. It discovers existing `.cpp`,
+`forge adopt` creates only `forge.recipe.toml`. It discovers existing `.cpp`,
 `.cc`, and `.cxx` files and public headers under `include/` without moving or
 modifying project sources. It inspects source files for `main()` entry points
 and infers:
@@ -134,9 +134,13 @@ and infers:
 - sources and public headers without an entry point: static-library project
 - public headers without sources: header-only project
 
-For multiple executables, non-entry-point source files are included in every
-generated target. When Forge cannot confidently infer a library interface, it
-generates an executable recipe and reports the ambiguity for manual review.
+For multiple executables, Forge uses local include relationships to group
+implementation files. Sources without a reliable ownership signal remain
+shared between generated targets. When Forge cannot confidently infer a
+library interface, it generates an executable recipe and reports the ambiguity
+for manual review.
+
+`forge init` remains available as a compatibility alias for `forge adopt`.
 
 Build a Forge project:
 
@@ -161,12 +165,12 @@ public_headers = ["include/hello/hello.h"]
 include_dirs = ["vendor/imgui"]
 ```
 
-`include_dirs` adds private project-relative header search roots. `forge init`
+`include_dirs` adds private project-relative header search roots. `forge adopt`
 infers these roots when an include directive maps unambiguously to a header
 already in the project, including projects whose headers do not live under the
 conventional `include/` directory.
 
-When multiple `main()` entry points are found, `forge init` also uses resolved
+When multiple `main()` entry points are found, `forge adopt` also uses resolved
 local include relationships to assign implementation files to the executables
 that use them. Sources without a reliable ownership signal remain shared
 between the inferred targets rather than being discarded.
@@ -612,14 +616,14 @@ preserving their project-relative paths. Forge also includes them automatically
 in executable boxes and releases. Runtime asset paths must remain inside the
 project, may not contain symbolic links, and may not collide with build output.
 
-`forge new` and `forge init` create `RELEASE_NOTES.md` and Linux, macOS, and
+`forge new` and `forge adopt` create `RELEASE_NOTES.md` and Linux, macOS, and
 Windows release workflows under `.github/workflows`. Pushing a `release-*` or
 `v*` tag builds Forge, runs `forge prepare-release`, and publishes the resulting
 artifacts to the matching GitHub Release. Executable projects produce a
 target-qualified ZIP archive. Static-library, dynamic-library, and header-only
 projects produce a target-qualified `.cbox` and its `.sha256` checksum under
 `boxes/`. Existing workflow files and release notes are never overwritten by
-`forge init`. Generated `.gitignore` files exclude Forge build state. Tag
+`forge adopt`. Generated `.gitignore` files exclude Forge build state. Tag
 creation remains an explicit opt-in action.
 
 The generated Linux workflow builds and publishes two compatibility variants:
@@ -709,7 +713,7 @@ See [docs/cbox-format.md](docs/cbox-format.md) for the implemented format.
 Forge provides a JSON Schema for recipe validation and editor completion at
 [`schemas/forge.recipe.schema.json`](schemas/forge.recipe.schema.json). See
 [docs/recipe-schema.md](docs/recipe-schema.md) for editor integration.
-`forge new` and `forge init` automatically associate generated recipes with the
+`forge new` and `forge adopt` automatically associate generated recipes with the
 hosted schema.
 
 See [docs/design.md](docs/design.md) for the current design baseline and

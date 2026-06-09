@@ -11,11 +11,12 @@ compilers and build systems rather than replacing them.
 - `forge.lock.toml` records exact resolved dependencies and artifacts.
 - A **box** is a packaged C++ artifact stored in a `.cbox` file.
 - Forge starts locally. Remote registries and shared caches come later.
-- `forge init` adopts an existing project and never creates, moves, or modifies
+- `forge adopt` adopts an existing project and never creates, moves, or modifies
   source files. It discovers public headers and `main()` entry points to infer
   executable, multi-executable, static-library, and header-only recipes. For
   multi-executable projects, unambiguous local include relationships guide
-  source ownership while uncertain sources remain shared.
+  source ownership while uncertain sources remain shared. `forge init` remains
+  a compatibility alias.
 - `forge new <name>` explicitly creates a new project with a recipe and starter
   source file.
 - `forge build` generates private CMake infrastructure under `.forge/generated`
@@ -90,7 +91,7 @@ without building the current project, while preserving other targets.
 
 ## Initial roadmap
 
-1. v0.1: `forge new`, `forge init`, `forge build`, `forge run`, and
+1. v0.1: `forge new`, `forge adopt`, `forge build`, `forge run`, and
    `forge release`
 2. v0.2: local path dependencies
 3. v0.3: `.cbox` creation and consumption
