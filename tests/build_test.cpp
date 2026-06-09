@@ -130,7 +130,8 @@ namespace
       << "type = \"header_only\"\n"
       << "cpp_std = 20\n"
       << "sources = []\n"
-      << "public_headers = [\"include/hello/hello.h\"]\n\n"
+      << "public_headers = [\"include/hello/hello.h\"]\n"
+      << "include_dirs = [\"include/hello\"]\n\n"
       << "[target.examples]\n"
       << "type = \"executable\"\n"
       << "cpp_std = 20\n"
@@ -402,6 +403,14 @@ namespace
     expect(
       contains(generated, "add_library(forge_internal_0 INTERFACE)"),
       "build generates internal header-only target"
+    );
+    expect(
+      contains(
+        generated,
+        "target_include_directories(forge_internal_0 INTERFACE "
+        "\"${FORGE_PROJECT_ROOT}/include/hello\")"
+      ),
+      "build exposes adopted header-only include directories as interface properties"
     );
     expect(
       contains(generated, "target_link_libraries(forge_project PRIVATE forge_internal_0)"),

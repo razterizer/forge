@@ -981,8 +981,10 @@ namespace forge
 
         for (const auto& include_directory : target.include_directories)
         {
+          const auto include_visibility =
+            target.type == "header_only" ? "INTERFACE" : "PRIVATE";
           file
-            << "target_include_directories(" << target_name << " PRIVATE "
+            << "target_include_directories(" << target_name << ' ' << include_visibility << ' '
             << "\"${FORGE_PROJECT_ROOT}/"
             << escape_cmake(include_directory.generic_string()) << "\")\n";
         }
