@@ -174,6 +174,28 @@ infers these roots when an include directive maps unambiguously to a header
 already in the project, including projects whose headers do not live under the
 conventional `include/` directory.
 
+Declare persistent preprocessor definitions for a legacy project target:
+
+```toml
+[build]
+defines = ["TERMIN8OR_ENABLE_AUDIO", "VERSION_MAJOR=3"]
+```
+
+Named targets may declare their own `defines`. Definitions use `NAME` or
+`NAME=value` syntax. Add temporary definitions to a selected root build by
+repeating `--define`:
+
+```sh
+forge build --define=DEBUG_UI --define=VERSION_MAJOR=3
+forge build Termin8or --define=LOCAL_DIAGNOSTICS
+```
+
+Recipe definitions are reproducible project inputs and invalidate compatible
+source-box reuse when changed. CLI definitions are temporary additions for the
+selected root project and are not written to the recipe. From a workspace root,
+they apply to the requested project, or every top-level project in a
+workspace-wide build, but not to dependency projects.
+
 When multiple `main()` entry points are found, `forge adopt` also uses resolved
 local include relationships to assign implementation files to the executables
 that use them. Sources without a reliable ownership signal remain shared

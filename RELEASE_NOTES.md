@@ -6,6 +6,8 @@
   groups independent Forge projects, validates their local dependency graph,
   and supports workspace-wide or selected-project builds, selected project
   runs, and aggregated workspace tests.
+- Added persistent project and named-target preprocessor definitions plus
+  repeatable temporary `forge build --define=<symbol>` additions.
 
 ## 0.4.0
 

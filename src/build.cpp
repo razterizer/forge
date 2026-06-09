@@ -986,6 +986,15 @@ namespace forge
             << escape_cmake(include_directory.generic_string()) << "\")\n";
         }
 
+        for (const auto& definition : target.compile_definitions)
+        {
+          const auto definition_visibility =
+            target.type == "header_only" ? "INTERFACE" : "PRIVATE";
+          file
+            << "target_compile_definitions(" << target_name << ' ' << definition_visibility << " \""
+            << escape_cmake(definition) << "\")\n";
+        }
+
         for (const auto& dependency : target.dependencies)
         {
           file << "target_link_libraries(" << target_name << ' ' << visibility
@@ -1052,6 +1061,13 @@ namespace forge
         file
           << "target_include_directories(forge_project PRIVATE \"${FORGE_PROJECT_ROOT}/"
           << escape_cmake(include_directory.generic_string()) << "\")\n";
+      }
+
+      for (const auto& definition : recipe.compile_definitions)
+      {
+        file
+          << "target_compile_definitions(forge_project PRIVATE \""
+          << escape_cmake(definition) << "\")\n";
       }
 
       for (const auto& dependency : recipe.selected_internal_dependencies)
@@ -2381,6 +2397,15 @@ namespace forge
     if (!select_recipe_target(recipe, requested_target, error))
     {
       return 2;
+    }
+
+    if (is_root_project)
+    {
+      recipe.compile_definitions.insert(
+        recipe.compile_definitions.end(),
+        options.compile_definitions.begin(),
+        options.compile_definitions.end()
+      );
     }
 
     for (const auto& target : recipe.internal_targets)

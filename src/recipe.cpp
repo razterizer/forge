@@ -1,6 +1,7 @@
 #include "recipe.h"
 
 #include <algorithm>
+#include <cctype>
 #include <charconv>
 #include <fstream>
 #include <iterator>
@@ -177,6 +178,29 @@ namespace forge
       return true;
     }
 
+    bool parse_definitions(std::string_view value, std::vector<std::string>& definitions)
+    {
+      std::vector<std::filesystem::path> paths;
+
+      if (!parse_sources(value, paths))
+      {
+        return false;
+      }
+
+      definitions.clear();
+
+      for (const auto& path : paths)
+      {
+        definitions.push_back(path.string());
+      }
+
+      return std::all_of(
+        definitions.begin(),
+        definitions.end(),
+        is_valid_compile_definition
+      );
+    }
+
     bool parse_dependency(std::string_view value, Dependency& dependency)
     {
       value = trim(value);
@@ -327,6 +351,30 @@ namespace forge
 
   } // namespace
 
+  bool is_valid_compile_definition(std::string_view definition)
+  {
+    const auto equals = definition.find('=');
+    const auto name = definition.substr(0, equals);
+
+    if (name.empty()
+        || (!std::isalpha(static_cast<unsigned char>(name.front())) && name.front() != '_')
+        || definition.find(';') != std::string_view::npos
+        || definition.find('\n') != std::string_view::npos
+        || definition.find('\r') != std::string_view::npos)
+    {
+      return false;
+    }
+
+    return std::all_of(
+      name.begin() + 1,
+      name.end(),
+      [](unsigned char character)
+      {
+        return std::isalnum(character) || character == '_';
+      }
+    );
+  }
+
   bool read_recipe(const std::filesystem::path& path,
                    Recipe& recipe,
                    std::ostream& error)
@@ -402,6 +450,10 @@ namespace forge
           recipe.build_number = build_number;
         }
       }
+      else if (section == "build" && key == "defines")
+      {
+        valid = parse_definitions(value, recipe.compile_definitions);
+      }
       else if (section == "sources" && key == "paths")
       {
         valid = parse_sources(value, recipe.sources);
@@ -458,6 +510,10 @@ namespace forge
         else if (key == "include_dirs")
         {
           valid = parse_sources(value, target->include_directories);
+        }
+        else if (key == "defines")
+        {
+          valid = parse_definitions(value, target->compile_definitions);
         }
         else if (key == "runtime_files")
         {
@@ -740,6 +796,7 @@ namespace forge
     recipe.sources = selected->sources;
     recipe.public_headers = selected->public_headers;
     recipe.include_directories = selected->include_directories;
+    recipe.compile_definitions = selected->compile_definitions;
     recipe.runtime_files = selected->runtime_files;
     return true;
   }

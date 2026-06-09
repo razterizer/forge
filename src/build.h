@@ -4,6 +4,7 @@
 #include <iosfwd>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "fprocess.h"
 
@@ -15,6 +16,7 @@ namespace forge
     std::optional<std::string> update_dependency;
     std::optional<std::string> target;
     std::optional<std::string> profile;
+    std::vector<std::string> compile_definitions;
     bool dependencies_only = false;
     bool update_dependencies = false;
   };

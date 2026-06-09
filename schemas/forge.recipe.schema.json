@@ -62,6 +62,10 @@
           "type": "integer",
           "minimum": 0,
           "description": "Optional artifact build number, represented as SemVer build metadata."
+        },
+        "defines": {
+          "$ref": "#/$defs/compileDefinitions",
+          "description": "Private preprocessor definitions applied when compiling the project."
         }
       }
     },
@@ -127,6 +131,10 @@
           "include_dirs": {
             "$ref": "#/$defs/projectPaths",
             "description": "Private project-relative include search directories."
+          },
+          "defines": {
+            "$ref": "#/$defs/compileDefinitions",
+            "description": "Preprocessor definitions applied when compiling this target."
           },
           "runtime_files": {
             "$ref": "#/$defs/projectPaths",
@@ -617,6 +625,14 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/projectPath"
+      },
+      "uniqueItems": true
+    },
+    "compileDefinitions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:=[^;\\r\\n]*)?$"
       },
       "uniqueItems": true
     },

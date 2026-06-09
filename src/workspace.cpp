@@ -405,6 +405,7 @@ namespace forge
       workspace_directory,
       project,
       profile,
+      {},
       run_process,
       output,
       error
@@ -414,6 +415,43 @@ namespace forge
   int build_workspace(const std::filesystem::path& workspace_directory,
                       const std::optional<std::string>& project,
                       const std::optional<std::string>& profile,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    return build_workspace(
+      workspace_directory,
+      project,
+      profile,
+      {},
+      process_runner,
+      output,
+      error
+    );
+  }
+
+  int build_workspace(const std::filesystem::path& workspace_directory,
+                      const std::optional<std::string>& project,
+                      const std::optional<std::string>& profile,
+                      const std::vector<std::string>& compile_definitions,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    return build_workspace(
+      workspace_directory,
+      project,
+      profile,
+      compile_definitions,
+      run_process,
+      output,
+      error
+    );
+  }
+
+  int build_workspace(const std::filesystem::path& workspace_directory,
+                      const std::optional<std::string>& project,
+                      const std::optional<std::string>& profile,
+                      const std::vector<std::string>& compile_definitions,
                       const ProcessRunner& process_runner,
                       std::ostream& output,
                       std::ostream& error)
@@ -479,6 +517,7 @@ namespace forge
       {
         BuildOptions options;
         options.profile = profile;
+        options.compile_definitions = compile_definitions;
 
         if (build_project(current->path, options, process_runner, output, error) != 0)
         {
@@ -492,6 +531,7 @@ namespace forge
           BuildOptions options;
           options.profile = profile;
           options.target = target.name;
+          options.compile_definitions = compile_definitions;
 
           if (build_project(current->path, options, process_runner, output, error) != 0)
           {

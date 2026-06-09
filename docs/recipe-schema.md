@@ -27,6 +27,10 @@ rules:
 - Source and named-target `include_dirs` declare private project-relative
   include search directories. `forge adopt` infers these when local headers
   unambiguously satisfy source `#include` directives.
+- `[build].defines` and named-target `defines` declare persistent preprocessor
+  definitions. Definitions use `NAME` or `NAME=value` syntax. Repeatable
+  `forge build --define=<symbol>` options temporarily add private definitions
+  to selected root builds without changing their recipes.
 - Build numbers must be non-negative.
 - Projects may declare local static-library, dynamic-library, imported-library,
   and header-only dependencies using name and either project-path or cbox-path

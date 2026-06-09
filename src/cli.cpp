@@ -49,7 +49,7 @@ namespace forge::cli
         << "  forge box create [target]\n"
         << "  forge box <inspect|verify|extract|publish> <path>\n"
         << "  forge update [dependency]\n"
-        << "  forge build [target] [--profile=<name>]\n"
+        << "  forge build [target] [--profile=<name>] [--define=<symbol> ...]\n"
         << "  forge bump <major|minor|patch>\n"
         << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n"
         << "  forge release [target]\n"
@@ -409,13 +409,25 @@ namespace forge::cli
             return 2;
           }
         }
+        else if (argument.starts_with("--define="))
+        {
+          const auto definition = argument.substr(std::string_view { "--define=" }.size());
+
+          if (!is_valid_compile_definition(definition))
+          {
+            error << "forge: invalid compile definition '" << definition << "'\n";
+            return 2;
+          }
+
+          options.compile_definitions.emplace_back(definition);
+        }
         else if (!options.target)
         {
           options.target = std::string { argument };
         }
         else
         {
-          error << "forge: usage: forge build [target] [--profile=<name>]\n";
+          error << "forge: usage: forge build [target] [--profile=<name>] [--define=<symbol> ...]\n";
           return 2;
         }
       }
@@ -427,6 +439,7 @@ namespace forge::cli
           working_directory,
           options.target,
           options.profile,
+          options.compile_definitions,
           output,
           error
         );

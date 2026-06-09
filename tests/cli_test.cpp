@@ -113,7 +113,10 @@ namespace
   void test_cli_builds_workspace()
   {
     TemporaryDirectory directory;
-    constexpr std::array arguments { std::string_view { "build" } };
+    constexpr std::array arguments {
+      std::string_view { "build" },
+      std::string_view { "--define=WORKSPACE_FEATURE" }
+    };
     write_file(
       directory.path() / "forge.workspace.toml",
       "[workspace]\nname = \"suite\"\nprojects = [\"hello\"]\n"
@@ -123,7 +126,10 @@ namespace
       "[project]\nname = \"hello\"\nversion = \"0.1.0\"\n"
       "type = \"executable\"\ncpp_std = 20\n\n[sources]\npaths = [\"main.cpp\"]\n"
     );
-    write_file(directory.path() / "hello/main.cpp", "int main() {}\n");
+    write_file(
+      directory.path() / "hello/main.cpp",
+      "#ifndef WORKSPACE_FEATURE\n#error missing definition\n#endif\nint main() {}\n"
+    );
     std::ostringstream output;
     std::ostringstream error;
 
@@ -133,6 +139,25 @@ namespace
     );
     expect(contains(output.str(), "Built workspace suite"), "CLI reports the built workspace");
     expect(error.str().empty(), "successful CLI workspace build does not write an error");
+  }
+
+  void test_cli_rejects_invalid_compile_definition()
+  {
+    constexpr std::array arguments {
+      std::string_view { "build" },
+      std::string_view { "--define=NOT-VALID" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, output, error) == 2,
+      "CLI rejects an invalid compile definition"
+    );
+    expect(
+      contains(error.str(), "invalid compile definition"),
+      "invalid CLI definition is explained"
+    );
   }
 
   void test_cli_runs_and_tests_workspace()
@@ -3088,6 +3113,7 @@ int main()
 {
   test_help();
   test_cli_builds_workspace();
+  test_cli_rejects_invalid_compile_definition();
   test_cli_runs_and_tests_workspace();
   test_version();
   test_init_alias_adopts_existing_project();

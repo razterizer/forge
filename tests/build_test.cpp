@@ -212,6 +212,108 @@ namespace
     expect(contains(error.str(), "configuration failed"), "build explains configuration failure");
   }
 
+  void test_build_generates_recipe_and_cli_definitions()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[build]\n"
+      << "defines = [\"RECIPE_FEATURE\", \"RECIPE_VALUE=42\"]\n";
+    recipe.close();
+    forge::BuildOptions options;
+    options.compile_definitions = { "CLI_FEATURE", "CLI_VALUE=hello/world" };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), options, runner, output, error) == 0,
+      "build succeeds with recipe and CLI definitions"
+    );
+    const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
+    expect(contains(generated, "\"RECIPE_FEATURE\""), "build generates a recipe definition");
+    expect(contains(generated, "\"RECIPE_VALUE=42\""), "build generates a valued recipe definition");
+    expect(contains(generated, "\"CLI_FEATURE\""), "build generates a CLI definition");
+    expect(contains(generated, "\"CLI_VALUE=hello/world\""), "build preserves CLI definition values");
+    expect(error.str().empty(), "definition build does not write an error");
+  }
+
+  void test_build_generates_named_target_definitions()
+  {
+    TemporaryDirectory directory;
+    write_multi_target_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[target.defined]\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n"
+      << "sources = [\"Examples/examples.cpp\"]\n"
+      << "defines = [\"NAMED_FEATURE\"]\n";
+    recipe.close();
+    forge::BuildOptions options;
+    options.target = "defined";
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), options, runner, output, error) == 0,
+      "named target build succeeds with definitions"
+    );
+    expect(
+      contains(
+        read_file(directory.path() / ".forge/generated/defined/CMakeLists.txt"),
+        "\"NAMED_FEATURE\""
+      ),
+      "build generates a named target definition"
+    );
+  }
+
+  void test_build_rejects_invalid_recipe_definition()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[build]\n"
+      << "defines = [\"NOT-VALID\"]\n";
+    recipe.close();
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 2,
+      "build rejects an invalid recipe definition"
+    );
+    expect(invocations == 0, "invalid recipe definition does not invoke external tools");
+    expect(contains(error.str(), "invalid recipe value"), "invalid recipe definition is explained");
+  }
+
   void test_build_selects_named_target()
   {
     TemporaryDirectory directory;
@@ -940,6 +1042,9 @@ int main()
   test_build_accepts_legacy_shared_library_alias();
   test_build_validates_header_only_project();
   test_build_stops_after_configuration_failure();
+  test_build_generates_recipe_and_cli_definitions();
+  test_build_generates_named_target_definitions();
+  test_build_rejects_invalid_recipe_definition();
   test_build_selects_named_target();
   test_build_requires_target_for_multi_target_recipe();
   test_build_rejects_missing_internal_target();

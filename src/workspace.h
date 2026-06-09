@@ -41,6 +41,21 @@ namespace forge
   int build_workspace(const std::filesystem::path& workspace_directory,
                       const std::optional<std::string>& project,
                       const std::optional<std::string>& profile,
+                      const std::vector<std::string>& compile_definitions,
+                      std::ostream& output,
+                      std::ostream& error);
+
+  int build_workspace(const std::filesystem::path& workspace_directory,
+                      const std::optional<std::string>& project,
+                      const std::optional<std::string>& profile,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error);
+
+  int build_workspace(const std::filesystem::path& workspace_directory,
+                      const std::optional<std::string>& project,
+                      const std::optional<std::string>& profile,
+                      const std::vector<std::string>& compile_definitions,
                       const ProcessRunner& process_runner,
                       std::ostream& output,
                       std::ostream& error);
