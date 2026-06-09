@@ -16,7 +16,8 @@ compilers and build systems rather than replacing them.
   executable, multi-executable, static-library, and header-only recipes. For
   multi-executable projects, unambiguous local include relationships guide
   source ownership while uncertain sources remain shared. `forge init` remains
-  a compatibility alias.
+  a compatibility alias. Remaining library-looking includes are reported as
+  dependency candidates without modifying the generated dependency graph.
 - `forge new <name>` explicitly creates a new project with a recipe and starter
   source file.
 - `forge build` generates private CMake infrastructure under `.forge/generated`

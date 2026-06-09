@@ -175,6 +175,12 @@ local include relationships to assign implementation files to the executables
 that use them. Sources without a reliable ownership signal remain shared
 between the inferred targets rather than being discarded.
 
+After resolving local headers, `forge adopt` reports remaining library-looking
+includes as dependency candidates together with the first source file that
+references each one. Known standard and platform headers are omitted. Adoption
+still succeeds so the generated recipe can be reviewed before dependencies are
+added.
+
 Forge generates CMake infrastructure under `.forge/generated/` and builds into
 `.forge/build/`.
 

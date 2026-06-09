@@ -251,6 +251,46 @@ namespace
     expect(build_error.str().empty(), "inferred include-root build does not write an error");
   }
 
+  void test_adopt_reports_unresolved_dependency_includes()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+    std::ostringstream output;
+    std::ostringstream error;
+    write_file(
+      directory.path() / "main.cpp",
+      "#include <iostream>\n"
+      "#include <sys/wait.h>\n"
+      "#include <imgui.h>\n"
+      "#include <Core/core.h>\n"
+      "int main() { return 0; }\n"
+    );
+    write_file(
+      directory.path() / "other.cpp",
+      "#include <Core/core.h>\n"
+    );
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt succeeds with unresolved dependency includes"
+    );
+    expect(
+      contains(output.str(), "Found 2 unresolved dependency includes:"),
+      "adopt reports the unresolved dependency count"
+    );
+    expect(
+      contains(output.str(), "<Core/core.h> from main.cpp")
+        && contains(output.str(), "<imgui.h> from main.cpp"),
+      "adopt reports dependency candidates and their first source"
+    );
+    expect(
+      !contains(output.str(), "<iostream>")
+        && !contains(output.str(), "<sys/wait.h>"),
+      "adopt excludes known system headers from dependency candidates"
+    );
+    expect(error.str().empty(), "unresolved dependency includes do not fail adoption");
+  }
+
   void test_init_empty_project()
   {
     TemporaryDirectory directory;
@@ -2730,6 +2770,7 @@ int main()
   test_init_discovers_existing_sources();
   test_init_ignores_generated_directories();
   test_init_infers_local_include_directories();
+  test_adopt_reports_unresolved_dependency_includes();
   test_init_empty_project();
   test_init_infers_library_projects();
   test_init_infers_multiple_executables();

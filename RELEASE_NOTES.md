@@ -20,6 +20,8 @@
   `#include` directives.
 - Made `forge adopt` use local include relationships to group implementation
   files into inferred executable targets.
+- Made `forge adopt` report unresolved library-looking includes as dependency
+  candidates while excluding known standard and platform headers.
 
 ## 0.3.0
 

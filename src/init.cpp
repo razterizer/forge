@@ -285,6 +285,72 @@ namespace forge
       return includes;
     }
 
+    bool looks_like_dependency_include(std::string_view include)
+    {
+      static const std::set<std::string_view> system_headers {
+        "assert.h", "complex.h", "ctype.h", "errno.h", "fenv.h", "float.h",
+        "inttypes.h", "limits.h", "locale.h", "math.h", "process.h", "setjmp.h",
+        "signal.h", "stdarg.h", "stdbool.h", "stddef.h", "stdint.h", "stdio.h",
+        "stdlib.h", "string.h", "time.h", "uchar.h", "unistd.h", "wchar.h",
+        "wctype.h", "windows.h",
+        "algorithm", "any", "array", "atomic", "barrier", "bit", "bitset",
+        "cassert", "ccomplex", "cctype", "cerrno", "cfenv", "cfloat", "charconv",
+        "chrono", "cinttypes", "ciso646", "climits", "clocale", "cmath",
+        "codecvt", "compare", "complex", "concepts", "condition_variable",
+        "coroutine", "csetjmp", "csignal", "cstdarg", "cstdbool", "cstddef",
+        "cstdint", "cstdio", "cstdlib", "cstring", "ctgmath", "ctime", "cuchar",
+        "cwchar", "cwctype", "deque",
+        "exception", "execution", "filesystem", "format", "forward_list",
+        "fstream", "functional", "future", "initializer_list", "iomanip",
+        "ios", "iosfwd", "iostream", "istream", "iterator", "latch", "limits",
+        "list", "map", "memory", "memory_resource", "mutex", "new", "numbers",
+        "numeric", "optional", "ostream", "queue", "random", "ranges", "ratio",
+        "regex", "scoped_allocator", "semaphore", "set", "shared_mutex",
+        "source_location", "span", "sstream", "stack", "stdexcept", "stop_token",
+        "streambuf", "string", "string_view", "syncstream", "system_error",
+        "thread", "tuple", "type_traits", "typeindex", "typeinfo",
+        "unordered_map", "unordered_set", "utility", "valarray", "variant",
+        "vector", "version"
+      };
+
+      return
+        !system_headers.contains(include)
+        && !include.starts_with("sys/")
+        && !include.starts_with("linux/")
+        && !include.starts_with("machine/")
+        && !include.starts_with("arpa/")
+        && !include.starts_with("netinet/");
+    }
+
+    std::optional<std::string> resolve_local_header(
+      const std::string& including_file,
+      const std::string& include,
+      const std::vector<std::string>& headers);
+
+    std::map<std::string, std::string> unresolved_includes(
+      const std::filesystem::path& project_directory,
+      const std::vector<std::string>& sources,
+      const std::vector<std::string>& headers)
+    {
+      std::map<std::string, std::string> unresolved;
+      std::vector<std::string> scanned_files = sources;
+      scanned_files.insert(scanned_files.end(), headers.begin(), headers.end());
+
+      for (const auto& scanned_file : scanned_files)
+      {
+        for (const auto& include : included_headers(project_directory / scanned_file))
+        {
+          if (!resolve_local_header(scanned_file, include, headers)
+              && looks_like_dependency_include(include))
+          {
+            unresolved.try_emplace(include, scanned_file);
+          }
+        }
+      }
+
+      return unresolved;
+    }
+
     std::vector<std::string> infer_include_directories(
       const std::filesystem::path& project_directory,
       const std::vector<std::string>& sources,
@@ -558,6 +624,7 @@ namespace forge
     }
 
     const auto include_directories = infer_include_directories(project_directory, sources, headers);
+    const auto unresolved = unresolved_includes(project_directory, sources, headers);
     const auto project_name = project_directory.filename().string();
     const auto escaped_project_name = escape_toml_string(project_name);
     const auto formatted_sources = format_sources(sources);
@@ -663,6 +730,17 @@ namespace forge
     {
       output << "Inferred " << include_directories.size() << " local include director";
       output << (include_directories.size() == 1 ? "y\n" : "ies\n");
+    }
+
+    if (!unresolved.empty())
+    {
+      output << "Found " << unresolved.size() << " unresolved dependency include";
+      output << (unresolved.size() == 1 ? ":\n" : "s:\n");
+
+      for (const auto& [include, source] : unresolved)
+      {
+        output << "  <" << include << "> from " << source << '\n';
+      }
     }
 
     if (entry_points.empty() && !sources.empty() && public_headers.empty())
