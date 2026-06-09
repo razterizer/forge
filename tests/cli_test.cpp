@@ -1349,9 +1349,17 @@ namespace
       directory.path() / "Examples/Utf8_examples.h",
       "#pragma once\n"
       "#include <fstream>\n"
-      "inline int example() { std::ifstream file { \"Blocks.txt\" }; return 0; }\n"
+      "inline int example()\n"
+      "{\n"
+      "  std::ifstream file { \"Blocks.txt\" };\n"
+      "  TextureFile::load(texture, \"colors.tx\");\n"
+      "  sprite->load_frame(0, \"background.tx\");\n"
+      "  return 0;\n"
+      "}\n"
     );
     write_file(directory.path() / "Examples/Blocks.txt", "0000..007F; Basic Latin\n");
+    write_file(directory.path() / "Examples/colors.tx", "colors\n");
+    write_file(directory.path() / "Examples/background.tx", "background\n");
     write_file(directory.path() / "Examples/bin/Blocks.txt", "generated copy\n");
 
     expect(
@@ -1362,9 +1370,17 @@ namespace
     expect(
       contains(
         recipe,
-        "files = [{ source = \"Examples/Blocks.txt\", destination = \"Blocks.txt\" }]"
+        "{ source = \"Examples/Blocks.txt\", destination = \"Blocks.txt\" }"
       ),
       "adopt maps a uniquely resolved runtime asset to the path expected by the executable"
+    );
+    expect(
+      contains(
+        recipe,
+        "{ source = \"Examples/background.tx\", destination = \"background.tx\" }"
+      )
+        && contains(recipe, "{ source = \"Examples/colors.tx\", destination = \"colors.tx\" }"),
+      "adopt infers runtime assets loaded through domain-specific load functions"
     );
     expect(
       contains(output.str(), "Examples/Blocks.txt -> Blocks.txt"),

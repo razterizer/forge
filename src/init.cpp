@@ -2715,7 +2715,13 @@ namespace forge
         std::string_view { "ifstream" },
         std::string_view { "fstream" },
         std::string_view { "fopen(" },
-        std::string_view { "freopen(" }
+        std::string_view { "freopen(" },
+        std::string_view { "::load(" },
+        std::string_view { "->load(" },
+        std::string_view { ".load(" },
+        std::string_view { "::load_" },
+        std::string_view { "->load_" },
+        std::string_view { ".load_" }
       };
 
       return std::ranges::any_of(
