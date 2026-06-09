@@ -303,7 +303,7 @@ public_headers = ["include/hello/hello.h"]
 type = "executable"
 cpp_std = 20
 sources = ["Examples/examples.cpp"]
-runtime_files = ["Examples/background.tx"]
+runtime_files = ["Examples/background.tx", { source = "Examples/Blocks.txt", destination = "Blocks.txt" }]
 dependencies = ["hello"]
 
 [target.unit_tests]
@@ -755,13 +755,20 @@ Executable projects can declare files needed at runtime:
 
 ```toml
 [runtime]
-files = ["assets", "config/default.toml"]
+files = ["assets", "config/default.toml", { source = "Examples/Blocks.txt", destination = "Blocks.txt" }]
 ```
 
 `forge build` and `forge run` stage these files beside the executable while
-preserving their project-relative paths. Forge also includes them automatically
-in executable boxes and releases. Runtime asset paths must remain inside the
-project, may not contain symbolic links, and may not collide with build output.
+preserving their project-relative paths by default. A mapped entry copies
+`source` to its requested executable-relative `destination`. Forge also
+includes runtime assets automatically in executable boxes and releases.
+Runtime asset paths must remain inside the project, may not contain symbolic
+links, and may not collide with build output.
+
+`forge adopt` conservatively infers mapped runtime assets from literal paths
+used with common file-opening APIs. It prefers a matching file beside the
+source or reachable header containing the literal, then accepts only a unique
+project-wide match.
 
 `forge new` and `forge adopt` create `RELEASE_NOTES.md` and Linux, macOS, and
 Windows release workflows under `.github/workflows`. Pushing a `release-*` or

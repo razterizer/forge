@@ -1328,6 +1328,45 @@ namespace
     expect(build_error.str().empty(), "inferred named executable build does not write an error");
   }
 
+  void test_adopt_infers_mapped_runtime_asset()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+    std::ostringstream output;
+    std::ostringstream error;
+    write_file(
+      directory.path() / "Examples/examples.cpp",
+      "#include \"Utf8_examples.h\"\n"
+      "int main() { return example(); }\n"
+    );
+    write_file(
+      directory.path() / "Examples/Utf8_examples.h",
+      "#pragma once\n"
+      "#include <fstream>\n"
+      "inline int example() { std::ifstream file { \"Blocks.txt\" }; return 0; }\n"
+    );
+    write_file(directory.path() / "Examples/Blocks.txt", "0000..007F; Basic Latin\n");
+    write_file(directory.path() / "Examples/bin/Blocks.txt", "generated copy\n");
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt infers a mapped runtime asset"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(
+        recipe,
+        "files = [{ source = \"Examples/Blocks.txt\", destination = \"Blocks.txt\" }]"
+      ),
+      "adopt maps a uniquely resolved runtime asset to the path expected by the executable"
+    );
+    expect(
+      contains(output.str(), "Examples/Blocks.txt -> Blocks.txt"),
+      "adopt reports the inferred runtime asset mapping"
+    );
+    expect(error.str().empty(), "runtime asset inference does not write an error");
+  }
+
   void test_init_groups_sources_by_local_include_graph()
   {
     TemporaryDirectory directory;
@@ -3703,6 +3742,7 @@ int main()
   test_init_empty_project();
   test_init_infers_library_projects();
   test_init_infers_multiple_executables();
+  test_adopt_infers_mapped_runtime_asset();
   test_init_groups_sources_by_local_include_graph();
   test_init_refuses_to_overwrite();
   test_init_preserves_existing_release_support();

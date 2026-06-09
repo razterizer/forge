@@ -1239,7 +1239,7 @@ namespace forge
 
       for (const auto& runtime : recipe.runtime_files)
       {
-        const auto path = dependency_directory / runtime;
+        const auto path = dependency_directory / runtime.source;
 
         if (std::filesystem::is_directory(path))
         {

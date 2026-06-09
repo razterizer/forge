@@ -39,6 +39,9 @@ compilers and build systems rather than replacing them.
   and writes artifacts under `.forge/build`.
 - `forge run` performs an incremental build before launching the executable and
   forwarding its arguments and exit status.
+- Runtime assets may preserve their project-relative paths or map a source file
+  to a different executable-relative destination. Adoption infers only
+  high-confidence literal file accesses with adjacent or unique matches.
 - Named targets use `[target.<name>]` sections and isolated generated and build
   directories. The legacy single-target recipe form remains supported.
 - Named targets may depend on other named library targets in the same recipe.

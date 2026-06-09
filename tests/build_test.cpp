@@ -521,11 +521,14 @@ namespace
     TemporaryDirectory directory;
     write_project(directory.path());
     std::filesystem::create_directories(directory.path() / "assets");
+    std::filesystem::create_directories(directory.path() / "Examples");
     std::ofstream { directory.path() / "assets/message.txt" } << "hello\n";
+    std::ofstream { directory.path() / "Examples/Blocks.txt" } << "blocks\n";
     std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
     recipe
       << "\n[runtime]\n"
-      << "files = [\"assets\"]\n";
+      << "files = [\"assets\", "
+      << "{ source = \"Examples/Blocks.txt\", destination = \"Blocks.txt\" }]\n";
     recipe.close();
     std::ostringstream output;
     std::ostringstream error;
@@ -545,6 +548,10 @@ namespace
     expect(
       read_file(directory.path() / ".forge/build/assets/message.txt") == "hello\n",
       "build stages runtime assets beside the executable"
+    );
+    expect(
+      read_file(directory.path() / ".forge/build/Blocks.txt") == "blocks\n",
+      "build stages mapped runtime assets at their requested destination"
     );
 
     std::filesystem::remove(directory.path() / "assets/message.txt");

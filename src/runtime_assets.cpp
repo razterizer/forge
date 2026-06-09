@@ -49,7 +49,7 @@ namespace forge
   } // namespace
 
   bool collect_runtime_assets(const std::filesystem::path& project_directory,
-                              const std::vector<std::filesystem::path>& declared,
+                              const std::vector<RuntimeFile>& declared,
                               std::vector<RuntimeAsset>& assets,
                               std::ostream& error)
   {
@@ -57,15 +57,15 @@ namespace forge
     std::error_code filesystem_error;
     assets.clear();
 
-    for (const auto& path : declared)
+    for (const auto& file : declared)
     {
-      if (!is_safe_project_path(path))
+      if (!is_safe_project_path(file.source) || !is_safe_project_path(file.destination))
       {
         error << "forge: runtime asset paths must stay inside the project\n";
         return false;
       }
 
-      const auto source = project_directory / path;
+      const auto source = project_directory / file.source;
 
       if (std::filesystem::is_symlink(source, filesystem_error))
       {
@@ -75,7 +75,7 @@ namespace forge
 
       if (std::filesystem::is_regular_file(source, filesystem_error))
       {
-        if (!add_asset(source, path, paths, assets, error))
+        if (!add_asset(source, file.destination, paths, assets, error))
         {
           return false;
         }
@@ -85,7 +85,7 @@ namespace forge
 
       if (!std::filesystem::is_directory(source, filesystem_error))
       {
-        error << "forge: runtime asset '" << path.generic_string() << "' does not exist\n";
+        error << "forge: runtime asset '" << file.source.generic_string() << "' does not exist\n";
         return false;
       }
 
@@ -111,7 +111,8 @@ namespace forge
           return false;
         }
 
-        const auto relative = entry.path().lexically_relative(project_directory);
+        const auto relative =
+          file.destination / entry.path().lexically_relative(source);
 
         if (!add_asset(entry.path(), relative, paths, assets, error))
         {

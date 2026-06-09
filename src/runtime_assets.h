@@ -4,6 +4,8 @@
 #include <iosfwd>
 #include <vector>
 
+#include "recipe.h"
+
 namespace forge
 {
 
@@ -14,7 +16,7 @@ namespace forge
   };
 
   bool collect_runtime_assets(const std::filesystem::path& project_directory,
-                              const std::vector<std::filesystem::path>& declared,
+                              const std::vector<RuntimeFile>& declared,
                               std::vector<RuntimeAsset>& assets,
                               std::ostream& error);
 

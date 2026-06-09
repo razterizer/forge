@@ -5,6 +5,8 @@
 - Made adoption preserve library targets alongside inferred examples and tests,
   added explicit `--library-type` hints, and made source dependencies
   automatically select matching named library targets.
+- Added mapped runtime assets and made adoption infer high-confidence literal
+  file dependencies for executable targets.
 
 ## 0.5.0
 

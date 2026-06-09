@@ -152,6 +152,163 @@ namespace forge
       return true;
     }
 
+    bool parse_runtime_mapping(std::string_view value, RuntimeFile& runtime_file)
+    {
+      value = trim(value);
+
+      if (value.size() < 2 || value.front() != '{' || value.back() != '}')
+      {
+        return false;
+      }
+
+      value = trim(value.substr(1, value.size() - 2));
+      bool has_source = false;
+      bool has_destination = false;
+
+      while (!value.empty())
+      {
+        const auto equals = value.find('=');
+
+        if (equals == std::string_view::npos)
+        {
+          return false;
+        }
+
+        const auto key = trim(value.substr(0, equals));
+        value = trim(value.substr(equals + 1));
+
+        if (value.empty() || value.front() != '"')
+        {
+          return false;
+        }
+
+        std::size_t end = 1;
+
+        while (end < value.size() && value[end] != '"')
+        {
+          if (value[end] == '\\')
+          {
+            ++end;
+          }
+
+          ++end;
+        }
+
+        std::string parsed;
+
+        if (end >= value.size() || !parse_string(value.substr(0, end + 1), parsed))
+        {
+          return false;
+        }
+
+        if (key == "source" && !has_source)
+        {
+          runtime_file.source = parsed;
+          has_source = true;
+        }
+        else if (key == "destination" && !has_destination)
+        {
+          runtime_file.destination = parsed;
+          has_destination = true;
+        }
+        else
+        {
+          return false;
+        }
+
+        value = trim(value.substr(end + 1));
+
+        if (value.empty())
+        {
+          break;
+        }
+
+        if (value.front() != ',')
+        {
+          return false;
+        }
+
+        value = trim(value.substr(1));
+      }
+
+      return has_source && has_destination;
+    }
+
+    bool parse_runtime_files(std::string_view value, std::vector<RuntimeFile>& runtime_files)
+    {
+      value = trim(value);
+
+      if (value.size() < 2 || value.front() != '[' || value.back() != ']')
+      {
+        return false;
+      }
+
+      value = trim(value.substr(1, value.size() - 2));
+      runtime_files.clear();
+
+      while (!value.empty())
+      {
+        RuntimeFile runtime_file;
+        std::size_t end = std::string_view::npos;
+
+        if (value.front() == '"')
+        {
+          end = 1;
+
+          while (end < value.size() && value[end] != '"')
+          {
+            if (value[end] == '\\')
+            {
+              ++end;
+            }
+
+            ++end;
+          }
+
+          std::string path;
+
+          if (end >= value.size() || !parse_string(value.substr(0, end + 1), path))
+          {
+            return false;
+          }
+
+          runtime_file.source = path;
+          runtime_file.destination = path;
+        }
+        else if (value.front() == '{')
+        {
+          end = value.find('}');
+
+          if (end == std::string_view::npos
+              || !parse_runtime_mapping(value.substr(0, end + 1), runtime_file))
+          {
+            return false;
+          }
+        }
+        else
+        {
+          return false;
+        }
+
+        runtime_files.push_back(std::move(runtime_file));
+        value = trim(value.substr(end + 1));
+
+        if (value.empty())
+        {
+          break;
+        }
+
+        if (value.front() != ',')
+        {
+          return false;
+        }
+
+        value = trim(value.substr(1));
+      }
+
+      return true;
+    }
+
     bool parse_names(std::string_view value, std::vector<std::string>& names)
     {
       std::vector<std::filesystem::path> paths;
@@ -517,7 +674,7 @@ namespace forge
         }
         else if (key == "runtime_files")
         {
-          valid = parse_sources(value, target->runtime_files);
+          valid = parse_runtime_files(value, target->runtime_files);
         }
         else if (key == "dependencies")
         {
@@ -670,7 +827,7 @@ namespace forge
       }
       else if (section == "runtime" && key == "files")
       {
-        valid = parse_sources(value, recipe.runtime_files);
+        valid = parse_runtime_files(value, recipe.runtime_files);
       }
       else if (section == "release" && key == "files")
       {

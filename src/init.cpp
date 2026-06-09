@@ -5,6 +5,7 @@
 #include "workspace.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <fstream>
 #include <iterator>
@@ -2705,6 +2706,159 @@ namespace forge
       return target_sources;
     }
 
+    bool looks_like_runtime_file_access(std::string_view line)
+    {
+      constexpr std::array markers {
+        std::string_view { "read_file(" },
+        std::string_view { "ifstream" },
+        std::string_view { "fstream" },
+        std::string_view { "fopen(" },
+        std::string_view { "freopen(" }
+      };
+
+      return std::ranges::any_of(
+        markers,
+        [line](std::string_view marker)
+        {
+          return line.find(marker) != std::string_view::npos;
+        }
+      );
+    }
+
+    std::vector<RuntimeFile> infer_runtime_files(
+      const std::filesystem::path& project_directory,
+      const std::vector<std::string>& target_sources,
+      const std::vector<std::string>& headers)
+    {
+      std::vector<std::string> scanned = target_sources;
+
+      for (const auto& source : target_sources)
+      {
+        const auto reachable = reachable_local_headers(project_directory, source, headers);
+        scanned.insert(scanned.end(), reachable.begin(), reachable.end());
+
+        for (const auto& header : headers)
+        {
+          if (std::filesystem::path { header }.parent_path()
+              == std::filesystem::path { source }.parent_path())
+          {
+            scanned.push_back(header);
+          }
+        }
+
+        std::error_code directory_error;
+        const auto source_directory =
+          project_directory / std::filesystem::path { source }.parent_path();
+
+        for (const auto& entry : std::filesystem::directory_iterator {
+          source_directory,
+          directory_error
+        })
+        {
+          if (!directory_error && entry.is_regular_file() && is_cpp_header(entry.path()))
+          {
+            scanned.push_back(entry.path().lexically_relative(project_directory).generic_string());
+          }
+        }
+      }
+
+      std::ranges::sort(scanned);
+      scanned.erase(std::unique(scanned.begin(), scanned.end()), scanned.end());
+      std::vector<std::filesystem::path> candidates;
+      std::error_code filesystem_error;
+      std::filesystem::recursive_directory_iterator iterator {
+        project_directory,
+        std::filesystem::directory_options::skip_permission_denied,
+        filesystem_error
+      };
+      const std::filesystem::recursive_directory_iterator end;
+
+      while (!filesystem_error && iterator != end)
+      {
+        const auto& entry = *iterator;
+
+        if (entry.is_directory(filesystem_error) && is_ignored_directory(entry.path()))
+        {
+          iterator.disable_recursion_pending();
+        }
+        else if (!filesystem_error
+                 && entry.is_regular_file(filesystem_error)
+                 && !is_cpp_source(entry.path())
+                 && !is_cpp_header(entry.path()))
+        {
+          candidates.push_back(entry.path().lexically_relative(project_directory));
+        }
+
+        iterator.increment(filesystem_error);
+      }
+
+      std::vector<RuntimeFile> inferred;
+      std::set<std::filesystem::path> destinations;
+      const std::regex literal { R"forge("([^"\r\n]+)")forge" };
+
+      for (const auto& scanned_file : scanned)
+      {
+        std::ifstream file { project_directory / scanned_file };
+        std::string line;
+
+        while (std::getline(file, line))
+        {
+          if (!looks_like_runtime_file_access(line))
+          {
+            continue;
+          }
+
+          for (auto match = std::sregex_iterator { line.begin(), line.end(), literal };
+               match != std::sregex_iterator {};
+               ++match)
+          {
+            const auto expected = std::filesystem::path { (*match)[1].str() };
+
+            if (expected.empty() || expected.is_absolute() || expected.string().starts_with(".."))
+            {
+              continue;
+            }
+
+            std::vector<std::filesystem::path> matches;
+            const auto adjacent =
+              (std::filesystem::path { scanned_file }.parent_path() / expected).lexically_normal();
+
+            if (std::ranges::find(candidates, adjacent) != candidates.end())
+            {
+              matches.push_back(adjacent);
+            }
+
+            if (matches.empty())
+            {
+              for (const auto& candidate : candidates)
+              {
+                if (candidate == expected
+                    || (expected.parent_path().empty() && candidate.filename() == expected))
+                {
+                  matches.push_back(candidate);
+                }
+              }
+            }
+
+            if (matches.size() == 1 && destinations.insert(expected).second)
+            {
+              inferred.push_back({ matches.front(), expected });
+            }
+          }
+        }
+      }
+
+      std::ranges::sort(
+        inferred,
+        {},
+        [](const RuntimeFile& runtime_file)
+        {
+          return runtime_file.destination.generic_string();
+        }
+      );
+      return inferred;
+    }
+
     std::string format_sources(const std::vector<std::string>& sources)
     {
       if (sources.empty())
@@ -2722,6 +2876,37 @@ namespace forge
         }
 
         formatted += '"' + escape_toml_string(sources[index]) + '"';
+      }
+
+      formatted += ']';
+      return formatted;
+    }
+
+    std::string format_runtime_files(const std::vector<RuntimeFile>& runtime_files)
+    {
+      std::string formatted = "[";
+
+      for (std::size_t index = 0; index < runtime_files.size(); ++index)
+      {
+        if (index != 0)
+        {
+          formatted += ", ";
+        }
+
+        const auto& runtime_file = runtime_files[index];
+
+        if (runtime_file.source == runtime_file.destination)
+        {
+          formatted += '"' + escape_toml_string(runtime_file.source.generic_string()) + '"';
+        }
+        else
+        {
+          formatted += "{ source = \""
+            + escape_toml_string(runtime_file.source.generic_string())
+            + "\", destination = \""
+            + escape_toml_string(runtime_file.destination.generic_string())
+            + "\" }";
+        }
       }
 
       formatted += ']';
@@ -3181,6 +3366,8 @@ namespace forge
       return 2;
     }
 
+    auto runtime_headers = headers;
+
     if (show_progress)
     {
       report_progress(output, 3, 6, "Reading project metadata");
@@ -3264,6 +3451,13 @@ namespace forge
       }
     }
 
+    runtime_headers.insert(runtime_headers.end(), headers.begin(), headers.end());
+    std::ranges::sort(runtime_headers);
+    runtime_headers.erase(
+      std::unique(runtime_headers.begin(), runtime_headers.end()),
+      runtime_headers.end()
+    );
+
     if (show_progress)
     {
       report_progress(output, 4, 6, "Resolving dependencies");
@@ -3334,6 +3528,7 @@ namespace forge
     const auto formatted_sources = format_sources(sources);
     const auto formatted_headers = format_sources(public_headers);
     const auto formatted_include_directories = format_sources(include_directories);
+    std::vector<std::pair<std::string, RuntimeFile>> inferred_runtime_files;
     std::string recipe =
       "#:schema " + std::string { recipe_schema_url } + "\n"
       "\n"
@@ -3413,6 +3608,19 @@ namespace forge
           ) + "\n"
           "sources = " + format_sources(inferred_target_sources[index]) + "\n";
 
+        const auto runtime_files =
+          infer_runtime_files(project_directory, inferred_target_sources[index], runtime_headers);
+
+        if (!runtime_files.empty())
+        {
+          recipe += "runtime_files = " + format_runtime_files(runtime_files) + "\n";
+
+          for (const auto& runtime_file : runtime_files)
+          {
+            inferred_runtime_files.emplace_back(name, runtime_file);
+          }
+        }
+
         if (!library_target.empty())
         {
           recipe += "dependencies = [\"" + escape_toml_string(library_target) + "\"]\n";
@@ -3476,6 +3684,21 @@ namespace forge
       {
         recipe += "\n[build]\n"
           "defines = " + format_sources(visual_studio_project->definitions) + "\n";
+      }
+
+      if (type == "executable")
+      {
+        const auto runtime_files = infer_runtime_files(project_directory, sources, runtime_headers);
+
+        if (!runtime_files.empty())
+        {
+          recipe += "\n[runtime]\nfiles = " + format_runtime_files(runtime_files) + "\n";
+
+          for (const auto& runtime_file : runtime_files)
+          {
+            inferred_runtime_files.emplace_back(project_name, runtime_file);
+          }
+        }
       }
     }
 
@@ -3602,6 +3825,24 @@ namespace forge
     {
       output << "Inferred " << include_directories.size() << " local include director";
       output << (include_directories.size() == 1 ? "y\n" : "ies\n");
+    }
+
+    if (!inferred_runtime_files.empty())
+    {
+      output << "Inferred " << inferred_runtime_files.size() << " runtime asset";
+      output << (inferred_runtime_files.size() == 1 ? ":\n" : "s:\n");
+
+      for (const auto& [target, runtime_file] : inferred_runtime_files)
+      {
+        output << "  " << target << ": " << runtime_file.source.generic_string();
+
+        if (runtime_file.source != runtime_file.destination)
+        {
+          output << " -> " << runtime_file.destination.generic_string();
+        }
+
+        output << '\n';
+      }
     }
 
     if (!unresolved.empty())

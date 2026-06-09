@@ -137,8 +137,8 @@
             "description": "Preprocessor definitions applied when compiling this target."
           },
           "runtime_files": {
-            "$ref": "#/$defs/projectPaths",
-            "description": "Project-relative runtime assets copied beside this executable target."
+            "$ref": "#/$defs/runtimeFiles",
+            "description": "Project-relative runtime assets copied beside this executable target, optionally mapped to a different destination."
           },
           "dependencies": {
             "type": "array",
@@ -352,8 +352,8 @@
       ],
       "properties": {
         "files": {
-          "$ref": "#/$defs/projectPaths",
-          "description": "Project-relative runtime assets copied after builds and included in executable boxes and releases."
+          "$ref": "#/$defs/runtimeFiles",
+          "description": "Project-relative runtime assets copied after builds and included in executable boxes and releases, optionally mapped to a different destination."
         }
       }
     },
@@ -648,6 +648,32 @@
         "$ref": "#/$defs/projectPath"
       },
       "uniqueItems": true
+    },
+    "runtimeFiles": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/projectPath"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source",
+              "destination"
+            ],
+            "properties": {
+              "source": {
+                "$ref": "#/$defs/projectPath"
+              },
+              "destination": {
+                "$ref": "#/$defs/projectPath"
+              }
+            }
+          }
+        ]
+      }
     },
     "compileDefinitions": {
       "type": "array",

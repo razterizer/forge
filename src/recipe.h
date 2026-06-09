@@ -42,6 +42,12 @@ namespace forge
     std::vector<std::filesystem::path> import_libraries;
   };
 
+  struct RuntimeFile
+  {
+    std::filesystem::path source;
+    std::filesystem::path destination;
+  };
+
   struct RecipeTarget
   {
     std::string name;
@@ -51,7 +57,7 @@ namespace forge
     std::vector<std::filesystem::path> public_headers;
     std::vector<std::filesystem::path> include_directories;
     std::vector<std::string> compile_definitions;
-    std::vector<std::filesystem::path> runtime_files;
+    std::vector<RuntimeFile> runtime_files;
     std::vector<std::string> dependencies;
     bool test = false;
   };
@@ -79,7 +85,7 @@ namespace forge
     std::vector<Dependency> dependencies;
     std::map<std::string, std::vector<Dependency>> dependency_profiles;
     std::map<std::string, BuildProfile> build_profiles;
-    std::vector<std::filesystem::path> runtime_files;
+    std::vector<RuntimeFile> runtime_files;
     std::vector<std::filesystem::path> release_files;
     std::vector<RecipeTarget> targets;
     std::vector<RecipeTarget> internal_targets;

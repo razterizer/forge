@@ -139,11 +139,14 @@ namespace
     TemporaryDirectory directory;
     write_project(directory.path());
     std::filesystem::create_directories(directory.path() / "assets");
+    std::filesystem::create_directories(directory.path() / "Examples");
     std::ofstream { directory.path() / "assets/message.txt" } << "hello\n";
+    std::ofstream { directory.path() / "Examples/Blocks.txt" } << "blocks\n";
     std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
     recipe
       << "\n[runtime]\n"
-      << "files = [\"assets\"]\n";
+      << "files = [\"assets\", "
+      << "{ source = \"Examples/Blocks.txt\", destination = \"Blocks.txt\" }]\n";
     recipe.close();
     std::vector<std::vector<std::string>> commands;
     std::ostringstream output;
@@ -195,6 +198,10 @@ namespace
     expect(
       std::filesystem::exists(manifest.parent_path() / "runtime-assets/assets/message.txt"),
       "box stages runtime assets"
+    );
+    expect(
+      std::filesystem::exists(manifest.parent_path() / "runtime-assets/Blocks.txt"),
+      "box stages mapped runtime assets at their requested destination"
     );
     expect(contains(output.str(), "Created"), "box create reports its archive");
     expect(error.str().empty(), "successful box create does not write an error");

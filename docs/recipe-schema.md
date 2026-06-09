@@ -48,6 +48,8 @@ rules:
   resolutions to `forge.lock.toml`; normal builds require those locked entries.
 - Executable projects may declare project-relative `[runtime].files`, which
   Forge stages beside the executable and includes in boxes and releases.
+  String entries preserve their paths; `{ source, destination }` entries map a
+  project file to a different executable-relative destination.
 - Repositories may replace the legacy project target with one or more
   `[target.<name>]` sections. Each named target declares its own type, C++
   standard, sources, public headers, and runtime files.
