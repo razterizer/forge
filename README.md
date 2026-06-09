@@ -166,6 +166,11 @@ infers these roots when an include directive maps unambiguously to a header
 already in the project, including projects whose headers do not live under the
 conventional `include/` directory.
 
+When multiple `main()` entry points are found, `forge init` also uses resolved
+local include relationships to assign implementation files to the executables
+that use them. Sources without a reliable ownership signal remain shared
+between the inferred targets rather than being discarded.
+
 Forge generates CMake infrastructure under `.forge/generated/` and builds into
 `.forge/build/`.
 

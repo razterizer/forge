@@ -13,7 +13,9 @@ compilers and build systems rather than replacing them.
 - Forge starts locally. Remote registries and shared caches come later.
 - `forge init` adopts an existing project and never creates, moves, or modifies
   source files. It discovers public headers and `main()` entry points to infer
-  executable, multi-executable, static-library, and header-only recipes.
+  executable, multi-executable, static-library, and header-only recipes. For
+  multi-executable projects, unambiguous local include relationships guide
+  source ownership while uncertain sources remain shared.
 - `forge new <name>` explicitly creates a new project with a recipe and starter
   source file.
 - `forge build` generates private CMake infrastructure under `.forge/generated`

@@ -7,6 +7,8 @@
 #include <cctype>
 #include <fstream>
 #include <iterator>
+#include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -324,6 +326,142 @@ namespace forge
       return { include_directories.begin(), include_directories.end() };
     }
 
+    std::optional<std::string> resolve_local_header(
+      const std::string& including_file,
+      const std::string& include,
+      const std::vector<std::string>& headers)
+    {
+      std::set<std::string> matches;
+      const auto relative =
+        (std::filesystem::path { including_file }.parent_path() / include)
+          .lexically_normal()
+          .generic_string();
+
+      if (std::binary_search(headers.begin(), headers.end(), relative))
+      {
+        matches.insert(relative);
+      }
+
+      if (std::binary_search(headers.begin(), headers.end(), include))
+      {
+        matches.insert(include);
+      }
+
+      const auto suffix = '/' + include;
+
+      for (const auto& header : headers)
+      {
+        if (header.size() > suffix.size() && header.ends_with(suffix))
+        {
+          matches.insert(header);
+        }
+      }
+
+      if (matches.size() == 1)
+      {
+        return *matches.begin();
+      }
+
+      return std::nullopt;
+    }
+
+    std::set<std::string> reachable_local_headers(
+      const std::filesystem::path& project_directory,
+      const std::string& source,
+      const std::vector<std::string>& headers)
+    {
+      std::set<std::string> reachable;
+      std::vector<std::string> pending { source };
+
+      while (!pending.empty())
+      {
+        auto file = std::move(pending.back());
+        pending.pop_back();
+
+        for (const auto& include : included_headers(project_directory / file))
+        {
+          const auto resolved = resolve_local_header(file, include, headers);
+
+          if (resolved && reachable.insert(*resolved).second)
+          {
+            pending.push_back(*resolved);
+          }
+        }
+      }
+
+      return reachable;
+    }
+
+    std::vector<std::vector<std::string>> infer_target_sources(
+      const std::filesystem::path& project_directory,
+      const std::vector<std::string>& sources,
+      const std::vector<std::string>& headers,
+      const std::vector<std::string>& entry_points)
+    {
+      std::map<std::string, std::set<std::string>> reachable;
+
+      for (const auto& source : sources)
+      {
+        reachable[source] = reachable_local_headers(project_directory, source, headers);
+      }
+
+      std::vector<std::vector<std::string>> target_sources(entry_points.size());
+
+      for (std::size_t target_index = 0; target_index < entry_points.size(); ++target_index)
+      {
+        target_sources[target_index].push_back(entry_points[target_index]);
+      }
+
+      for (const auto& source : sources)
+      {
+        if (std::binary_search(entry_points.begin(), entry_points.end(), source))
+        {
+          continue;
+        }
+
+        std::vector<std::size_t> owners;
+
+        for (std::size_t target_index = 0; target_index < entry_points.size(); ++target_index)
+        {
+          const auto& target_headers = reachable.at(entry_points[target_index]);
+          const auto& source_headers = reachable.at(source);
+
+          if (std::ranges::any_of(
+            source_headers,
+            [&target_headers](const std::string& header)
+            {
+              return target_headers.contains(header);
+            }
+          ))
+          {
+            owners.push_back(target_index);
+          }
+        }
+
+        if (owners.empty())
+        {
+          for (std::size_t target_index = 0; target_index < entry_points.size(); ++target_index)
+          {
+            target_sources[target_index].push_back(source);
+          }
+        }
+        else
+        {
+          for (const auto owner : owners)
+          {
+            target_sources[owner].push_back(source);
+          }
+        }
+      }
+
+      for (auto& target : target_sources)
+      {
+        std::ranges::sort(target);
+      }
+
+      return target_sources;
+    }
+
     std::string format_sources(const std::vector<std::string>& sources)
     {
       if (sources.empty())
@@ -435,6 +573,8 @@ namespace forge
     if (entry_points.size() > 1)
     {
       std::set<std::string> target_names;
+      const auto inferred_target_sources =
+        infer_target_sources(project_directory, sources, headers, entry_points);
 
       for (std::size_t index = 0; index < entry_points.size(); ++index)
       {
@@ -446,24 +586,11 @@ namespace forge
           target_names.insert(name);
         }
 
-        auto target_sources = sources;
-        target_sources.erase(
-          std::remove_if(
-            target_sources.begin(),
-            target_sources.end(),
-            [&entry_points, index](const std::string& source)
-            {
-              return source != entry_points[index]
-                && std::find(entry_points.begin(), entry_points.end(), source) != entry_points.end();
-            }
-          ),
-          target_sources.end()
-        );
         recipe
           += "\n[target." + name + "]\n"
           "type = \"executable\"\n"
           "cpp_std = 20\n"
-          "sources = " + format_sources(target_sources) + "\n";
+          "sources = " + format_sources(inferred_target_sources[index]) + "\n";
 
         if (!public_headers.empty())
         {

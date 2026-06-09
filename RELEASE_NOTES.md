@@ -16,6 +16,8 @@
   compatibility builds from `ubuntu-latest` and `ubuntu-22.04`.
 - Made `forge init` infer local include search roots from resolvable
   `#include` directives.
+- Made `forge init` use local include relationships to group implementation
+  files into inferred executable targets.
 
 ## 0.3.0
 

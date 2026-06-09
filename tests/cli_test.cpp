@@ -363,6 +363,70 @@ namespace
     expect(build_error.str().empty(), "inferred named executable build does not write an error");
   }
 
+  void test_init_groups_sources_by_local_include_graph()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array init_arguments { std::string_view { "init" } };
+    std::ostringstream output;
+    std::ostringstream error;
+    write_file(
+      directory.path() / "apps/editor.cpp",
+      "#include <editor/editor.h>\n"
+      "int main() { return editor(); }\n"
+    );
+    write_file(
+      directory.path() / "apps/game.cpp",
+      "#include <game/game.h>\n"
+      "int main() { return game(); }\n"
+    );
+    write_file(
+      directory.path() / "src/editor.cpp",
+      "#include <editor/editor.h>\n"
+      "int editor() { return 0; }\n"
+    );
+    write_file(
+      directory.path() / "src/game.cpp",
+      "#include <game/game.h>\n"
+      "int game() { return 0; }\n"
+    );
+    write_file(directory.path() / "src/unclassified.cpp", "int unclassified() { return 0; }\n");
+    write_file(directory.path() / "include/editor/editor.h", "int editor();\n");
+    write_file(directory.path() / "include/game/game.h", "int game();\n");
+
+    expect(
+      forge::cli::run(init_arguments, directory.path(), output, error) == 0,
+      "init groups multi-executable sources"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      count_occurrences(recipe, "src/editor.cpp") == 1,
+      "init assigns editor implementation only to editor"
+    );
+    expect(
+      count_occurrences(recipe, "src/game.cpp") == 1,
+      "init assigns game implementation only to game"
+    );
+    expect(
+      count_occurrences(recipe, "src/unclassified.cpp") == 2,
+      "init conservatively shares unclassified sources"
+    );
+
+    for (const auto target : { std::string_view { "editor" }, std::string_view { "game" } })
+    {
+      const std::array build_arguments {
+        std::string_view { "build" },
+        target
+      };
+      std::ostringstream build_output;
+      std::ostringstream build_error;
+      expect(
+        forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+        "source-grouped target builds"
+      );
+      expect(build_error.str().empty(), "source-grouped target build does not write an error");
+    }
+  }
+
   void test_init_refuses_to_overwrite()
   {
     TemporaryDirectory directory;
@@ -2642,6 +2706,7 @@ int main()
   test_init_empty_project();
   test_init_infers_library_projects();
   test_init_infers_multiple_executables();
+  test_init_groups_sources_by_local_include_graph();
   test_init_refuses_to_overwrite();
   test_init_preserves_existing_release_support();
   test_new();
