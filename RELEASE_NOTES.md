@@ -24,6 +24,8 @@
   candidates while excluding known standard and platform headers.
 - Made `forge adopt` infer unambiguous local path dependencies from sibling
   single-target Forge libraries.
+- Added non-destructive GitHub dependency suggestions and explicit
+  `forge adopt --github` verification with exact Git commit pins.
 
 ## 0.3.0
 

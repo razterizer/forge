@@ -18,7 +18,9 @@ compilers and build systems rather than replacing them.
   source ownership while uncertain sources remain shared. `forge init` remains
   a compatibility alias. Remaining library-looking includes are reported as
   dependency candidates. Unambiguous public-header matches from sibling
-  single-target Forge libraries are added as local path dependencies.
+  single-target Forge libraries are added as local path dependencies. A GitHub
+  origin enables non-network same-owner suggestions; `forge adopt --github`
+  explicitly verifies and pins accepted repositories by exact commit.
 - `forge new <name>` explicitly creates a new project with a recipe and starter
   source file.
 - `forge build` generates private CMake infrastructure under `.forge/generated`

@@ -1,5 +1,6 @@
 #include "cli.h"
 #include "fprocess.h"
+#include "init.h"
 #include "sha256.h"
 
 #include <array>
@@ -389,6 +390,115 @@ namespace
       "ambiguous sibling include remains unresolved"
     );
     expect(error.str().empty(), "ambiguous sibling matches do not fail adoption");
+  }
+
+  void test_adopt_suggests_github_dependencies_without_network()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+    write_file(
+      directory.path() / ".git/config",
+      "[remote \"origin\"]\n"
+      "  url = https://github.com/example/application.git\n"
+    );
+    write_file(directory.path() / "main.cpp", "#include <answer/answer.h>\nint main() {}\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt suggests GitHub dependencies"
+    );
+    expect(
+      contains(output.str(), "example/answer for <answer/answer.h>"),
+      "adopt derives a GitHub suggestion from the origin owner and include prefix"
+    );
+    expect(
+      contains(output.str(), "forge adopt --github"),
+      "adopt explains how to verify and pin GitHub suggestions"
+    );
+    expect(
+      !contains(read_file(directory.path() / "forge.recipe.toml"), "[dependencies]"),
+      "default adoption does not write unverified GitHub suggestions"
+    );
+    expect(
+      !std::filesystem::exists(directory.path() / ".forge/adopt/github"),
+      "default adoption does not access GitHub"
+    );
+    expect(error.str().empty(), "GitHub suggestions do not fail adoption");
+  }
+
+  void test_adopt_github_verifies_and_pins_dependency()
+  {
+    TemporaryDirectory directory;
+    const auto application = directory.path() / "application";
+    const auto remote = directory.path() / "fixtures" / "remote";
+    constexpr std::string_view commit = "0123456789abcdef0123456789abcdef01234567";
+    write_file(
+      application / ".git/config",
+      "[remote \"origin\"]\n"
+      "  url = git@github.com:example/application.git\n"
+    );
+    write_file(application / "main.cpp", "#include <answer/answer.h>\nint main() {}\n");
+    write_file(
+      remote / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"answer\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/answer/answer.h\"]\n"
+    );
+    write_file(remote / "include/answer/answer.h", "#pragma once\n");
+    write_file(remote / ".git/HEAD", commit);
+    bool cloned = false;
+    const forge::ProcessRunner runner =
+      [&remote, &cloned](const std::vector<std::string>& arguments,
+                         const std::filesystem::path&,
+                         std::ostream&) -> int
+      {
+        if (arguments.size() == 7
+            && arguments[0] == "git"
+            && arguments[1] == "clone"
+            && arguments[5] == "https://github.com/example/answer.git")
+        {
+          cloned = true;
+          std::filesystem::copy(
+            remote,
+            arguments[6],
+            std::filesystem::copy_options::recursive
+          );
+          return 0;
+        }
+
+        return 2;
+      };
+    forge::AdoptOptions options;
+    options.github = true;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::adopt_project(application, options, runner, output, error) == 0,
+      "adopt --github verifies a GitHub dependency"
+    );
+    const auto recipe = read_file(application / "forge.recipe.toml");
+    expect(cloned, "adopt --github clones the suggested repository");
+    expect(
+      contains(
+        recipe,
+        "answer = { git = \"https://github.com/example/answer.git\", commit = \""
+          + std::string { commit } + "\" }"
+      ),
+      "adopt --github writes an exact Git commit pin"
+    );
+    expect(
+      contains(output.str(), "Pinned GitHub dependency example/answer at " + std::string { commit }),
+      "adopt --github reports the exact pin"
+    );
+    expect(error.str().empty(), "verified GitHub adoption does not write an error");
   }
 
   void test_init_empty_project()
@@ -2873,6 +2983,8 @@ int main()
   test_adopt_reports_unresolved_dependency_includes();
   test_adopt_infers_sibling_project_dependencies();
   test_adopt_preserves_ambiguous_sibling_includes();
+  test_adopt_suggests_github_dependencies_without_network();
+  test_adopt_github_verifies_and_pins_dependency();
   test_init_empty_project();
   test_init_infers_library_projects();
   test_init_infers_multiple_executables();

@@ -43,7 +43,7 @@ namespace forge::cli
         << "Forge - a project workflow system for C++\n\n"
         << "Usage:\n"
         << "  forge <command>\n"
-        << "  forge adopt\n"
+        << "  forge adopt [--github]\n"
         << "  forge new <name>\n"
         << "  forge box create [target]\n"
         << "  forge box <inspect|verify|extract|publish> <path>\n"
@@ -414,15 +414,27 @@ namespace forge::cli
       return prepare_release(working_directory, target, output, error);
     }
 
+    if (arguments.front() == "adopt")
+    {
+      AdoptOptions options;
+
+      if (arguments.size() == 2 && arguments[1] == "--github")
+      {
+        options.github = true;
+      }
+      else if (arguments.size() != 1)
+      {
+        error << "forge: usage: forge adopt [--github]\n";
+        return 2;
+      }
+
+      return adopt_project(working_directory, options, run_process, output, error);
+    }
+
     if (arguments.size() != 1)
     {
       error << "forge: commands do not accept arguments yet\n";
       return 2;
-    }
-
-    if (arguments.front() == "adopt")
-    {
-      return adopt_project(working_directory, output, error);
     }
 
     if (arguments.front() == "init")

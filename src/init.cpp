@@ -358,6 +358,14 @@ namespace forge
       std::string path;
     };
 
+    struct GitHubDependency
+    {
+      std::string name;
+      std::string repository;
+      std::string git;
+      std::string commit;
+    };
+
     bool provides_include(const Recipe& recipe, std::string_view include)
     {
       if (!recipe.targets.empty()
@@ -483,6 +491,254 @@ namespace forge
         for (const auto& [include, dependency] : candidates)
         {
           unresolved.erase(include);
+        }
+      }
+
+      return result;
+    }
+
+    std::optional<std::string> github_owner(const std::filesystem::path& project_directory)
+    {
+      std::ifstream config { project_directory / ".git" / "config" };
+      std::string line;
+      bool origin = false;
+
+      while (std::getline(config, line))
+      {
+        const auto content = std::string_view { line };
+
+        if (content.starts_with('['))
+        {
+          origin =
+            content.find("remote \"origin\"") != std::string_view::npos;
+          continue;
+        }
+
+        const auto equals = content.find('=');
+
+        if (!origin || equals == std::string_view::npos)
+        {
+          continue;
+        }
+
+        const auto key = content.substr(0, equals);
+
+        if (key.find("url") == std::string_view::npos)
+        {
+          continue;
+        }
+
+        auto url = std::string { content.substr(equals + 1) };
+        const auto first = url.find_first_not_of(" \t");
+        url = first == std::string::npos ? std::string {} : url.substr(first);
+        std::string_view path;
+
+        if (const auto github = url.find("github.com/"); github != std::string::npos)
+        {
+          path = std::string_view { url }.substr(github + 11);
+        }
+        else if (const auto github = url.find("github.com:"); github != std::string::npos)
+        {
+          path = std::string_view { url }.substr(github + 11);
+        }
+
+        const auto slash = path.find('/');
+
+        if (slash != std::string_view::npos && slash != 0)
+        {
+          return std::string { path.substr(0, slash) };
+        }
+      }
+
+      return std::nullopt;
+    }
+
+    std::string github_repository_name(std::string_view include)
+    {
+      const auto slash = include.find('/');
+      auto name = std::string {
+        slash == std::string_view::npos ? include : include.substr(0, slash)
+      };
+
+      if (slash == std::string_view::npos)
+      {
+        const auto extension = name.rfind('.');
+
+        if (extension != std::string::npos)
+        {
+          name.resize(extension);
+        }
+      }
+
+      const auto safe =
+        !name.empty()
+        && name != "."
+        && name != ".."
+        && std::ranges::all_of(
+          name,
+          [](unsigned char character)
+          {
+            return std::isalnum(character)
+              || character == '-'
+              || character == '_'
+              || character == '.';
+          }
+        );
+      return safe ? name : std::string {};
+    }
+
+    std::map<std::string, std::vector<std::string>> github_suggestions(
+      const std::filesystem::path& project_directory,
+      const std::map<std::string, std::string>& unresolved)
+    {
+      std::map<std::string, std::vector<std::string>> suggestions;
+      const auto owner = github_owner(project_directory);
+
+      if (!owner)
+      {
+        return suggestions;
+      }
+
+      for (const auto& [include, source] : unresolved)
+      {
+        const auto name = github_repository_name(include);
+
+        if (!name.empty())
+        {
+          suggestions[*owner + "/" + name].push_back(include);
+        }
+      }
+
+      return suggestions;
+    }
+
+    std::optional<std::string> git_head(const std::filesystem::path& repository)
+    {
+      std::ifstream head_file { repository / ".git" / "HEAD" };
+      std::string head;
+      std::getline(head_file, head);
+
+      if (!head.starts_with("ref: "))
+      {
+        return head.empty() ? std::nullopt : std::optional<std::string> { head };
+      }
+
+      const auto reference = head.substr(5);
+      std::ifstream reference_file { repository / ".git" / reference };
+      std::string commit;
+      std::getline(reference_file, commit);
+
+      if (!commit.empty())
+      {
+        return commit;
+      }
+
+      std::ifstream packed { repository / ".git" / "packed-refs" };
+      std::string line;
+
+      while (std::getline(packed, line))
+      {
+        const auto separator = line.find(' ');
+
+        if (separator != std::string::npos && line.substr(separator + 1) == reference)
+        {
+          return line.substr(0, separator);
+        }
+      }
+
+      return std::nullopt;
+    }
+
+    bool is_exact_commit(std::string_view commit)
+    {
+      return
+        (commit.size() == 40 || commit.size() == 64)
+        && std::ranges::all_of(
+          commit,
+          [](unsigned char character)
+          {
+            return std::isxdigit(character);
+          }
+        );
+    }
+
+    std::vector<GitHubDependency> resolve_github_dependencies(
+      const std::filesystem::path& project_directory,
+      const std::map<std::string, std::vector<std::string>>& suggestions,
+      std::map<std::string, std::string>& unresolved,
+      const ProcessRunner& process_runner,
+      std::ostream& output)
+    {
+      std::map<std::string, GitHubDependency> dependencies;
+      std::set<std::string> conflicting_names;
+      const auto cache = project_directory / ".forge" / "adopt" / "github";
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(cache, filesystem_error);
+
+      for (const auto& [repository, includes] : suggestions)
+      {
+        const auto slash = repository.find('/');
+        const auto name = repository.substr(slash + 1);
+        const auto checkout = cache / name;
+        std::filesystem::remove_all(checkout, filesystem_error);
+        std::ostringstream clone_error;
+        const auto git = "https://github.com/" + repository + ".git";
+
+        if (process_runner({ "git", "clone", "--quiet", "--depth", "1", git, checkout.string() },
+                           project_directory,
+                           clone_error) != 0)
+        {
+          continue;
+        }
+
+        Recipe recipe;
+        std::ostringstream recipe_error;
+
+        if (!read_recipe(checkout / "forge.recipe.toml", recipe, recipe_error))
+        {
+          continue;
+        }
+
+        const auto verified = std::ranges::all_of(
+          includes,
+          [&recipe](const std::string& include)
+          {
+            return provides_include(recipe, include);
+          }
+        );
+        const auto commit = git_head(checkout);
+
+        if (!verified || !commit || !is_exact_commit(*commit))
+        {
+          continue;
+        }
+
+        const GitHubDependency dependency { recipe.name, repository, git, *commit };
+        const auto existing = dependencies.find(recipe.name);
+
+        if (existing != dependencies.end() && existing->second.repository != repository)
+        {
+          conflicting_names.insert(recipe.name);
+          continue;
+        }
+
+        dependencies[recipe.name] = dependency;
+      }
+
+      std::vector<GitHubDependency> result;
+
+      for (auto& [name, dependency] : dependencies)
+      {
+        if (!conflicting_names.contains(name))
+        {
+          for (const auto& include : suggestions.at(dependency.repository))
+          {
+            unresolved.erase(include);
+          }
+
+          output << "Pinned GitHub dependency " << dependency.repository
+                 << " at " << dependency.commit << '\n';
+          result.push_back(std::move(dependency));
         }
       }
 
@@ -735,6 +991,15 @@ namespace forge
                     std::ostream& output,
                     std::ostream& error)
   {
+    return adopt_project(project_directory, AdoptOptions {}, run_process, output, error);
+  }
+
+  int adopt_project(const std::filesystem::path& project_directory,
+                    const AdoptOptions& options,
+                    const ProcessRunner& process_runner,
+                    std::ostream& output,
+                    std::ostream& error)
+  {
     const auto recipe_path = project_directory / "forge.recipe.toml";
 
     std::error_code filesystem_error;
@@ -764,6 +1029,16 @@ namespace forge
     const auto include_directories = infer_include_directories(project_directory, sources, headers);
     auto unresolved = unresolved_includes(project_directory, sources, headers);
     const auto sibling_dependencies = infer_sibling_dependencies(project_directory, unresolved);
+    const auto suggestions = github_suggestions(project_directory, unresolved);
+    const auto github_dependencies = options.github
+      ? resolve_github_dependencies(
+        project_directory,
+        suggestions,
+        unresolved,
+        process_runner,
+        output
+      )
+      : std::vector<GitHubDependency> {};
     const auto project_name = project_directory.filename().string();
     const auto escaped_project_name = escape_toml_string(project_name);
     const auto formatted_sources = format_sources(sources);
@@ -835,7 +1110,7 @@ namespace forge
       }
     }
 
-    if (!sibling_dependencies.empty())
+    if (!sibling_dependencies.empty() || !github_dependencies.empty())
     {
       recipe += "\n[dependencies]\n";
 
@@ -843,6 +1118,12 @@ namespace forge
       {
         recipe += dependency.name + " = { path = \""
           + escape_toml_string(dependency.path) + "\" }\n";
+      }
+
+      for (const auto& dependency : github_dependencies)
+      {
+        recipe += dependency.name + " = { git = \"" + escape_toml_string(dependency.git)
+          + "\", commit = \"" + dependency.commit + "\" }\n";
       }
     }
 
@@ -904,6 +1185,25 @@ namespace forge
       }
     }
 
+    if (!options.github && !suggestions.empty())
+    {
+      output << "Suggested GitHub dependencies:\n";
+
+      for (const auto& [repository, includes] : suggestions)
+      {
+        output << "  " << repository << " for";
+
+        for (const auto& include : includes)
+        {
+          output << " <" << include << ">";
+        }
+
+        output << '\n';
+      }
+
+      output << "Run 'forge adopt --github' to verify and pin suggestions\n";
+    }
+
     if (entry_points.empty() && !sources.empty() && public_headers.empty())
     {
       output << "Could not infer a library interface; generated an executable recipe\n";
@@ -916,7 +1216,7 @@ namespace forge
                    std::ostream& output,
                    std::ostream& error)
   {
-    return adopt_project(project_directory, output, error);
+    return adopt_project(project_directory, AdoptOptions {}, run_process, output, error);
   }
 
 } // namespace forge

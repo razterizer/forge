@@ -186,6 +186,12 @@ exactly one single-target sibling library exposes a matching public header,
 `forge adopt` adds it as a local path dependency. Ambiguous matches and
 multi-target siblings remain unresolved for manual review.
 
+When the current Git repository has a GitHub `origin`, unresolved include
+prefixes produce non-destructive same-owner repository suggestions. Run
+`forge adopt --github` to explicitly clone suggested repositories, verify their
+Forge recipes and public headers, and write accepted dependencies as exact Git
+commit pins. Normal `forge adopt` never accesses the network.
+
 Forge generates CMake infrastructure under `.forge/generated/` and builds into
 `.forge/build/`.
 
