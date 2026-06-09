@@ -17,6 +17,7 @@ namespace forge
     std::optional<std::string> target;
     std::optional<std::string> profile;
     std::vector<std::string> compile_definitions;
+    std::string configuration = "Debug";
     bool dependencies_only = false;
     bool update_dependencies = false;
   };

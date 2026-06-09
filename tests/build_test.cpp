@@ -1,5 +1,6 @@
 #include "build.h"
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -312,6 +313,58 @@ namespace
     );
     expect(invocations == 0, "invalid recipe definition does not invoke external tools");
     expect(contains(error.str(), "invalid recipe value"), "invalid recipe definition is explained");
+  }
+
+  void test_build_applies_build_profile()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::filesystem::create_directories(directory.path() / "include");
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[profile.Release.build]\n"
+      << "configuration = \"Release\"\n"
+      << "cpp_std = 23\n"
+      << "include_dirs = [\"include\"]\n"
+      << "defines = [\"NDEBUG\", \"PROFILE_VALUE=42\"]\n";
+    recipe.close();
+    forge::BuildOptions options;
+    options.profile = "Release";
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&commands](const std::vector<std::string>& arguments,
+                  const std::filesystem::path&,
+                  std::ostream&)
+      {
+        commands.push_back(arguments);
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), options, runner, output, error) == 0,
+      "build succeeds with a build profile"
+    );
+    const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
+    expect(contains(generated, "cxx_std_23"), "build profile overrides the C++ standard");
+    expect(contains(generated, "\"NDEBUG\""), "build profile adds a definition");
+    expect(contains(generated, "include\""), "build profile adds an include directory");
+    expect(
+      commands.size() == 2
+        && std::find(commands[0].begin(), commands[0].end(), "-DCMAKE_BUILD_TYPE=Release")
+          != commands[0].end(),
+      "build profile selects the configure-time CMake configuration"
+    );
+    expect(
+      commands.size() == 2
+        && commands[1].size() >= 5
+        && commands[1][3] == "--config"
+        && commands[1][4] == "Release",
+      "build profile selects the build-time CMake configuration"
+    );
+    expect(error.str().empty(), "successful build profile does not write an error");
   }
 
   void test_build_selects_named_target()
@@ -1045,6 +1098,7 @@ int main()
   test_build_generates_recipe_and_cli_definitions();
   test_build_generates_named_target_definitions();
   test_build_rejects_invalid_recipe_definition();
+  test_build_applies_build_profile();
   test_build_selects_named_target();
   test_build_requires_target_for_multi_target_recipe();
   test_build_rejects_missing_internal_target();

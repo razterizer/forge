@@ -159,9 +159,12 @@ When a project directory contains one `.vcxproj`, `forge adopt` imports its
 project name, source and header items, output type, C++ standard, project
 references, and concrete project-relative include paths. Preprocessor
 definitions and include paths that are common across every declared Visual
-Studio configuration are imported; configuration-specific values remain for
-manual review. MSBuild property expressions such as `$(SolutionDir)` and
-inherited `%(...)` placeholders are not copied into the recipe.
+Studio configuration are imported into the project. Configuration-specific
+values become `[profile.<configuration>.build]` sections. Forge recursively
+imports concrete relative `.props` files, including paths using `$(ProjectDir)`
+and `$(MSBuildThisFileDirectory)`. Other unresolved MSBuild property
+expressions are reported for manual review, while inherited `%(...)`
+placeholders are omitted.
 
 At a solution root containing one `.sln` and no root `.vcxproj`, `forge adopt`
 adopts each C++ project in its distinct subdirectory and creates a
@@ -437,6 +440,18 @@ answer = {
 }
 ```
 
+The same profile may also select build settings:
+
+```toml
+[profile.Debug.build]
+configuration = "Debug"
+defines = ["DEBUG_UI"]
+
+[profile.Release.build]
+configuration = "Release"
+defines = ["NDEBUG"]
+```
+
 Select a profile for the complete command:
 
 ```sh
@@ -447,8 +462,8 @@ forge test --profile=pinned
 
 The root recipe must declare the requested profile. Forge propagates the
 selection through transitive source dependencies; dependencies declaring the
-same profile use it, while dependencies without it retain their normal
-`[dependencies]`.
+same profile use its dependency and build settings, while dependencies without
+it retain their normal dependencies and build settings.
 
 Projects may also consume an existing local box directly:
 

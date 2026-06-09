@@ -597,20 +597,59 @@ namespace forge
       {
         const auto profile_prefix = std::string_view { "profile." };
         const auto profile_suffix = std::string_view { ".dependencies" };
+        const auto build_suffix = std::string_view { ".build" };
         const auto is_profile =
           section.starts_with(profile_prefix)
           && section.ends_with(profile_suffix)
           && section.size() > profile_prefix.size() + profile_suffix.size();
+        const auto is_build_profile =
+          section.starts_with(profile_prefix)
+          && section.ends_with(build_suffix)
+          && section.size() > profile_prefix.size() + build_suffix.size();
         Dependency dependency;
         dependency.name = std::string { key };
         valid =
-          (section == "dependencies" || is_profile)
+          (section == "dependencies" || is_profile || is_build_profile)
           && !dependency.name.empty()
-          && parse_dependency(value, dependency);
+          && (is_build_profile || parse_dependency(value, dependency));
 
         if (valid)
         {
-          if (is_profile)
+          if (is_build_profile)
+          {
+            const auto profile = section.substr(
+              profile_prefix.size(),
+              section.size() - profile_prefix.size() - build_suffix.size()
+            );
+            valid = is_safe_name(profile);
+
+            if (valid)
+            {
+              auto& build = recipe.build_profiles[std::string { profile }];
+
+              if (key == "configuration")
+              {
+                valid = parse_string(value, build.configuration);
+              }
+              else if (key == "cpp_std")
+              {
+                valid = parse_integer(value, build.cpp_standard);
+              }
+              else if (key == "include_dirs")
+              {
+                valid = parse_sources(value, build.include_directories);
+              }
+              else if (key == "defines")
+              {
+                valid = parse_definitions(value, build.compile_definitions);
+              }
+              else
+              {
+                valid = false;
+              }
+            }
+          }
+          else if (is_profile)
           {
             const auto profile = section.substr(
               profile_prefix.size(),
@@ -815,9 +854,9 @@ namespace forge
 
     if (profile == recipe.dependency_profiles.end())
     {
-      if (required)
+      if (required && !recipe.build_profiles.contains(*requested))
       {
-        error << "forge: recipe has no dependency profile named '" << *requested << "'\n";
+        error << "forge: recipe has no profile named '" << *requested << "'\n";
         return false;
       }
 
@@ -825,6 +864,55 @@ namespace forge
     }
 
     recipe.dependencies = profile->second;
+    return true;
+  }
+
+  bool select_build_profile(Recipe& recipe,
+                            const std::optional<std::string>& requested,
+                            bool required,
+                            std::string& configuration,
+                            std::ostream& error)
+  {
+    if (!requested)
+    {
+      return true;
+    }
+
+    const auto profile = recipe.build_profiles.find(*requested);
+
+    if (profile == recipe.build_profiles.end())
+    {
+      if (required && !recipe.dependency_profiles.contains(*requested))
+      {
+        error << "forge: recipe has no profile named '" << *requested << "'\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    const auto& build = profile->second;
+    recipe.include_directories.insert(
+      recipe.include_directories.end(),
+      build.include_directories.begin(),
+      build.include_directories.end()
+    );
+    recipe.compile_definitions.insert(
+      recipe.compile_definitions.end(),
+      build.compile_definitions.begin(),
+      build.compile_definitions.end()
+    );
+
+    if (build.cpp_standard != 0)
+    {
+      recipe.cpp_standard = build.cpp_standard;
+    }
+
+    if (!build.configuration.empty())
+    {
+      configuration = build.configuration;
+    }
+
     return true;
   }
 

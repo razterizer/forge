@@ -39,8 +39,9 @@ rules:
   64-hex-character `commit`. Forge caches the detached checkout and treats it
   like a local source project.
 - Named `[profile.<name>.dependencies]` sections provide complete dependency-set
-  overrides selected by `forge build`, `forge run`, or `forge test` with
-  `--profile=<name>`.
+  overrides. `[profile.<name>.build]` sections add build configuration,
+  `cpp_std`, `include_dirs`, and `defines` overrides. Both are selected by
+  `forge build`, `forge run`, or `forge test` with `--profile=<name>`.
 - Downloadable cbox dependencies require both `url` and lowercase `sha256`.
 - GitHub Release cbox dependencies require `github = "owner/repository"` and a
   packaged `version`. `forge update` writes their exact target-specific

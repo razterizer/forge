@@ -229,17 +229,38 @@
     },
     "profile": {
       "type": "object",
-      "description": "Named dependency-set overrides selected with --profile=<name>.",
+      "description": "Named dependency and build-setting overrides selected with --profile=<name>.",
       "propertyNames": {
         "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
       },
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["dependencies"],
+        "minProperties": 1,
         "properties": {
           "dependencies": {
             "$ref": "#/properties/dependencies"
+          },
+          "build": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "configuration": {
+                "type": "string",
+                "minLength": 1
+              },
+              "cpp_std": {
+                "type": "integer",
+                "enum": [11, 14, 17, 20, 23, 26]
+              },
+              "include_dirs": {
+                "$ref": "#/$defs/projectPaths"
+              },
+              "defines": {
+                "$ref": "#/$defs/compileDefinitions"
+              }
+            }
           }
         }
       }

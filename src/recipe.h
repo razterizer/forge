@@ -56,6 +56,14 @@ namespace forge
     bool test = false;
   };
 
+  struct BuildProfile
+  {
+    std::string configuration;
+    int cpp_standard = 0;
+    std::vector<std::filesystem::path> include_directories;
+    std::vector<std::string> compile_definitions;
+  };
+
   struct Recipe
   {
     std::string name;
@@ -70,6 +78,7 @@ namespace forge
     std::vector<ImportProfile> imports;
     std::vector<Dependency> dependencies;
     std::map<std::string, std::vector<Dependency>> dependency_profiles;
+    std::map<std::string, BuildProfile> build_profiles;
     std::vector<std::filesystem::path> runtime_files;
     std::vector<std::filesystem::path> release_files;
     std::vector<RecipeTarget> targets;
@@ -90,6 +99,12 @@ namespace forge
                                  const std::optional<std::string>& profile,
                                  bool required,
                                  std::ostream& error);
+
+  bool select_build_profile(Recipe& recipe,
+                            const std::optional<std::string>& profile,
+                            bool required,
+                            std::string& configuration,
+                            std::ostream& error);
 
   bool is_valid_compile_definition(std::string_view definition);
 

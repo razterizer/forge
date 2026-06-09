@@ -40,8 +40,8 @@ forge build Termin8or
 forge build Termin8or --profile=dev
 ```
 
-Dependency profiles are applied while determining the workspace graph and are
-forwarded to project builds.
+Dependency and build profiles are applied while determining the workspace
+graph and are forwarded to project builds.
 
 Run a workspace project, or a named executable target within it:
 

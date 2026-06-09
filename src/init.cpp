@@ -187,6 +187,287 @@ namespace forge
       return values;
     }
 
+    struct XmlElement
+    {
+      std::string opening;
+      std::string body;
+    };
+
+    std::vector<XmlElement> xml_elements(std::string_view xml, std::string_view tag)
+    {
+      std::vector<XmlElement> elements;
+      const auto opening = '<' + std::string { tag };
+      const auto closing = "</" + std::string { tag } + '>';
+      std::size_t position = 0;
+
+      while ((position = xml.find(opening, position)) != std::string_view::npos)
+      {
+        const auto open_end = xml.find('>', position + opening.size());
+
+        if (open_end == std::string_view::npos)
+        {
+          break;
+        }
+
+        const auto close = xml.find(closing, open_end + 1);
+
+        if (close == std::string_view::npos)
+        {
+          break;
+        }
+
+        elements.push_back({
+          std::string { xml.substr(position, open_end - position + 1) },
+          std::string { xml.substr(open_end + 1, close - open_end - 1) }
+        });
+        position = close + closing.size();
+      }
+
+      return elements;
+    }
+
+    std::vector<std::string> xml_openings(std::string_view xml, std::string_view tag)
+    {
+      std::vector<std::string> openings;
+      const auto opening = '<' + std::string { tag };
+      std::size_t position = 0;
+
+      while ((position = xml.find(opening, position)) != std::string_view::npos)
+      {
+        const auto open_end = xml.find('>', position + opening.size());
+
+        if (open_end == std::string_view::npos)
+        {
+          break;
+        }
+
+        openings.push_back(std::string { xml.substr(position, open_end - position + 1) });
+        position = open_end + 1;
+      }
+
+      return openings;
+    }
+
+    std::optional<std::string> xml_attribute(std::string_view opening,
+                                             std::string_view attribute)
+    {
+      const auto needle = std::string { attribute } + "=\"";
+      const auto position = opening.find(needle);
+
+      if (position == std::string_view::npos)
+      {
+        return std::nullopt;
+      }
+
+      const auto begin = position + needle.size();
+      const auto end = opening.find('"', begin);
+      return end == std::string_view::npos
+        ? std::nullopt
+        : std::optional<std::string> {
+            decode_xml(std::string { opening.substr(begin, end - begin) })
+          };
+    }
+
+    std::optional<std::string> msbuild_configuration(std::string_view condition)
+    {
+      if (condition.find("$(Configuration)") == std::string_view::npos)
+      {
+        return std::nullopt;
+      }
+
+      const auto equals = condition.find("==");
+
+      if (equals == std::string_view::npos)
+      {
+        return std::nullopt;
+      }
+
+      auto value = trim(condition.substr(equals + 2));
+
+      if (value.size() >= 2
+          && ((value.front() == '\'' && value.back() == '\'')
+              || (value.front() == '"' && value.back() == '"')))
+      {
+        value = value.substr(1, value.size() - 2);
+      }
+
+      const auto separator = value.find('|');
+      value = value.substr(0, separator);
+      return value.empty() || value.find("$(") != std::string_view::npos
+        ? std::nullopt
+        : std::optional<std::string> { value };
+    }
+
+    std::string replace_msbuild_paths(std::string value,
+                                      const std::filesystem::path& project_directory,
+                                      const std::filesystem::path& document_directory)
+    {
+      for (const auto& [variable, path] : {
+        std::pair { std::string_view { "$(ProjectDir)" }, project_directory },
+        std::pair { std::string_view { "$(MSBuildThisFileDirectory)" }, document_directory }
+      })
+      {
+        std::size_t position = 0;
+        const auto replacement = path.generic_string() + '/';
+
+        while ((position = value.find(variable, position)) != std::string::npos)
+        {
+          value.replace(position, variable.size(), replacement);
+          position += replacement.size();
+        }
+      }
+
+      return value;
+    }
+
+    struct MsBuildDocument
+    {
+      std::filesystem::path path;
+      std::string xml;
+      std::optional<std::string> configuration;
+    };
+
+    bool collect_msbuild_documents(const std::filesystem::path& path,
+                                   const std::filesystem::path& project_directory,
+                                   const std::optional<std::string>& configuration,
+                                   std::set<std::filesystem::path>& active,
+                                   std::vector<MsBuildDocument>& documents,
+                                   std::vector<std::string>& unresolved,
+                                   std::ostream& error)
+    {
+      const auto normalized = path.lexically_normal();
+
+      if (!active.insert(normalized).second)
+      {
+        return true;
+      }
+
+      std::ifstream file { normalized };
+
+      if (!file)
+      {
+        error << "forge: could not open MSBuild file '" << normalized.string() << "'\n";
+        return false;
+      }
+
+      MsBuildDocument document;
+      document.path = normalized;
+      document.configuration = configuration;
+      document.xml = {
+        std::istreambuf_iterator<char> { file },
+        std::istreambuf_iterator<char> {}
+      };
+      documents.push_back(document);
+
+      std::multiset<std::string> grouped_imports;
+
+      for (const auto& group : xml_elements(document.xml, "ImportGroup"))
+      {
+        const auto group_condition = xml_attribute(group.opening, "Condition");
+        const auto group_configuration =
+          group_condition && msbuild_configuration(*group_condition)
+            ? msbuild_configuration(*group_condition)
+            : configuration;
+
+        for (const auto& opening : xml_openings(group.body, "Import"))
+        {
+          if (const auto imported = xml_attribute(opening, "Project"))
+          {
+            grouped_imports.insert(*imported);
+            auto expanded = replace_msbuild_paths(
+              *imported,
+              project_directory,
+              normalized.parent_path()
+            );
+            std::replace(expanded.begin(), expanded.end(), '\\', '/');
+
+            if (expanded.find("$(") != std::string::npos)
+            {
+              unresolved.push_back(*imported);
+              continue;
+            }
+
+            const auto imported_path =
+              (std::filesystem::path { expanded }.is_absolute()
+                ? std::filesystem::path { expanded }
+                : normalized.parent_path() / expanded).lexically_normal();
+
+            if (imported_path.extension() == ".props"
+                && std::filesystem::exists(imported_path)
+                && !collect_msbuild_documents(
+                  imported_path,
+                  project_directory,
+                  group_configuration,
+                  active,
+                  documents,
+                  unresolved,
+                  error
+                ))
+            {
+              return false;
+            }
+          }
+        }
+      }
+
+      for (const auto& opening : xml_openings(document.xml, "Import"))
+      {
+        const auto imported = xml_attribute(opening, "Project");
+
+        if (!imported)
+        {
+          continue;
+        }
+
+        if (const auto grouped = grouped_imports.find(*imported); grouped != grouped_imports.end())
+        {
+          grouped_imports.erase(grouped);
+          continue;
+        }
+
+        const auto import_condition = xml_attribute(opening, "Condition");
+        const auto import_configuration =
+          import_condition && msbuild_configuration(*import_condition)
+            ? msbuild_configuration(*import_condition)
+            : configuration;
+        auto expanded = replace_msbuild_paths(
+          *imported,
+          project_directory,
+          normalized.parent_path()
+        );
+        std::replace(expanded.begin(), expanded.end(), '\\', '/');
+
+        if (expanded.find("$(") != std::string::npos)
+        {
+          unresolved.push_back(*imported);
+          continue;
+        }
+
+        const auto imported_path =
+          (std::filesystem::path { expanded }.is_absolute()
+            ? std::filesystem::path { expanded }
+            : normalized.parent_path() / expanded).lexically_normal();
+
+        if (imported_path.extension() == ".props"
+            && std::filesystem::exists(imported_path)
+            && !collect_msbuild_documents(
+              imported_path,
+              project_directory,
+              import_configuration,
+              active,
+              documents,
+              unresolved,
+              error
+            ))
+        {
+          return false;
+        }
+      }
+
+      active.erase(normalized);
+      return true;
+    }
+
     std::vector<std::string> split_msbuild_list(const std::vector<std::string>& values)
     {
       std::set<std::string> result;
@@ -200,9 +481,7 @@ namespace forge
           const auto separator = remaining.find(';');
           auto item = trim(remaining.substr(0, separator));
 
-          if (!item.empty()
-              && !item.starts_with("%(")
-              && item.find("$(") == std::string_view::npos)
+          if (!item.empty() && !item.starts_with("%("))
           {
             result.insert(std::string { item });
           }
@@ -217,37 +496,6 @@ namespace forge
       }
 
       return { result.begin(), result.end() };
-    }
-
-    std::vector<std::string> common_msbuild_list(const std::vector<std::string>& values)
-    {
-      std::set<std::string> common;
-      bool first = true;
-
-      for (const auto& value : values)
-      {
-        const auto items = split_msbuild_list({ value });
-        const std::set<std::string> current { items.begin(), items.end() };
-
-        if (first)
-        {
-          common = current;
-          first = false;
-          continue;
-        }
-
-        std::set<std::string> intersection;
-        std::set_intersection(
-          common.begin(),
-          common.end(),
-          current.begin(),
-          current.end(),
-          std::inserter(intersection, intersection.end())
-        );
-        common = std::move(intersection);
-      }
-
-      return { common.begin(), common.end() };
     }
 
     std::optional<std::string> project_relative_path(
@@ -287,7 +535,94 @@ namespace forge
       std::vector<std::string> include_directories;
       std::vector<std::string> definitions;
       std::vector<std::filesystem::path> references;
+      std::map<std::string, BuildProfile> profiles;
+      std::vector<std::string> unresolved_properties;
     };
+
+    int cpp_standard_from_msbuild(std::string_view standard)
+    {
+      if (standard == "stdcpp14")
+      {
+        return 14;
+      }
+
+      if (standard == "stdcpp17")
+      {
+        return 17;
+      }
+
+      if (standard == "stdcpp20")
+      {
+        return 20;
+      }
+
+      if (standard == "stdcpp23" || standard == "stdcpplatest")
+      {
+        return 23;
+      }
+
+      return 0;
+    }
+
+    void append_visual_studio_settings(
+      BuildProfile& settings,
+      const MsBuildDocument& document,
+      std::string_view xml,
+      const std::filesystem::path& project_directory,
+      std::vector<std::string>& unresolved)
+    {
+      for (const auto& standard : xml_values(xml, "LanguageStandard"))
+      {
+        if (const auto parsed = cpp_standard_from_msbuild(standard); parsed != 0)
+        {
+          settings.cpp_standard = parsed;
+        }
+      }
+
+      for (const auto& include : split_msbuild_list(xml_values(xml, "AdditionalIncludeDirectories")))
+      {
+        const auto expanded = replace_msbuild_paths(
+          include,
+          project_directory,
+          document.path.parent_path()
+        );
+
+        if (expanded.find("$(") != std::string::npos)
+        {
+          unresolved.push_back(include);
+        }
+        else if (const auto relative = project_relative_path(project_directory, expanded))
+        {
+          settings.include_directories.push_back(*relative);
+        }
+      }
+
+      for (const auto& definition : split_msbuild_list(xml_values(xml, "PreprocessorDefinitions")))
+      {
+        if (definition.find("$(") != std::string::npos)
+        {
+          unresolved.push_back(definition);
+        }
+        else if (is_valid_compile_definition(definition))
+        {
+          settings.compile_definitions.push_back(definition);
+        }
+      }
+    }
+
+    void sort_unique(BuildProfile& profile)
+    {
+      std::ranges::sort(profile.include_directories);
+      std::ranges::sort(profile.compile_definitions);
+      profile.include_directories.erase(
+        std::unique(profile.include_directories.begin(), profile.include_directories.end()),
+        profile.include_directories.end()
+      );
+      profile.compile_definitions.erase(
+        std::unique(profile.compile_definitions.begin(), profile.compile_definitions.end()),
+        profile.compile_definitions.end()
+      );
+    }
 
     std::optional<VisualStudioProject> read_visual_studio_project(
       const std::filesystem::path& path,
@@ -309,6 +644,21 @@ namespace forge
       project.path = path;
       project.name = path.stem().string();
       const auto directory = path.parent_path();
+      std::set<std::filesystem::path> active;
+      std::vector<MsBuildDocument> documents;
+
+      if (!collect_msbuild_documents(
+        path,
+        directory,
+        std::nullopt,
+        active,
+        documents,
+        project.unresolved_properties,
+        error
+      ))
+      {
+        return std::nullopt;
+      }
 
       for (const auto& name : xml_values(xml, "ProjectName"))
       {
@@ -340,23 +690,152 @@ namespace forge
         }
       }
 
-      for (const auto& standard : xml_values(xml, "LanguageStandard"))
+      std::set<std::string> configurations;
+
+      for (const auto& configuration : xml_attributes(xml, "ProjectConfiguration", "Include"))
       {
-        if (standard == "stdcpp14")
+        const auto separator = configuration.find('|');
+        configurations.insert(configuration.substr(0, separator));
+      }
+
+      for (const auto& document : documents)
+      {
+        if (document.configuration)
         {
-          project.cpp_standard = 14;
+          configurations.insert(*document.configuration);
         }
-        else if (standard == "stdcpp17")
+
+        for (const auto& group : xml_elements(document.xml, "ItemDefinitionGroup"))
         {
-          project.cpp_standard = 17;
+          const auto condition = xml_attribute(group.opening, "Condition");
+          const auto configuration =
+            condition && msbuild_configuration(*condition)
+              ? msbuild_configuration(*condition)
+              : document.configuration;
+
+          if (configuration)
+          {
+            configurations.insert(*configuration);
+          }
         }
-        else if (standard == "stdcpp20")
+      }
+
+      BuildProfile common;
+
+      for (const auto& document : documents)
+      {
+        for (const auto& group : xml_elements(document.xml, "ItemDefinitionGroup"))
         {
-          project.cpp_standard = 20;
+          const auto condition = xml_attribute(group.opening, "Condition");
+          const auto configuration =
+            condition && msbuild_configuration(*condition)
+              ? msbuild_configuration(*condition)
+              : document.configuration;
+
+          if (!configuration)
+          {
+            append_visual_studio_settings(
+              common,
+              document,
+              group.body,
+              directory,
+              project.unresolved_properties
+            );
+          }
         }
-        else if (standard == "stdcpp23" || standard == "stdcpplatest")
+      }
+
+      sort_unique(common);
+      project.cpp_standard = common.cpp_standard == 0 ? 20 : common.cpp_standard;
+
+      for (const auto& configuration : configurations)
+      {
+        auto profile = common;
+        profile.configuration = configuration;
+
+        for (const auto& document : documents)
         {
-          project.cpp_standard = 23;
+          for (const auto& group : xml_elements(document.xml, "ItemDefinitionGroup"))
+          {
+            const auto condition = xml_attribute(group.opening, "Condition");
+            const auto group_configuration =
+              condition && msbuild_configuration(*condition)
+                ? msbuild_configuration(*condition)
+                : document.configuration;
+
+            if (group_configuration == configuration)
+            {
+              append_visual_studio_settings(
+                profile,
+                document,
+                group.body,
+                directory,
+                project.unresolved_properties
+              );
+            }
+          }
+        }
+
+        sort_unique(profile);
+        project.profiles.emplace(configuration, std::move(profile));
+      }
+
+      if (!project.profiles.empty())
+      {
+        auto common_includes = project.profiles.begin()->second.include_directories;
+        auto common_definitions = project.profiles.begin()->second.compile_definitions;
+
+        for (const auto& [configuration, profile] : project.profiles)
+        {
+          std::vector<std::filesystem::path> includes;
+          std::vector<std::string> definitions;
+          std::set_intersection(
+            common_includes.begin(),
+            common_includes.end(),
+            profile.include_directories.begin(),
+            profile.include_directories.end(),
+            std::back_inserter(includes)
+          );
+          std::set_intersection(
+            common_definitions.begin(),
+            common_definitions.end(),
+            profile.compile_definitions.begin(),
+            profile.compile_definitions.end(),
+            std::back_inserter(definitions)
+          );
+          common_includes = std::move(includes);
+          common_definitions = std::move(definitions);
+        }
+
+        project.include_directories.clear();
+
+        for (const auto& include : common_includes)
+        {
+          project.include_directories.push_back(include.generic_string());
+        }
+
+        project.definitions = common_definitions;
+
+        for (auto& [configuration, profile] : project.profiles)
+        {
+          std::erase_if(
+            profile.include_directories,
+            [&common_includes](const auto& include)
+            {
+              return std::binary_search(common_includes.begin(), common_includes.end(), include);
+            }
+          );
+          std::erase_if(
+            profile.compile_definitions,
+            [&common_definitions](const auto& definition)
+            {
+              return std::binary_search(
+                common_definitions.begin(),
+                common_definitions.end(),
+                definition
+              );
+            }
+          );
         }
       }
 
@@ -373,24 +852,6 @@ namespace forge
         if (const auto relative = project_relative_path(directory, header))
         {
           project.headers.push_back(*relative);
-        }
-      }
-
-      for (const auto& include :
-           common_msbuild_list(xml_values(xml, "AdditionalIncludeDirectories")))
-      {
-        if (const auto relative = project_relative_path(directory, include))
-        {
-          project.include_directories.push_back(*relative);
-        }
-      }
-
-      for (const auto& definition :
-           common_msbuild_list(xml_values(xml, "PreprocessorDefinitions")))
-      {
-        if (is_valid_compile_definition(definition))
-        {
-          project.definitions.push_back(definition);
         }
       }
 
@@ -1873,6 +2334,37 @@ namespace forge
       }
     }
 
+    if (visual_studio_project)
+    {
+      for (const auto& [name, profile] : visual_studio_project->profiles)
+      {
+        recipe += "\n[profile." + escape_toml_string(name) + ".build]\n"
+          "configuration = \"" + escape_toml_string(profile.configuration) + "\"\n";
+
+        if (profile.cpp_standard != 0 && profile.cpp_standard != visual_studio_project->cpp_standard)
+        {
+          recipe += "cpp_std = " + std::to_string(profile.cpp_standard) + "\n";
+        }
+
+        if (!profile.include_directories.empty())
+        {
+          std::vector<std::string> includes;
+
+          for (const auto& include : profile.include_directories)
+          {
+            includes.push_back(include.generic_string());
+          }
+
+          recipe += "include_dirs = " + format_sources(includes) + "\n";
+        }
+
+        if (!profile.compile_definitions.empty())
+        {
+          recipe += "defines = " + format_sources(profile.compile_definitions) + "\n";
+        }
+      }
+    }
+
     if (show_progress)
     {
       report_progress(output, 5, 6, "Writing recipe");
@@ -1917,6 +2409,25 @@ namespace forge
     {
       output << "Imported Visual Studio project " << visual_studio_project->path.filename().string()
              << '\n';
+
+      if (!visual_studio_project->profiles.empty())
+      {
+        output << "Imported " << visual_studio_project->profiles.size()
+               << " Visual Studio build profile";
+        output << (visual_studio_project->profiles.size() == 1 ? "\n" : "s\n");
+      }
+
+      if (!visual_studio_project->unresolved_properties.empty())
+      {
+        output << "Skipped " << visual_studio_project->unresolved_properties.size()
+               << " unresolved MSBuild value";
+        output << (visual_studio_project->unresolved_properties.size() == 1 ? ":\n" : "s:\n");
+
+        for (const auto& value : visual_studio_project->unresolved_properties)
+        {
+          output << "  " << value << '\n';
+        }
+      }
     }
 
     if (!include_directories.empty())

@@ -389,26 +389,58 @@ namespace
     TemporaryDirectory directory;
     constexpr std::array adopt_arguments { std::string_view { "adopt" } };
     constexpr std::array build_arguments { std::string_view { "build" } };
+    constexpr std::array release_build_arguments {
+      std::string_view { "build" },
+      std::string_view { "--profile=Release" }
+    };
     write_file(
       directory.path() / "hello.vcxproj",
       "<Project>\n"
       "  <PropertyGroup><ProjectName>HelloApp</ProjectName>"
       "<ConfigurationType>Application</ConfigurationType></PropertyGroup>\n"
+      "  <ItemGroup Label=\"ProjectConfigurations\">"
+      "<ProjectConfiguration Include=\"Debug|x64\" />"
+      "<ProjectConfiguration Include=\"Release|x64\" /></ItemGroup>\n"
+      "  <Import Project=\"config\\common.props\" />"
+      "  <ImportGroup Condition=\"'$(Configuration)|$(Platform)'=='Debug|x64'\">"
+      "<Import Project=\"config\\debug.props\" /></ImportGroup>"
+      "  <Import Project=\"$(SolutionDir)missing.props\" />"
       "  <ItemDefinitionGroup><ClCompile>"
       "<LanguageStandard>stdcpp17</LanguageStandard>"
-      "<AdditionalIncludeDirectories>include;debug;$(Ignored);%(AdditionalIncludeDirectories)"
+      "<AdditionalIncludeDirectories>include;%(AdditionalIncludeDirectories)"
       "</AdditionalIncludeDirectories>"
-      "<PreprocessorDefinitions>HELLO_FEATURE;VALUE=42;DEBUG_ONLY;%(PreprocessorDefinitions)"
+      "</ClCompile></ItemDefinitionGroup>\n"
+      "  <ItemDefinitionGroup Condition=\"'$(Configuration)|$(Platform)'=='Debug|x64'\">"
+      "<ClCompile><AdditionalIncludeDirectories>debug;%(AdditionalIncludeDirectories)"
+      "</AdditionalIncludeDirectories>"
+      "<PreprocessorDefinitions>DEBUG_ONLY;%(PreprocessorDefinitions)"
       "</PreprocessorDefinitions></ClCompile></ItemDefinitionGroup>\n"
-      "  <ItemDefinitionGroup><ClCompile>"
-      "<AdditionalIncludeDirectories>include;release;%(AdditionalIncludeDirectories)"
+      "  <ItemDefinitionGroup Condition=\"'$(Configuration)|$(Platform)'=='Release|x64'\">"
+      "<ClCompile><AdditionalIncludeDirectories>release;%(AdditionalIncludeDirectories)"
       "</AdditionalIncludeDirectories>"
-      "<PreprocessorDefinitions>HELLO_FEATURE;VALUE=42;RELEASE_ONLY;%(PreprocessorDefinitions)"
+      "<PreprocessorDefinitions>RELEASE_ONLY;%(PreprocessorDefinitions)"
       "</PreprocessorDefinitions></ClCompile></ItemDefinitionGroup>\n"
       "  <ItemGroup><ClCompile Include=\"src\\main.cpp\" />"
       "<ClInclude Include=\"include\\hello\\hello.h\" /></ItemGroup>\n"
       "</Project>\n"
     );
+    write_file(
+      directory.path() / "config/common.props",
+      "<Project><ItemDefinitionGroup><ClCompile>"
+      "<AdditionalIncludeDirectories>$(ProjectDir)props_include;"
+      "%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>"
+      "<PreprocessorDefinitions>HELLO_FEATURE;VALUE=42;%(PreprocessorDefinitions)"
+      "</PreprocessorDefinitions></ClCompile></ItemDefinitionGroup></Project>\n"
+    );
+    write_file(
+      directory.path() / "config/debug.props",
+      "<Project><ItemDefinitionGroup><ClCompile>"
+      "<PreprocessorDefinitions>DEBUG_PROPS;%(PreprocessorDefinitions)"
+      "</PreprocessorDefinitions></ClCompile></ItemDefinitionGroup></Project>\n"
+    );
+    write_file(directory.path() / "props_include/placeholder.h", "#pragma once\n");
+    write_file(directory.path() / "debug/placeholder.h", "#pragma once\n");
+    write_file(directory.path() / "release/placeholder.h", "#pragma once\n");
     write_file(
       directory.path() / "src/main.cpp",
       "#include <hello/hello.h>\n"
@@ -430,22 +462,32 @@ namespace
     expect(contains(recipe, "name = \"HelloApp\""), "adopt imports the Visual Studio project name");
     expect(contains(recipe, "cpp_std = 17"), "adopt imports the Visual Studio C++ standard");
     expect(contains(recipe, "paths = [\"src/main.cpp\"]"), "adopt normalizes Visual Studio sources");
-    expect(contains(recipe, "include_dirs = [\"include\"]"), "adopt imports include directories");
     expect(
-      !contains(recipe, "debug") && !contains(recipe, "release"),
-      "adopt excludes configuration-specific include directories"
+      contains(recipe, "include_dirs = [\"include\", \"props_include\"]"),
+      "adopt imports project and props include directories"
     );
     expect(
       contains(recipe, "defines = [\"HELLO_FEATURE\", \"VALUE=42\"]"),
       "adopt imports preprocessor definitions"
     );
     expect(
-      !contains(recipe, "DEBUG_ONLY") && !contains(recipe, "RELEASE_ONLY"),
-      "adopt excludes configuration-specific preprocessor definitions"
+      contains(recipe, "[profile.Debug.build]")
+        && contains(recipe, "configuration = \"Debug\"")
+        && contains(recipe, "include_dirs = [\"debug\"]")
+        && contains(recipe, "defines = [\"DEBUG_ONLY\", \"DEBUG_PROPS\"]")
+        && contains(recipe, "[profile.Release.build]")
+        && contains(recipe, "include_dirs = [\"release\"]")
+        && contains(recipe, "defines = [\"RELEASE_ONLY\"]"),
+      "adopt maps Visual Studio configurations to build profiles"
     );
     expect(
       contains(output.str(), "Imported Visual Studio project hello.vcxproj"),
       "adopt reports the imported Visual Studio project"
+    );
+    expect(
+      contains(output.str(), "Imported 2 Visual Studio build profiles")
+        && contains(output.str(), "$(SolutionDir)missing.props"),
+      "adopt reports imported profiles and unresolved MSBuild values"
     );
     std::ostringstream build_output;
     std::ostringstream build_error;
@@ -454,6 +496,18 @@ namespace
       "imported Visual Studio project builds"
     );
     expect(build_error.str().empty(), "imported Visual Studio project build does not write an error");
+    std::ostringstream release_output;
+    std::ostringstream release_error;
+    expect(
+      forge::cli::run(
+        release_build_arguments,
+        directory.path(),
+        release_output,
+        release_error
+      ) == 0,
+      "imported Visual Studio Release profile builds"
+    );
+    expect(release_error.str().empty(), "imported Release profile does not write an error");
   }
 
   void test_adopt_imports_visual_studio_solution()
@@ -2693,8 +2747,8 @@ namespace
       "build rejects a missing dependency profile"
     );
     expect(
-      contains(missing_error.str(), "no dependency profile named 'missing'"),
-      "missing dependency profile is explained"
+      contains(missing_error.str(), "no profile named 'missing'"),
+      "missing profile is explained"
     );
   }
 

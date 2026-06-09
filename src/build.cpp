@@ -2399,6 +2399,19 @@ namespace forge
       return 2;
     }
 
+    auto configuration = dependency_session->options.configuration;
+
+    if (!select_build_profile(
+      recipe,
+      dependency_session->options.profile,
+      is_root_project,
+      configuration,
+      error
+    ))
+    {
+      return 2;
+    }
+
     if (is_root_project)
     {
       recipe.compile_definitions.insert(
@@ -2668,7 +2681,7 @@ namespace forge
       build_directory.string(),
       "-G",
       "Ninja",
-      "-DCMAKE_BUILD_TYPE=Debug",
+      "-DCMAKE_BUILD_TYPE=" + configuration,
       "-DFORGE_PROJECT_ROOT=" + project_directory.generic_string()
     };
 
@@ -2688,7 +2701,9 @@ namespace forge
     const std::vector<std::string> build_arguments {
       "cmake",
       "--build",
-      build_directory.string()
+      build_directory.string(),
+      "--config",
+      configuration
     };
 
     if (process_runner(build_arguments, project_directory, error) != 0)

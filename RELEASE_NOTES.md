@@ -11,6 +11,9 @@
 - Made `forge adopt` import common `.vcxproj` metadata and turn supported
   Visual Studio `.sln` files into Forge workspaces with local project
   dependencies.
+- Added build profiles for configuration-specific C++ standards, include
+  directories, and definitions; `forge adopt` generates them from Visual
+  Studio configurations and recursively imported concrete `.props` files.
 - Added concise phase and per-project progress reporting to `forge adopt`.
 
 ## 0.4.0
