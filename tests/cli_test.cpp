@@ -510,6 +510,258 @@ namespace
     expect(release_error.str().empty(), "imported Release profile does not write an error");
   }
 
+  void test_adopt_imports_cmake_project()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "cmake_minimum_required(VERSION 3.25)\n"
+      "project(CMakeApp LANGUAGES CXX)\n"
+      "add_executable(CMakeApp src/main.cpp)\n"
+      "target_compile_features(CMakeApp PRIVATE cxx_std_23)\n"
+      "target_include_directories(CMakeApp PRIVATE ${PROJECT_SOURCE_DIR}/include)\n"
+      "target_compile_definitions(CMakeApp PRIVATE CMAKE_FEATURE VALUE=42)\n"
+      "# add_executable(Commented bad.cpp)\n"
+    );
+    write_file(
+      directory.path() / "src/main.cpp",
+      "#include <answer.h>\n"
+      "#ifndef CMAKE_FEATURE\n#error missing definition\n#endif\n"
+      "int main() { return answer() == VALUE ? 0 : 1; }\n"
+    );
+    write_file(directory.path() / "include/answer.h", "#pragma once\ninline int answer() { return 42; }\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt imports a CMake project"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(contains(recipe, "name = \"CMakeApp\""), "adopt imports the CMake project name");
+    expect(contains(recipe, "cpp_std = 23"), "adopt imports the CMake C++ standard");
+    expect(contains(recipe, "include_dirs = [\"include\"]"), "adopt imports CMake include directories");
+    expect(
+      contains(recipe, "defines = [\"CMAKE_FEATURE\", \"VALUE=42\"]"),
+      "adopt imports CMake compile definitions"
+    );
+    expect(contains(output.str(), "Imported CMake project CMakeLists.txt"), "adopt reports CMake import");
+    expect(!contains(recipe, "bad.cpp"), "adopt ignores commented CMake commands");
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "imported CMake project builds"
+    );
+    expect(build_error.str().empty(), "imported CMake build does not write an error");
+  }
+
+  void test_adopt_merges_mirrored_cmake_and_visual_studio_projects()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "project(Mirrored LANGUAGES CXX)\n"
+      "add_executable(Mirrored src/main.cpp)\n"
+      "target_compile_definitions(Mirrored PRIVATE FROM_CMAKE)\n"
+    );
+    write_file(
+      directory.path() / "Mirrored.vcxproj",
+      "<Project><PropertyGroup><ProjectName>MirroredNative</ProjectName>"
+      "<ConfigurationType>Application</ConfigurationType></PropertyGroup>"
+      "<ItemGroup><ClCompile Include=\"src\\main.cpp\" /></ItemGroup></Project>\n"
+    );
+    write_file(directory.path() / "src/main.cpp", "int main() {}\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt merges mirrored CMake and Visual Studio metadata"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "name = \"MirroredNative\""),
+      "explicit Visual Studio metadata remains authoritative"
+    );
+    expect(contains(recipe, "FROM_CMAKE"), "mirrored CMake metadata fills additional settings");
+    expect(
+      contains(output.str(), "Imported Visual Studio project Mirrored.vcxproj")
+        && contains(output.str(), "Merged mirrored CMake project metadata"),
+      "adopt reports mirrored project metadata"
+    );
+    expect(error.str().empty(), "mirrored project adoption does not write an error");
+  }
+
+  void test_adopt_prefers_cmake_over_generated_solution()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+    write_file(directory.path() / "CMakeLists.txt", "project(CMakeRoot)\nadd_executable(CMakeRoot main.cpp)\n");
+    write_file(
+      directory.path() / "Generated.sln",
+      "Microsoft Visual Studio Solution File, Format Version 12.00\n"
+      "Project(\"{TYPE}\") = \"Generated\", \"build\\Generated.vcxproj\", \"{ID}\"\n"
+    );
+    write_file(
+      directory.path() / "Generated.vcxproj",
+      "<Project><PropertyGroup><ProjectName>Generated</ProjectName></PropertyGroup>"
+      "<ItemGroup><CustomBuild Include=\"CMakeFiles\\generate.stamp\" /></ItemGroup></Project>\n"
+    );
+    write_file(
+      directory.path() / "Generated.xcodeproj/project.pbxproj",
+      "{ CMakeFiles = generated; }\n"
+    );
+    write_file(directory.path() / "main.cpp", "int main() {}\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt ignores a generated solution beside a CMake source project"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / "forge.recipe.toml")
+        && !std::filesystem::exists(directory.path() / "forge.workspace.toml"),
+      "generated solution does not turn the CMake project into a workspace"
+    );
+    expect(contains(output.str(), "Imported CMake project CMakeLists.txt"), "CMake remains authoritative");
+    expect(error.str().empty(), "generated solution preference does not write an error");
+  }
+
+  void test_adopt_imports_xcode_project()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array release_build_arguments {
+      std::string_view { "build" },
+      std::string_view { "--profile=Release" }
+    };
+    write_file(
+      directory.path() / "Hello.xcodeproj/project.pbxproj",
+      "{ objects = {\n"
+      "TARGET = { isa = PBXNativeTarget; name = HelloXcode; "
+      "productType = \"com.apple.product-type.tool\"; };\n"
+      "DEBUG = { isa = XCBuildConfiguration; buildSettings = { "
+      "CLANG_CXX_LANGUAGE_STANDARD = \"c++20\"; "
+      "HEADER_SEARCH_PATHS = (\"$(PROJECT_DIR)/include\", \"$(inherited)\"); "
+      "GCC_PREPROCESSOR_DEFINITIONS = (XCODE_COMMON, DEBUG_XCODE); }; name = Debug; };\n"
+      "RELEASE = { isa = XCBuildConfiguration; buildSettings = { "
+      "CLANG_CXX_LANGUAGE_STANDARD = \"c++20\"; "
+      "HEADER_SEARCH_PATHS = (\"$(PROJECT_DIR)/include\", \"$(inherited)\"); "
+      "GCC_PREPROCESSOR_DEFINITIONS = (XCODE_COMMON, RELEASE_XCODE); }; name = Release; };\n"
+      "CONFIG = { isa = PBXFileReference; path = config/Release.xcconfig; };\n"
+      "}; }\n"
+    );
+    write_file(directory.path() / "config/Release.xcconfig", "GCC_PREPROCESSOR_DEFINITIONS = RELEASE_CONFIG\n");
+    write_file(directory.path() / "include/placeholder.h", "#pragma once\n");
+    write_file(
+      directory.path() / "main.cpp",
+      "#ifndef XCODE_COMMON\n#error missing definition\n#endif\nint main() {}\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt imports an Xcode project"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(contains(recipe, "name = \"HelloXcode\""), "adopt imports the Xcode target name");
+    expect(contains(recipe, "include_dirs = [\"include\"]"), "adopt imports Xcode header search paths");
+    expect(contains(recipe, "defines = [\"XCODE_COMMON\"]"), "adopt imports common Xcode definitions");
+    expect(
+      contains(recipe, "[profile.Debug.build]")
+        && contains(recipe, "defines = [\"DEBUG_XCODE\"]")
+        && contains(recipe, "[profile.Release.build]")
+        && contains(recipe, "defines = [\"RELEASE_CONFIG\", \"RELEASE_XCODE\"]"),
+      "adopt maps Xcode configurations to build profiles"
+    );
+    expect(contains(output.str(), "Imported Xcode project Hello.xcodeproj"), "adopt reports Xcode import");
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(
+        release_build_arguments,
+        directory.path(),
+        build_output,
+        build_error
+      ) == 0,
+      "imported Xcode Release profile builds"
+    );
+    expect(build_error.str().empty(), "imported Xcode build does not write an error");
+  }
+
+  void test_adopt_imports_cmake_superproject_as_workspace()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "project(CMakeSuite)\nadd_subdirectory(Core)\nadd_subdirectory(Tool)\n"
+    );
+    write_file(
+      directory.path() / "Generated.sln",
+      "Microsoft Visual Studio Solution File, Format Version 12.00\n"
+    );
+    write_file(
+      directory.path() / "Core/CMakeLists.txt",
+      "project(Core)\nadd_library(Core STATIC src/core.cpp)\n"
+      "target_include_directories(Core PUBLIC ${PROJECT_SOURCE_DIR}/include)\n"
+    );
+    write_file(
+      directory.path() / "Core/Generated.vcxproj",
+      "<Project><ItemGroup><CustomBuild Include=\"CMakeFiles\\generate.stamp\" /></ItemGroup></Project>\n"
+    );
+    write_file(
+      directory.path() / "Core/src/core.cpp",
+      "#include <Core/core.h>\nint answer() { return 42; }\n"
+    );
+    write_file(directory.path() / "Core/include/Core/core.h", "#pragma once\nint answer();\n");
+    write_file(
+      directory.path() / "Tool/CMakeLists.txt",
+      "project(Tool)\nadd_executable(Tool main.cpp)\n"
+    );
+    write_file(
+      directory.path() / "Tool/main.cpp",
+      "#include <Core/core.h>\nint main() { return answer() == 42 ? 0 : 1; }\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt imports a CMake superproject as a workspace"
+    );
+    const auto workspace = read_file(directory.path() / "forge.workspace.toml");
+    const auto tool_recipe = read_file(directory.path() / "Tool/forge.recipe.toml");
+    expect(
+      contains(workspace, "name = \"CMakeSuite\"")
+        && contains(workspace, "projects = [\"Core\", \"Tool\"]"),
+      "CMake superproject adoption creates a workspace"
+    );
+    expect(
+      contains(tool_recipe, "Core = { path = \"../Core\" }"),
+      "CMake workspace adoption infers sibling dependencies"
+    );
+    expect(
+      contains(output.str(), "Adopted 2 CMake projects")
+        && contains(output.str(), "[1/4] Reading CMake superproject"),
+      "CMake workspace adoption reports compact progress"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "imported CMake superproject builds as a workspace"
+    );
+    expect(build_error.str().empty(), "imported CMake workspace build does not write an error");
+  }
+
   void test_adopt_imports_visual_studio_solution()
   {
     TemporaryDirectory directory;
@@ -3331,6 +3583,11 @@ int main()
   test_init_ignores_generated_directories();
   test_init_infers_local_include_directories();
   test_adopt_imports_visual_studio_project();
+  test_adopt_imports_cmake_project();
+  test_adopt_merges_mirrored_cmake_and_visual_studio_projects();
+  test_adopt_prefers_cmake_over_generated_solution();
+  test_adopt_imports_xcode_project();
+  test_adopt_imports_cmake_superproject_as_workspace();
   test_adopt_imports_visual_studio_solution();
   test_adopt_reports_unresolved_dependency_includes();
   test_adopt_infers_sibling_project_dependencies();

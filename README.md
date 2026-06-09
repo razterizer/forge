@@ -166,6 +166,27 @@ and `$(MSBuildThisFileDirectory)`. Other unresolved MSBuild property
 expressions are reported for manual review, while inherited `%(...)`
 placeholders are omitted.
 
+When a project directory contains `CMakeLists.txt`, `forge adopt` imports
+concrete target sources, the project name and output type, C++ standard,
+include directories, and preprocessor definitions. Generator expressions,
+unexpanded variables, and ambiguous multi-target details are reported for
+manual review. CMake remains authoritative when generated Visual Studio
+solution, Visual Studio project, or Xcode project files are present. A
+top-level CMake project that defines only concrete `add_subdirectory(...)`
+projects becomes a Forge workspace.
+
+When a project directory contains one `.xcodeproj`, `forge adopt` imports its
+native target name and output type, C++ standard, header search paths,
+preprocessor definitions, and Debug/Release-style build configurations.
+Referenced `.xcconfig` files whose filenames identify a configuration are
+included. Unresolved Xcode variables and ambiguous multi-target details are
+reported for manual review.
+
+When hand-maintained CMake and native Visual Studio or Xcode project metadata
+mirror the same source project, Forge prefers the native project metadata and
+uses CMake to fill additional settings. It reports the merge rather than
+creating duplicate projects.
+
 At a solution root containing one `.sln` and no root `.vcxproj`, `forge adopt`
 adopts each C++ project in its distinct subdirectory and creates a
 `forge.workspace.toml`. Visual Studio `ProjectReference` entries become Forge

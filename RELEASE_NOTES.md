@@ -14,6 +14,10 @@
 - Added build profiles for configuration-specific C++ standards, include
   directories, and definitions; `forge adopt` generates them from Visual
   Studio configurations and recursively imported concrete `.props` files.
+- Made `forge adopt` import concrete CMake and Xcode project metadata,
+  configuration-matched `.xcconfig` files, and safely merge mirrored native
+  and CMake definitions while ignoring CMake-generated IDE projects. Concrete
+  target-free CMake superprojects become Forge workspaces.
 - Added concise phase and per-project progress reporting to `forge adopt`.
 
 ## 0.4.0

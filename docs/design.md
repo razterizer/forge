@@ -21,6 +21,13 @@ compilers and build systems rather than replacing them.
   single-target Forge libraries are added as local path dependencies. A GitHub
   origin enables non-network same-owner suggestions; `forge adopt --github`
   explicitly verifies and pins accepted repositories by exact commit.
+- `forge adopt` imports concrete metadata from CMake, Visual Studio projects
+  and solutions, Xcode projects, MSBuild property sheets, and
+  configuration-matched `.xcconfig` files. Generated CMake IDE projects do not
+  outrank their `CMakeLists.txt`; hand-maintained mirrored native projects
+  remain authoritative and receive additional concrete CMake settings.
+  Concrete target-free CMake superprojects become Forge workspaces containing
+  their `add_subdirectory(...)` projects.
 - `forge new <name>` explicitly creates a new project with a recipe and starter
   source file.
 - `forge build` generates private CMake infrastructure under `.forge/generated`

@@ -10,6 +10,7 @@
 #include <iterator>
 #include <map>
 #include <optional>
+#include <regex>
 #include <set>
 #include <sstream>
 #include <string>
@@ -527,6 +528,7 @@ namespace forge
     struct VisualStudioProject
     {
       std::filesystem::path path;
+      std::string format = "Visual Studio";
       std::string name;
       std::string type;
       int cpp_standard = 20;
@@ -538,6 +540,764 @@ namespace forge
       std::map<std::string, BuildProfile> profiles;
       std::vector<std::string> unresolved_properties;
     };
+
+    struct CMakeCommand
+    {
+      std::string name;
+      std::vector<std::string> arguments;
+    };
+
+    void sort_unique(BuildProfile& profile);
+
+    std::vector<std::string> cmake_arguments(std::string_view value)
+    {
+      std::vector<std::string> arguments;
+      std::string argument;
+      char quote = '\0';
+
+      for (std::size_t index = 0; index < value.size(); ++index)
+      {
+        const auto character = value[index];
+
+        if (quote != '\0')
+        {
+          if (character == '\\' && index + 1 < value.size())
+          {
+            argument += value[++index];
+          }
+          else if (character == quote)
+          {
+            quote = '\0';
+          }
+          else
+          {
+            argument += character;
+          }
+
+          continue;
+        }
+
+        if (character == '"' || character == '\'')
+        {
+          quote = character;
+        }
+        else if (character == '#')
+        {
+          while (index < value.size() && value[index] != '\n')
+          {
+            ++index;
+          }
+        }
+        else if (std::isspace(static_cast<unsigned char>(character)) || character == ';')
+        {
+          if (!argument.empty())
+          {
+            arguments.push_back(std::move(argument));
+            argument.clear();
+          }
+        }
+        else
+        {
+          argument += character;
+        }
+      }
+
+      if (!argument.empty())
+      {
+        arguments.push_back(std::move(argument));
+      }
+
+      return arguments;
+    }
+
+    std::vector<CMakeCommand> cmake_commands(std::string_view contents)
+    {
+      std::vector<CMakeCommand> commands;
+      std::size_t position = 0;
+
+      while (position < contents.size())
+      {
+        if (contents[position] == '#')
+        {
+          while (position < contents.size() && contents[position] != '\n')
+          {
+            ++position;
+          }
+
+          continue;
+        }
+
+        while (position < contents.size()
+               && !std::isalpha(static_cast<unsigned char>(contents[position]))
+               && contents[position] != '_')
+        {
+          if (contents[position] == '#')
+          {
+            while (position < contents.size() && contents[position] != '\n')
+            {
+              ++position;
+            }
+          }
+          else
+          {
+            ++position;
+          }
+        }
+
+        const auto name_begin = position;
+
+        while (position < contents.size()
+               && (std::isalnum(static_cast<unsigned char>(contents[position]))
+                   || contents[position] == '_'))
+        {
+          ++position;
+        }
+
+        const auto name = contents.substr(name_begin, position - name_begin);
+
+        while (position < contents.size()
+               && std::isspace(static_cast<unsigned char>(contents[position])))
+        {
+          ++position;
+        }
+
+        if (name.empty() || position >= contents.size() || contents[position] != '(')
+        {
+          continue;
+        }
+
+        const auto arguments_begin = ++position;
+        std::size_t depth = 1;
+        char quote = '\0';
+
+        while (position < contents.size() && depth != 0)
+        {
+          const auto character = contents[position];
+
+          if (quote != '\0')
+          {
+            if (character == '\\')
+            {
+              ++position;
+            }
+            else if (character == quote)
+            {
+              quote = '\0';
+            }
+          }
+          else if (character == '"' || character == '\'')
+          {
+            quote = character;
+          }
+          else if (character == '(')
+          {
+            ++depth;
+          }
+          else if (character == ')')
+          {
+            --depth;
+          }
+
+          ++position;
+        }
+
+        if (depth == 0)
+        {
+          auto command_name = std::string { name };
+          std::ranges::transform(command_name, command_name.begin(), [](unsigned char character)
+          {
+            return static_cast<char>(std::tolower(character));
+          });
+          commands.push_back({
+            std::move(command_name),
+            cmake_arguments(contents.substr(arguments_begin, position - arguments_begin - 1))
+          });
+        }
+      }
+
+      return commands;
+    }
+
+    std::string replace_cmake_paths(std::string value,
+                                    const std::filesystem::path& project_directory)
+    {
+      for (const auto variable : {
+        std::string_view { "${CMAKE_CURRENT_SOURCE_DIR}" },
+        std::string_view { "${CMAKE_SOURCE_DIR}" },
+        std::string_view { "${PROJECT_SOURCE_DIR}" }
+      })
+      {
+        std::size_t position = 0;
+        const auto replacement = project_directory.generic_string();
+
+        while ((position = value.find(variable, position)) != std::string::npos)
+        {
+          value.replace(position, variable.size(), replacement);
+          position += replacement.size();
+        }
+      }
+
+      return value;
+    }
+
+    bool is_cmake_scope(std::string_view value)
+    {
+      return value == "PUBLIC" || value == "PRIVATE" || value == "INTERFACE"
+        || value == "BEFORE" || value == "SYSTEM";
+    }
+
+    std::optional<VisualStudioProject> read_cmake_project(
+      const std::filesystem::path& path,
+      std::ostream& error)
+    {
+      std::ifstream file { path };
+
+      if (!file)
+      {
+        error << "forge: could not open CMake project '" << path.string() << "'\n";
+        return std::nullopt;
+      }
+
+      const std::string contents {
+        std::istreambuf_iterator<char> { file },
+        std::istreambuf_iterator<char> {}
+      };
+      VisualStudioProject project;
+      project.path = path;
+      project.format = "CMake";
+      project.name = path.parent_path().filename().string();
+      const auto directory = path.parent_path();
+      std::set<std::string> targets;
+
+      for (const auto& command : cmake_commands(contents))
+      {
+        if (command.name == "project" && !command.arguments.empty())
+        {
+          project.name = command.arguments.front();
+        }
+        else if ((command.name == "add_executable" || command.name == "add_library")
+                 && !command.arguments.empty())
+        {
+          targets.insert(command.arguments.front());
+
+          if (targets.size() == 1)
+          {
+            project.type = command.name == "add_executable" ? "executable" : "static_library";
+
+            if (command.name == "add_library" && command.arguments.size() > 1)
+            {
+              if (command.arguments[1] == "SHARED" || command.arguments[1] == "MODULE")
+              {
+                project.type = "dynamic_library";
+              }
+              else if (command.arguments[1] == "INTERFACE")
+              {
+                project.type = "header_only";
+              }
+            }
+          }
+
+          for (std::size_t index = 1; index < command.arguments.size(); ++index)
+          {
+            const auto& argument = command.arguments[index];
+
+            if (is_cmake_scope(argument)
+                || argument == "STATIC"
+                || argument == "SHARED"
+                || argument == "MODULE"
+                || argument == "INTERFACE"
+                || argument == "EXCLUDE_FROM_ALL"
+                || argument == "WIN32"
+                || argument == "MACOSX_BUNDLE")
+            {
+              continue;
+            }
+
+            const auto expanded = replace_cmake_paths(argument, directory);
+
+            if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
+            {
+              project.unresolved_properties.push_back(argument);
+            }
+            else if (const auto relative = project_relative_path(directory, expanded))
+            {
+              const auto extension = std::filesystem::path { *relative }.extension().string();
+
+              if (extension == ".cpp" || extension == ".cc" || extension == ".cxx")
+              {
+                project.sources.push_back(*relative);
+              }
+              else if (extension == ".h" || extension == ".hpp" || extension == ".hh")
+              {
+                project.headers.push_back(*relative);
+              }
+            }
+          }
+        }
+        else if (command.name == "target_compile_features" && command.arguments.size() > 1)
+        {
+          for (const auto& argument : command.arguments)
+          {
+            if (argument.starts_with("cxx_std_"))
+            {
+              project.cpp_standard = std::stoi(argument.substr(8));
+            }
+          }
+        }
+        else if (command.name == "target_include_directories" && command.arguments.size() > 1)
+        {
+          for (std::size_t index = 1; index < command.arguments.size(); ++index)
+          {
+            const auto& argument = command.arguments[index];
+
+            if (is_cmake_scope(argument))
+            {
+              continue;
+            }
+
+            const auto expanded = replace_cmake_paths(argument, directory);
+
+            if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
+            {
+              project.unresolved_properties.push_back(argument);
+            }
+            else if (const auto relative = project_relative_path(directory, expanded))
+            {
+              project.include_directories.push_back(*relative);
+            }
+          }
+        }
+        else if (command.name == "target_compile_definitions" && command.arguments.size() > 1)
+        {
+          for (std::size_t index = 1; index < command.arguments.size(); ++index)
+          {
+            const auto& argument = command.arguments[index];
+
+            if (!is_cmake_scope(argument) && is_valid_compile_definition(argument))
+            {
+              project.definitions.push_back(argument);
+            }
+            else if (argument.find('$') != std::string::npos)
+            {
+              project.unresolved_properties.push_back(argument);
+            }
+          }
+        }
+      }
+
+      if (targets.size() > 1)
+      {
+        project.type.clear();
+        project.unresolved_properties.push_back(
+          std::to_string(targets.size()) + " CMake targets require inferred Forge targets"
+        );
+      }
+
+      for (auto* values : {
+        &project.sources,
+        &project.headers,
+        &project.include_directories,
+        &project.definitions,
+        &project.unresolved_properties
+      })
+      {
+        std::ranges::sort(*values);
+        values->erase(std::unique(values->begin(), values->end()), values->end());
+      }
+
+      return project;
+    }
+
+    std::vector<std::string> xcode_setting_values(std::string_view settings,
+                                                   std::string_view key)
+    {
+      const auto position = settings.find(key);
+
+      if (position == std::string_view::npos)
+      {
+        return {};
+      }
+
+      const auto equals = settings.find('=', position + key.size());
+
+      if (equals == std::string_view::npos)
+      {
+        return {};
+      }
+
+      auto begin = equals + 1;
+
+      while (begin < settings.size()
+             && std::isspace(static_cast<unsigned char>(settings[begin])))
+      {
+        ++begin;
+      }
+
+      std::string_view value;
+
+      if (begin < settings.size() && settings[begin] == '(')
+      {
+        const auto end = settings.find(");", begin + 1);
+
+        if (end == std::string_view::npos)
+        {
+          return {};
+        }
+
+        value = settings.substr(begin + 1, end - begin - 1);
+      }
+      else
+      {
+        const auto end = settings.find(';', begin);
+
+        if (end == std::string_view::npos)
+        {
+          return {};
+        }
+
+        value = settings.substr(begin, end - begin);
+      }
+
+      std::vector<std::string> values;
+      std::string current;
+      char quote = '\0';
+
+      for (const auto character : value)
+      {
+        if (quote != '\0')
+        {
+          if (character == quote)
+          {
+            quote = '\0';
+          }
+          else
+          {
+            current += character;
+          }
+        }
+        else if (character == '"' || character == '\'')
+        {
+          quote = character;
+        }
+        else if (character == ',' || std::isspace(static_cast<unsigned char>(character)))
+        {
+          if (!current.empty())
+          {
+            values.push_back(std::move(current));
+            current.clear();
+          }
+        }
+        else
+        {
+          current += character;
+        }
+      }
+
+      if (!current.empty())
+      {
+        values.push_back(std::move(current));
+      }
+
+      return values;
+    }
+
+    std::string replace_xcode_paths(std::string value,
+                                    const std::filesystem::path& project_directory)
+    {
+      for (const auto variable : {
+        std::string_view { "$(PROJECT_DIR)" },
+        std::string_view { "$(SRCROOT)" },
+        std::string_view { "${PROJECT_DIR}" },
+        std::string_view { "${SRCROOT}" }
+      })
+      {
+        std::size_t position = 0;
+        const auto replacement = project_directory.generic_string();
+
+        while ((position = value.find(variable, position)) != std::string::npos)
+        {
+          value.replace(position, variable.size(), replacement);
+          position += replacement.size();
+        }
+      }
+
+      return value;
+    }
+
+    void append_xcode_settings(BuildProfile& profile,
+                               std::string_view settings,
+                               const std::filesystem::path& project_directory,
+                               std::vector<std::string>& unresolved)
+    {
+      for (const auto& standard : xcode_setting_values(settings, "CLANG_CXX_LANGUAGE_STANDARD"))
+      {
+        const auto number =
+          standard.starts_with("c++")
+            ? standard.substr(3)
+            : standard.starts_with("gnu++")
+              ? standard.substr(5)
+              : std::string {};
+
+        if (!number.empty()
+            && std::ranges::all_of(number, [](unsigned char character)
+            {
+              return std::isdigit(character);
+            }))
+        {
+          profile.cpp_standard = std::stoi(number);
+        }
+        else if (!standard.empty())
+        {
+          unresolved.push_back(standard);
+        }
+      }
+
+      for (const auto& include : xcode_setting_values(settings, "HEADER_SEARCH_PATHS"))
+      {
+        if (include == "$(inherited)")
+        {
+          continue;
+        }
+
+        const auto expanded = replace_xcode_paths(include, project_directory);
+
+        if (expanded.find("$(") != std::string::npos || expanded.find("${") != std::string::npos)
+        {
+          unresolved.push_back(include);
+        }
+        else if (const auto relative = project_relative_path(project_directory, expanded))
+        {
+          profile.include_directories.push_back(*relative);
+        }
+      }
+
+      for (const auto& definition : xcode_setting_values(settings, "GCC_PREPROCESSOR_DEFINITIONS"))
+      {
+        if (definition == "$(inherited)")
+        {
+          continue;
+        }
+
+        if (definition.find('$') != std::string::npos)
+        {
+          unresolved.push_back(definition);
+        }
+        else if (is_valid_compile_definition(definition))
+        {
+          profile.compile_definitions.push_back(definition);
+        }
+      }
+    }
+
+    std::optional<VisualStudioProject> read_xcode_project(
+      const std::filesystem::path& path,
+      std::ostream& error)
+    {
+      const auto project_file = path / "project.pbxproj";
+      std::ifstream file { project_file };
+
+      if (!file)
+      {
+        error << "forge: could not open Xcode project '" << path.string() << "'\n";
+        return std::nullopt;
+      }
+
+      const std::string contents {
+        std::istreambuf_iterator<char> { file },
+        std::istreambuf_iterator<char> {}
+      };
+      VisualStudioProject project;
+      project.path = path;
+      project.format = "Xcode";
+      project.name = path.stem().string();
+      const auto directory = path.parent_path();
+      const std::regex target_pattern {
+        R"regex(isa\s*=\s*PBXNativeTarget;[\s\S]*?name\s*=\s*"?([^";\n]+)"?;[\s\S]*?productType\s*=\s*"([^"]+)";)regex"
+      };
+      std::vector<std::pair<std::string, std::string>> targets;
+
+      for (std::sregex_iterator target { contents.begin(), contents.end(), target_pattern };
+           target != std::sregex_iterator {};
+           ++target)
+      {
+        targets.emplace_back((*target)[1].str(), (*target)[2].str());
+      }
+
+      if (targets.size() == 1)
+      {
+        project.name = trim(targets.front().first);
+        const auto& product_type = targets.front().second;
+        project.type =
+          product_type.find("static-library") != std::string::npos
+            ? "static_library"
+            : product_type.find("dynamic-library") != std::string::npos
+              ? "dynamic_library"
+              : product_type.find("tool") != std::string::npos
+                  || product_type.find("application") != std::string::npos
+                ? "executable"
+                : "";
+      }
+      else if (targets.size() > 1)
+      {
+        project.unresolved_properties.push_back(
+          std::to_string(targets.size()) + " Xcode targets require inferred Forge targets"
+        );
+      }
+
+      const std::regex configuration_pattern {
+        R"regex(isa\s*=\s*XCBuildConfiguration;[\s\S]*?buildSettings\s*=\s*\{([\s\S]*?)\};[\s\S]*?name\s*=\s*"?([^";\n]+)"?;)regex"
+      };
+
+      for (std::sregex_iterator configuration {
+             contents.begin(),
+             contents.end(),
+             configuration_pattern
+           };
+           configuration != std::sregex_iterator {};
+           ++configuration)
+      {
+        const auto configuration_name = (*configuration)[2].str();
+        const auto name = std::string { trim(configuration_name) };
+        auto& profile = project.profiles[name];
+        profile.configuration = name;
+        append_xcode_settings(
+          profile,
+          (*configuration)[1].str(),
+          directory,
+          project.unresolved_properties
+        );
+        sort_unique(profile);
+      }
+
+      const std::regex xcconfig_pattern { R"regex(path\s*=\s*"?([^";]+\.xcconfig)"?;)regex" };
+
+      for (std::sregex_iterator reference { contents.begin(), contents.end(), xcconfig_pattern };
+           reference != std::sregex_iterator {};
+           ++reference)
+      {
+        const auto relative = (*reference)[1].str();
+        const auto xcconfig_path = directory / relative;
+        std::ifstream xcconfig_file { xcconfig_path };
+
+        if (!xcconfig_file)
+        {
+          project.unresolved_properties.push_back(relative);
+          continue;
+        }
+
+        std::string settings;
+        std::string line;
+
+        while (std::getline(xcconfig_file, line))
+        {
+          const auto content = trim(line);
+
+          if (!content.empty() && !content.starts_with("//") && !content.starts_with('#'))
+          {
+            settings += std::string { content } + ";\n";
+          }
+        }
+
+        auto stem = xcconfig_path.stem().string();
+        std::ranges::transform(stem, stem.begin(), [](unsigned char character)
+        {
+          return static_cast<char>(std::tolower(character));
+        });
+        bool matched = false;
+
+        for (auto& [name, profile] : project.profiles)
+        {
+          auto normalized_name = name;
+          std::ranges::transform(normalized_name, normalized_name.begin(), [](unsigned char character)
+          {
+            return static_cast<char>(std::tolower(character));
+          });
+
+          if (stem.find(normalized_name) != std::string::npos)
+          {
+            append_xcode_settings(
+              profile,
+              settings,
+              directory,
+              project.unresolved_properties
+            );
+            sort_unique(profile);
+            matched = true;
+          }
+        }
+
+        if (!matched)
+        {
+          project.unresolved_properties.push_back(relative);
+        }
+      }
+
+      if (!project.profiles.empty())
+      {
+        auto common_includes = project.profiles.begin()->second.include_directories;
+        auto common_definitions = project.profiles.begin()->second.compile_definitions;
+        auto common_standard = project.profiles.begin()->second.cpp_standard;
+
+        for (const auto& [name, profile] : project.profiles)
+        {
+          std::vector<std::filesystem::path> includes;
+          std::vector<std::string> definitions;
+          std::set_intersection(
+            common_includes.begin(),
+            common_includes.end(),
+            profile.include_directories.begin(),
+            profile.include_directories.end(),
+            std::back_inserter(includes)
+          );
+          std::set_intersection(
+            common_definitions.begin(),
+            common_definitions.end(),
+            profile.compile_definitions.begin(),
+            profile.compile_definitions.end(),
+            std::back_inserter(definitions)
+          );
+          common_includes = std::move(includes);
+          common_definitions = std::move(definitions);
+
+          if (profile.cpp_standard != common_standard)
+          {
+            common_standard = 0;
+          }
+        }
+
+        project.cpp_standard = common_standard == 0 ? 20 : common_standard;
+
+        for (const auto& include : common_includes)
+        {
+          project.include_directories.push_back(include.generic_string());
+        }
+
+        project.definitions = common_definitions;
+
+        for (auto& [name, profile] : project.profiles)
+        {
+          std::erase_if(profile.include_directories, [&common_includes](const auto& include)
+          {
+            return std::binary_search(common_includes.begin(), common_includes.end(), include);
+          });
+          std::erase_if(profile.compile_definitions, [&common_definitions](const auto& definition)
+          {
+            return std::binary_search(
+              common_definitions.begin(),
+              common_definitions.end(),
+              definition
+            );
+          });
+        }
+      }
+
+      std::ranges::sort(project.unresolved_properties);
+      project.unresolved_properties.erase(
+        std::unique(project.unresolved_properties.begin(), project.unresolved_properties.end()),
+        project.unresolved_properties.end()
+      );
+      return project;
+    }
 
     int cpp_standard_from_msbuild(std::string_view standard)
     {
@@ -890,6 +1650,30 @@ namespace forge
       return project;
     }
 
+    bool is_cmake_generated_visual_studio_project(const std::filesystem::path& path)
+    {
+      std::ifstream file { path };
+      const std::string contents {
+        std::istreambuf_iterator<char> { file },
+        std::istreambuf_iterator<char> {}
+      };
+      return contents.find("CMakeFiles") != std::string::npos
+        || contents.find("ZERO_CHECK") != std::string::npos
+        || contents.find("CMAKE_") != std::string::npos;
+    }
+
+    bool is_cmake_generated_xcode_project(const std::filesystem::path& path)
+    {
+      std::ifstream file { path / "project.pbxproj" };
+      const std::string contents {
+        std::istreambuf_iterator<char> { file },
+        std::istreambuf_iterator<char> {}
+      };
+      return contents.find("CMakeFiles") != std::string::npos
+        || contents.find("ZERO_CHECK") != std::string::npos
+        || contents.find("CMAKE_") != std::string::npos;
+    }
+
     std::vector<std::filesystem::path> files_with_extension(
       const std::filesystem::path& directory,
       std::string_view extension)
@@ -909,6 +1693,77 @@ namespace forge
 
       std::ranges::sort(paths);
       return paths;
+    }
+
+    std::vector<std::filesystem::path> directories_with_extension(
+      const std::filesystem::path& directory,
+      std::string_view extension)
+    {
+      std::vector<std::filesystem::path> paths;
+      std::error_code filesystem_error;
+
+      for (const auto& entry : std::filesystem::directory_iterator { directory, filesystem_error })
+      {
+        if (!filesystem_error
+            && entry.is_directory(filesystem_error)
+            && entry.path().extension() == extension)
+        {
+          paths.push_back(entry.path());
+        }
+      }
+
+      std::ranges::sort(paths);
+      return paths;
+    }
+
+    void merge_project_metadata(VisualStudioProject& project,
+                                const VisualStudioProject& additional)
+    {
+      if (project.name.empty())
+      {
+        project.name = additional.name;
+      }
+
+      if (project.type.empty())
+      {
+        project.type = additional.type;
+      }
+
+      if (project.cpp_standard == 20 && additional.cpp_standard != 20)
+      {
+        project.cpp_standard = additional.cpp_standard;
+      }
+
+      project.include_directories.insert(
+        project.include_directories.end(),
+        additional.include_directories.begin(),
+        additional.include_directories.end()
+      );
+      project.definitions.insert(
+        project.definitions.end(),
+        additional.definitions.begin(),
+        additional.definitions.end()
+      );
+      project.unresolved_properties.insert(
+        project.unresolved_properties.end(),
+        additional.unresolved_properties.begin(),
+        additional.unresolved_properties.end()
+      );
+
+      for (const auto& [name, profile] : additional.profiles)
+      {
+        project.profiles.try_emplace(name, profile);
+      }
+
+      for (auto* values : {
+        &project.include_directories,
+        &project.definitions,
+        &project.unresolved_properties
+      })
+      {
+        std::ranges::sort(*values);
+        values->erase(std::unique(values->begin(), values->end()), values->end());
+      }
     }
 
     bool contains_main_function(const std::filesystem::path& path)
@@ -1940,6 +2795,57 @@ namespace forge
       return projects;
     }
 
+    std::vector<std::filesystem::path> read_cmake_subdirectories(
+      const std::filesystem::path& cmake_path)
+    {
+      std::ifstream file { cmake_path };
+      const std::string contents {
+        std::istreambuf_iterator<char> { file },
+        std::istreambuf_iterator<char> {}
+      };
+      std::vector<std::filesystem::path> projects;
+
+      for (const auto& command : cmake_commands(contents))
+      {
+        if (command.name != "add_subdirectory" || command.arguments.empty())
+        {
+          continue;
+        }
+
+        const auto& argument = command.arguments.front();
+
+        if (argument.find('$') != std::string::npos)
+        {
+          continue;
+        }
+
+        const auto project = (cmake_path.parent_path() / argument).lexically_normal();
+
+        if (std::filesystem::is_regular_file(project / "CMakeLists.txt"))
+        {
+          projects.push_back(project);
+        }
+      }
+
+      std::ranges::sort(projects);
+      projects.erase(std::unique(projects.begin(), projects.end()), projects.end());
+      return projects;
+    }
+
+    bool cmake_defines_target(const std::filesystem::path& cmake_path)
+    {
+      std::ifstream file { cmake_path };
+      const std::string contents {
+        std::istreambuf_iterator<char> { file },
+        std::istreambuf_iterator<char> {}
+      };
+
+      return std::ranges::any_of(cmake_commands(contents), [](const CMakeCommand& command)
+      {
+        return command.name == "add_executable" || command.name == "add_library";
+      });
+    }
+
     int adopt_solution(const std::filesystem::path& workspace_directory,
                        const std::filesystem::path& solution_path,
                        const AdoptOptions& options,
@@ -2042,6 +2948,97 @@ namespace forge
       return 0;
     }
 
+    int adopt_cmake_workspace(const std::filesystem::path& workspace_directory,
+                              const std::filesystem::path& cmake_path,
+                              const std::vector<std::filesystem::path>& projects,
+                              const AdoptOptions& options,
+                              const ProcessRunner& process_runner,
+                              std::ostream& output,
+                              std::ostream& error)
+    {
+      const auto workspace_path = workspace_directory / "forge.workspace.toml";
+
+      if (std::filesystem::exists(workspace_path))
+      {
+        error << "forge: '" << workspace_path.string() << "' already exists\n";
+        return 2;
+      }
+
+      std::vector<std::string> relative_directories;
+      const auto progress_total = projects.size() + 2;
+      report_progress(output, 1, progress_total, "Reading CMake superproject");
+
+      for (const auto& project : projects)
+      {
+        const auto relative = project.lexically_relative(workspace_directory);
+
+        if (relative.empty()
+            || relative == "."
+            || relative.is_absolute()
+            || *relative.begin() == "..")
+        {
+          error << "forge: CMake subprojects must live inside the workspace\n";
+          return 2;
+        }
+
+        if (std::filesystem::exists(project / "forge.recipe.toml"))
+        {
+          error << "forge: '" << (project / "forge.recipe.toml").string() << "' already exists\n";
+          return 2;
+        }
+
+        relative_directories.push_back(relative.generic_string());
+      }
+
+      for (std::size_t index = 0; index < projects.size(); ++index)
+      {
+        report_progress(
+          output,
+          index + 2,
+          progress_total,
+          "Adopting project " + projects[index].filename().string()
+        );
+
+        if (adopt_project_impl(
+          projects[index],
+          options,
+          process_runner,
+          false,
+          output,
+          error
+        ) != 0)
+        {
+          return 2;
+        }
+      }
+
+      report_progress(output, progress_total, progress_total, "Writing workspace");
+      auto name = cmake_path.parent_path().filename().string();
+      const auto cmake_project = read_cmake_project(cmake_path, error);
+
+      if (cmake_project && !cmake_project->name.empty())
+      {
+        name = cmake_project->name;
+      }
+
+      const std::string workspace =
+        "#:schema " + std::string { workspace_schema_url } + "\n"
+        "\n"
+        "[workspace]\n"
+        "name = \"" + escape_toml_string(name) + "\"\n"
+        "projects = " + format_sources(relative_directories) + "\n";
+
+      if (!write_file(workspace_path, workspace, error))
+      {
+        return 2;
+      }
+
+      output << "Created " << workspace_path.string() << '\n'
+             << "Adopted " << projects.size() << " CMake project";
+      output << (projects.size() == 1 ? "\n" : "s\n");
+      return 0;
+    }
+
   } // namespace
 
   int adopt_project(const std::filesystem::path& project_directory,
@@ -2076,8 +3073,32 @@ namespace forge
   {
     const auto solutions = files_with_extension(project_directory, ".sln");
     const auto visual_studio_projects = files_with_extension(project_directory, ".vcxproj");
+    const auto xcode_projects = directories_with_extension(project_directory, ".xcodeproj");
+    const auto cmake_path = project_directory / "CMakeLists.txt";
+    const auto has_cmake_project = std::filesystem::is_regular_file(cmake_path);
+    const auto cmake_subdirectories = has_cmake_project
+      ? read_cmake_subdirectories(cmake_path)
+      : std::vector<std::filesystem::path> {};
 
-    if (solutions.size() == 1 && visual_studio_projects.empty())
+    if (has_cmake_project
+        && !cmake_subdirectories.empty()
+        && !cmake_defines_target(cmake_path))
+    {
+      return adopt_cmake_workspace(
+        project_directory,
+        cmake_path,
+        cmake_subdirectories,
+        options,
+        process_runner,
+        output,
+        error
+      );
+    }
+
+    if (solutions.size() == 1
+        && visual_studio_projects.empty()
+        && xcode_projects.empty()
+        && !has_cmake_project)
     {
       return adopt_solution(
         project_directory,
@@ -2115,6 +3136,7 @@ namespace forge
     std::vector<std::string> headers;
     std::vector<std::string> entry_points;
     std::optional<VisualStudioProject> visual_studio_project;
+    std::vector<std::string> merged_project_formats;
 
     if (show_progress)
     {
@@ -2131,7 +3153,9 @@ namespace forge
       report_progress(output, 3, 6, "Reading project metadata");
     }
 
-    if (visual_studio_projects.size() == 1)
+    if (visual_studio_projects.size() == 1
+        && !(has_cmake_project
+             && is_cmake_generated_visual_studio_project(visual_studio_projects.front())))
     {
       visual_studio_project = read_visual_studio_project(visual_studio_projects.front(), error);
 
@@ -2139,9 +3163,52 @@ namespace forge
       {
         return 2;
       }
+    }
+    else if (xcode_projects.size() == 1
+             && !(has_cmake_project && is_cmake_generated_xcode_project(xcode_projects.front())))
+    {
+      visual_studio_project = read_xcode_project(xcode_projects.front(), error);
 
-      sources = visual_studio_project->sources;
-      headers = visual_studio_project->headers;
+      if (!visual_studio_project)
+      {
+        return 2;
+      }
+    }
+    else if (has_cmake_project)
+    {
+      visual_studio_project = read_cmake_project(cmake_path, error);
+
+      if (!visual_studio_project)
+      {
+        return 2;
+      }
+    }
+
+    if (visual_studio_project && has_cmake_project && visual_studio_project->format != "CMake")
+    {
+      const auto cmake_project = read_cmake_project(cmake_path, error);
+
+      if (!cmake_project)
+      {
+        return 2;
+      }
+
+      merge_project_metadata(*visual_studio_project, *cmake_project);
+      merged_project_formats.push_back("CMake");
+    }
+
+    if (visual_studio_project)
+    {
+      if (!visual_studio_project->sources.empty())
+      {
+        sources = visual_studio_project->sources;
+      }
+
+      if (!visual_studio_project->headers.empty())
+      {
+        headers = visual_studio_project->headers;
+      }
+
       public_headers.clear();
       entry_points.clear();
 
@@ -2407,20 +3474,26 @@ namespace forge
 
     if (visual_studio_project)
     {
-      output << "Imported Visual Studio project " << visual_studio_project->path.filename().string()
+      output << "Imported " << visual_studio_project->format << " project "
+             << visual_studio_project->path.filename().string()
              << '\n';
+
+      for (const auto& format : merged_project_formats)
+      {
+        output << "Merged mirrored " << format << " project metadata\n";
+      }
 
       if (!visual_studio_project->profiles.empty())
       {
         output << "Imported " << visual_studio_project->profiles.size()
-               << " Visual Studio build profile";
+               << ' ' << visual_studio_project->format << " build profile";
         output << (visual_studio_project->profiles.size() == 1 ? "\n" : "s\n");
       }
 
       if (!visual_studio_project->unresolved_properties.empty())
       {
         output << "Skipped " << visual_studio_project->unresolved_properties.size()
-               << " unresolved MSBuild value";
+               << " unresolved " << visual_studio_project->format << " value";
         output << (visual_studio_project->unresolved_properties.size() == 1 ? ":\n" : "s:\n");
 
         for (const auto& value : visual_studio_project->unresolved_properties)
