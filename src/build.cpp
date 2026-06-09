@@ -978,6 +978,14 @@ namespace forge
           << "target_include_directories(" << target_name << ' ' << visibility
           << " \"${FORGE_PROJECT_ROOT}/include\")\n";
 
+        for (const auto& include_directory : target.include_directories)
+        {
+          file
+            << "target_include_directories(" << target_name << " PRIVATE "
+            << "\"${FORGE_PROJECT_ROOT}/"
+            << escape_cmake(include_directory.generic_string()) << "\")\n";
+        }
+
         for (const auto& dependency : target.dependencies)
         {
           file << "target_link_libraries(" << target_name << ' ' << visibility
@@ -1037,6 +1045,13 @@ namespace forge
       {
         file
           << "target_include_directories(forge_project PUBLIC \"${FORGE_PROJECT_ROOT}/include\")\n";
+      }
+
+      for (const auto& include_directory : recipe.include_directories)
+      {
+        file
+          << "target_include_directories(forge_project PRIVATE \"${FORGE_PROJECT_ROOT}/"
+          << escape_cmake(include_directory.generic_string()) << "\")\n";
       }
 
       for (const auto& dependency : recipe.selected_internal_dependencies)
@@ -1160,6 +1175,47 @@ namespace forge
       for (const auto& header : recipe.public_headers)
       {
         files.push_back(dependency_directory / header);
+      }
+
+      for (const auto& include_directory : recipe.include_directories)
+      {
+        std::error_code traversal_error;
+        std::filesystem::recursive_directory_iterator iterator {
+          dependency_directory / include_directory,
+          std::filesystem::directory_options::skip_permission_denied,
+          traversal_error
+        };
+        const std::filesystem::recursive_directory_iterator end;
+
+        while (!traversal_error && iterator != end)
+        {
+          const auto& entry = *iterator;
+          const auto name = entry.path().filename().string();
+
+          if (entry.is_directory(traversal_error)
+              && (name == ".git"
+                  || name == ".forge"
+                  || name == "build"
+                  || name == "out"
+                  || name.starts_with("cmake-build-")))
+          {
+            iterator.disable_recursion_pending();
+          }
+          else if (!traversal_error && entry.is_regular_file(traversal_error))
+          {
+            const auto extension = entry.path().extension().string();
+
+            if (extension == ".h"
+                || extension == ".hpp"
+                || extension == ".hh"
+                || extension == ".hxx")
+            {
+              files.push_back(entry.path());
+            }
+          }
+
+          iterator.increment(traversal_error);
+        }
       }
 
       for (const auto& runtime : recipe.runtime_files)
@@ -2388,6 +2444,19 @@ namespace forge
           return 2;
         }
       }
+
+      for (const auto& include_directory : target.include_directories)
+      {
+        if (include_directory.is_absolute()
+            || include_directory.string().starts_with("..")
+            || !std::filesystem::is_directory(project_directory / include_directory))
+        {
+          error << "forge: internal target include directory '"
+                << include_directory.generic_string()
+                << "' does not exist or leaves the project\n";
+          return 2;
+        }
+      }
     }
 
     if (recipe.type != "executable"
@@ -2455,6 +2524,18 @@ namespace forge
       if (!std::filesystem::is_regular_file(project_directory / header))
       {
         error << "forge: public header '" << header.generic_string() << "' does not exist\n";
+        return 2;
+      }
+    }
+
+    for (const auto& include_directory : recipe.include_directories)
+    {
+      if (include_directory.is_absolute()
+          || include_directory.string().starts_with("..")
+          || !std::filesystem::is_directory(project_directory / include_directory))
+      {
+        error << "forge: include directory '" << include_directory.generic_string()
+              << "' does not exist or leaves the project\n";
         return 2;
       }
     }

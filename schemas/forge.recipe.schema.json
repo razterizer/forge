@@ -78,6 +78,10 @@
         },
         "public_headers": {
           "$ref": "#/$defs/publicHeaders"
+        },
+        "include_dirs": {
+          "$ref": "#/$defs/projectPaths",
+          "description": "Private project-relative include search directories."
         }
       }
     },
@@ -119,6 +123,10 @@
           },
           "public_headers": {
             "$ref": "#/$defs/publicHeaders"
+          },
+          "include_dirs": {
+            "$ref": "#/$defs/projectPaths",
+            "description": "Private project-relative include search directories."
           },
           "runtime_files": {
             "$ref": "#/$defs/projectPaths",

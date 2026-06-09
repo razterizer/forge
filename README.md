@@ -158,7 +158,13 @@ cpp_std = 20
 [sources]
 paths = ["src/hello.cpp"]
 public_headers = ["include/hello/hello.h"]
+include_dirs = ["vendor/imgui"]
 ```
+
+`include_dirs` adds private project-relative header search roots. `forge init`
+infers these roots when an include directive maps unambiguously to a header
+already in the project, including projects whose headers do not live under the
+conventional `include/` directory.
 
 Forge generates CMake infrastructure under `.forge/generated/` and builds into
 `.forge/build/`.

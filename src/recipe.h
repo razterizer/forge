@@ -49,6 +49,7 @@ namespace forge
     int cpp_standard = 0;
     std::vector<std::filesystem::path> sources;
     std::vector<std::filesystem::path> public_headers;
+    std::vector<std::filesystem::path> include_directories;
     std::vector<std::filesystem::path> runtime_files;
     std::vector<std::string> dependencies;
     bool test = false;
@@ -63,6 +64,7 @@ namespace forge
     std::optional<int> build_number;
     std::vector<std::filesystem::path> sources;
     std::vector<std::filesystem::path> public_headers;
+    std::vector<std::filesystem::path> include_directories;
     std::vector<ImportProfile> imports;
     std::vector<Dependency> dependencies;
     std::map<std::string, std::vector<Dependency>> dependency_profiles;

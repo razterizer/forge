@@ -182,6 +182,49 @@ namespace
     expect(!contains(recipe, "generated.cpp"), "init ignores generated directories");
   }
 
+  void test_init_infers_local_include_directories()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array init_arguments { std::string_view { "init" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    std::ostringstream output;
+    std::ostringstream error;
+    write_file(
+      directory.path() / "main.cpp",
+      "#include <suite/detail.h>\n"
+      "#include <imgui.h>\n"
+      "int main() { return detail() + imgui(); }\n"
+    );
+    write_file(directory.path() / "suite/detail.h", "inline int detail() { return 20; }\n");
+    write_file(directory.path() / "vendor/imgui/imgui.h", "inline int imgui() { return 22; }\n");
+
+    expect(
+      forge::cli::run(init_arguments, directory.path(), output, error) == 0,
+      "init infers local include directories"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "include_dirs = [\".\", \"vendor/imgui\"]"),
+      "init writes unambiguous local include roots"
+    );
+    expect(
+      contains(output.str(), "Inferred 2 local include directories"),
+      "init reports inferred local include roots"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(
+        build_arguments,
+        directory.path(),
+        build_output,
+        build_error
+      ) == 0,
+      "recipe with inferred local include roots builds"
+    );
+    expect(build_error.str().empty(), "inferred include-root build does not write an error");
+  }
+
   void test_init_empty_project()
   {
     TemporaryDirectory directory;
@@ -2595,6 +2638,7 @@ int main()
   test_version();
   test_init_discovers_existing_sources();
   test_init_ignores_generated_directories();
+  test_init_infers_local_include_directories();
   test_init_empty_project();
   test_init_infers_library_projects();
   test_init_infers_multiple_executables();

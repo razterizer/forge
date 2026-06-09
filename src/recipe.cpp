@@ -410,6 +410,10 @@ namespace forge
       {
         valid = parse_sources(value, recipe.public_headers);
       }
+      else if (section == "sources" && key == "include_dirs")
+      {
+        valid = parse_sources(value, recipe.include_directories);
+      }
       else if (section.starts_with("target."))
       {
         const auto name = section.substr(std::string_view { "target." }.size());
@@ -450,6 +454,10 @@ namespace forge
         else if (key == "public_headers")
         {
           valid = parse_sources(value, target->public_headers);
+        }
+        else if (key == "include_dirs")
+        {
+          valid = parse_sources(value, target->include_directories);
         }
         else if (key == "runtime_files")
         {
@@ -588,7 +596,8 @@ namespace forge
     }
 
     const auto legacy_target = !recipe.type.empty() || recipe.cpp_standard != 0
-      || !recipe.sources.empty() || !recipe.public_headers.empty() || !recipe.runtime_files.empty();
+      || !recipe.sources.empty() || !recipe.public_headers.empty()
+      || !recipe.include_directories.empty() || !recipe.runtime_files.empty();
 
     if ((legacy_target && !recipe.targets.empty())
         || (recipe.targets.empty()
@@ -730,6 +739,7 @@ namespace forge
     recipe.cpp_standard = selected->cpp_standard;
     recipe.sources = selected->sources;
     recipe.public_headers = selected->public_headers;
+    recipe.include_directories = selected->include_directories;
     recipe.runtime_files = selected->runtime_files;
     return true;
   }

@@ -24,6 +24,9 @@ rules:
   header roots and at least one precompiled library artifact.
 - Header-only projects require public headers and an empty source-path array.
 - Public headers must remain under `include/`.
+- Source and named-target `include_dirs` declare private project-relative
+  include search directories. `forge init` infers these when local headers
+  unambiguously satisfy source `#include` directives.
 - Build numbers must be non-negative.
 - Projects may declare local static-library, dynamic-library, imported-library,
   and header-only dependencies using name and either project-path or cbox-path

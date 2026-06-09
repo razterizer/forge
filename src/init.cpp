@@ -158,6 +158,7 @@ namespace forge
     bool discover_sources(const std::filesystem::path& project_directory,
                           std::vector<std::string>& sources,
                           std::vector<std::string>& public_headers,
+                          std::vector<std::string>& headers,
                           std::vector<std::string>& entry_points,
                           std::ostream& error)
     {
@@ -195,10 +196,15 @@ namespace forge
         }
         else if (!filesystem_error
                  && entry.is_regular_file(filesystem_error)
-                 && is_cpp_header(entry.path())
-                 && entry.path().lexically_relative(project_directory).begin()->string() == "include")
+                 && is_cpp_header(entry.path()))
         {
-          public_headers.push_back(entry.path().lexically_relative(project_directory).generic_string());
+          const auto relative = entry.path().lexically_relative(project_directory);
+          headers.push_back(relative.generic_string());
+
+          if (relative.begin()->string() == "include")
+          {
+            public_headers.push_back(relative.generic_string());
+          }
         }
 
         if (filesystem_error)
@@ -218,8 +224,104 @@ namespace forge
 
       std::ranges::sort(sources);
       std::ranges::sort(public_headers);
+      std::ranges::sort(headers);
       std::ranges::sort(entry_points);
       return true;
+    }
+
+    std::vector<std::string> included_headers(const std::filesystem::path& path)
+    {
+      std::ifstream file { path };
+      std::vector<std::string> includes;
+      std::string line;
+
+      while (std::getline(file, line))
+      {
+        auto content = std::string_view { line };
+        const auto first = content.find_first_not_of(" \t");
+
+        if (first == std::string_view::npos || content[first] != '#')
+        {
+          continue;
+        }
+
+        content.remove_prefix(first + 1);
+        const auto directive = content.find_first_not_of(" \t");
+
+        if (directive == std::string_view::npos)
+        {
+          continue;
+        }
+
+        content.remove_prefix(directive);
+
+        if (!content.starts_with("include"))
+        {
+          continue;
+        }
+
+        content.remove_prefix(std::string_view { "include" }.size());
+        const auto delimiter = content.find_first_not_of(" \t");
+
+        if (delimiter == std::string_view::npos
+            || (content[delimiter] != '<' && content[delimiter] != '"'))
+        {
+          continue;
+        }
+
+        const auto closing = content[delimiter] == '<' ? '>' : '"';
+        const auto end = content.find(closing, delimiter + 1);
+
+        if (end != std::string_view::npos)
+        {
+          auto include = std::string { content.substr(delimiter + 1, end - delimiter - 1) };
+          std::replace(include.begin(), include.end(), '\\', '/');
+          includes.push_back(std::move(include));
+        }
+      }
+
+      return includes;
+    }
+
+    std::vector<std::string> infer_include_directories(
+      const std::filesystem::path& project_directory,
+      const std::vector<std::string>& sources,
+      const std::vector<std::string>& headers)
+    {
+      std::set<std::string> include_directories;
+      std::vector<std::string> scanned_files = sources;
+      scanned_files.insert(scanned_files.end(), headers.begin(), headers.end());
+
+      for (const auto& scanned_file : scanned_files)
+      {
+        for (const auto& include : included_headers(project_directory / scanned_file))
+        {
+          std::set<std::string> matching_roots;
+
+          for (const auto& header : headers)
+          {
+            if (header == include)
+            {
+              matching_roots.insert(".");
+              continue;
+            }
+
+            const auto suffix = '/' + include;
+
+            if (header.size() > suffix.size() && header.ends_with(suffix))
+            {
+              matching_roots.insert(header.substr(0, header.size() - suffix.size()));
+            }
+          }
+
+          if (matching_roots.size() == 1 && *matching_roots.begin() != "include")
+          {
+            include_directories.insert(*matching_roots.begin());
+          }
+        }
+      }
+
+      return { include_directories.begin(), include_directories.end() };
     }
 
     std::string format_sources(const std::vector<std::string>& sources)
@@ -309,17 +411,20 @@ namespace forge
 
     std::vector<std::string> sources;
     std::vector<std::string> public_headers;
+    std::vector<std::string> headers;
     std::vector<std::string> entry_points;
 
-    if (!discover_sources(project_directory, sources, public_headers, entry_points, error))
+    if (!discover_sources(project_directory, sources, public_headers, headers, entry_points, error))
     {
       return 2;
     }
 
+    const auto include_directories = infer_include_directories(project_directory, sources, headers);
     const auto project_name = project_directory.filename().string();
     const auto escaped_project_name = escape_toml_string(project_name);
     const auto formatted_sources = format_sources(sources);
     const auto formatted_headers = format_sources(public_headers);
+    const auto formatted_include_directories = format_sources(include_directories);
     std::string recipe =
       "#:schema " + std::string { recipe_schema_url } + "\n"
       "\n"
@@ -364,6 +469,11 @@ namespace forge
         {
           recipe += "public_headers = " + formatted_headers + "\n";
         }
+
+        if (!include_directories.empty())
+        {
+          recipe += "include_dirs = " + formatted_include_directories + "\n";
+        }
       }
     }
     else
@@ -384,6 +494,11 @@ namespace forge
       if (!public_headers.empty())
       {
         recipe += "public_headers = " + formatted_headers + "\n";
+      }
+
+      if (!include_directories.empty())
+      {
+        recipe += "include_dirs = " + formatted_include_directories + "\n";
       }
     }
 
@@ -415,6 +530,12 @@ namespace forge
     }
 
     output << '\n';
+
+    if (!include_directories.empty())
+    {
+      output << "Inferred " << include_directories.size() << " local include director";
+      output << (include_directories.size() == 1 ? "y\n" : "ies\n");
+    }
 
     if (entry_points.empty() && !sources.empty() && public_headers.empty())
     {

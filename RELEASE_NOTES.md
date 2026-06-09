@@ -14,6 +14,8 @@
   `<process.h>` header.
 - Made generated Linux release workflows publish modern and legacy
   compatibility builds from `ubuntu-latest` and `ubuntu-22.04`.
+- Made `forge init` infer local include search roots from resolvable
+  `#include` directives.
 
 ## 0.3.0
 
