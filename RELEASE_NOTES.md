@@ -2,7 +2,9 @@
 
 ## 0.5.0
 
-- Describe changes.
+- Added the first multi-project workspace milestone: `forge.workspace.toml`
+  groups independent Forge projects, validates their local dependency graph,
+  and supports workspace-wide or selected-project builds.
 
 ## 0.4.0
 

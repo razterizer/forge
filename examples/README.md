@@ -10,6 +10,8 @@ run:
 - `imported-library/` packages local precompiled artifacts for `macos-arm64`
   without building them.
 - `executable/` builds and runs an executable with multiple source files.
+- `workspace/` groups a static library and dependent executable into a
+  solution-like multi-project build.
 
 From an example containing a recipe:
 
@@ -23,4 +25,11 @@ Create boxes for library examples with:
 ```sh
 cd examples/static-library
 ../../build/dev/forge box create
+```
+
+Build the workspace example from its root:
+
+```sh
+cd examples/workspace
+../../build/dev/forge build
 ```

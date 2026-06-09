@@ -110,6 +110,31 @@ namespace
     expect(error.str().empty(), "help does not write an error");
   }
 
+  void test_cli_builds_workspace()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "forge.workspace.toml",
+      "[workspace]\nname = \"suite\"\nprojects = [\"hello\"]\n"
+    );
+    write_file(
+      directory.path() / "hello/forge.recipe.toml",
+      "[project]\nname = \"hello\"\nversion = \"0.1.0\"\n"
+      "type = \"executable\"\ncpp_std = 20\n\n[sources]\npaths = [\"main.cpp\"]\n"
+    );
+    write_file(directory.path() / "hello/main.cpp", "int main() {}\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "CLI builds a workspace from its root"
+    );
+    expect(contains(output.str(), "Built workspace suite"), "CLI reports the built workspace");
+    expect(error.str().empty(), "successful CLI workspace build does not write an error");
+  }
+
   void test_version()
   {
     constexpr std::array arguments { std::string_view { "--version" } };
@@ -2989,6 +3014,7 @@ namespace
 int main()
 {
   test_help();
+  test_cli_builds_workspace();
   test_version();
   test_init_alias_adopts_existing_project();
   test_init_discovers_existing_sources();

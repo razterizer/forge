@@ -9,6 +9,7 @@
 #include "release.h"
 #include "run.h"
 #include "test.h"
+#include "workspace.h"
 
 #include <array>
 #include <filesystem>
@@ -62,7 +63,7 @@ namespace forge::cli
         << "  box             Create, inspect, verify, publish locally, or extract boxes\n"
         << "  init            Alias for adopt\n"
         << "  new             Create a new project\n"
-        << "  build           Build the current project\n"
+        << "  build           Build the current project or workspace\n"
         << "  bump            Bump the project version and prepare release notes\n"
         << "  clean           Remove generated project state\n"
         << "  run             Run the current project\n"
@@ -383,6 +384,18 @@ namespace forge::cli
           error << "forge: usage: forge build [target] [--profile=<name>]\n";
           return 2;
         }
+      }
+
+      if (!std::filesystem::exists(working_directory / "forge.recipe.toml")
+          && std::filesystem::exists(working_directory / "forge.workspace.toml"))
+      {
+        return build_workspace(
+          working_directory,
+          options.target,
+          options.profile,
+          output,
+          error
+        );
       }
 
       return build_project(working_directory, options, output, error);

@@ -45,3 +45,11 @@ target_link_libraries(forge_box_unit_tests PRIVATE forge::core)
 
 add_test(NAME forge.box.unit COMMAND forge_box_unit_tests)
 set_tests_properties(forge.box.unit PROPERTIES LABELS unit)
+
+add_executable(forge_workspace_unit_tests
+    workspace_test.cpp
+)
+target_link_libraries(forge_workspace_unit_tests PRIVATE forge::core)
+
+add_test(NAME forge.workspace.unit COMMAND forge_workspace_unit_tests)
+set_tests_properties(forge.workspace.unit PROPERTIES LABELS unit)

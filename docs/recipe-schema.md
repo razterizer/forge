@@ -102,3 +102,7 @@ to `schemas/forge.recipe.schema.json`.
 Xcode does not currently consume JSON Schema for TOML. The schema remains the
 shared definition for other editors, documentation, CI, and future Forge
 validation commands.
+
+Forge also provides `schemas/forge.workspace.schema.json` for solution-like
+`forge.workspace.toml` files. Workspace files list project directories while
+their individual recipes remain authoritative.

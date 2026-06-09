@@ -19,6 +19,10 @@
 
 A project workflow system that eliminates build and release glue from C++ projects.
 
+Forge workspaces group several independently defined projects under one
+`forge.workspace.toml`, providing the cross-platform equivalent of a Visual
+Studio solution while keeping each `forge.recipe.toml` authoritative.
+
 ## Status
 
 Forge is currently in the design and prototyping phase.
@@ -569,6 +573,20 @@ Build and run a Forge project:
 
 `forge run` performs an incremental build, forwards its remaining arguments to
 the executable, and returns the executable's exit status.
+
+Build every root project in a workspace, or one selected project and its
+dependency closure:
+
+```sh
+forge build
+forge build Termin8or
+forge build Termin8or --profile=dev
+```
+
+At a workspace root, Forge reads `forge.workspace.toml`, validates the listed
+projects and their local dependency graph, rejects cycles, and delegates
+dependency builds to the existing project build machinery. See
+[`docs/workspaces.md`](docs/workspaces.md) for the format.
 
 Create a release archive:
 

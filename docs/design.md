@@ -37,6 +37,9 @@ compilers and build systems rather than replacing them.
   dependencies. Named executable releases stage required dynamic libraries.
 - `forge release` stages an application release and creates a versioned ZIP
   archive. Release archives are distinct from dependency `.cbox` artifacts.
+- `forge.workspace.toml` groups independently defined Forge projects. Workspace
+  builds validate the complete local project graph and build root projects,
+  while existing recipe dependencies remain the source of truth for edges.
 
 ## Project workspace
 
@@ -140,6 +143,7 @@ reviewable.
 
 ## Deferred decisions
 
+- Workspace-aware run, test, release, adoption, and workspace generation
 - Extended `.cbox` compatibility identity and deterministic archive rules
 - Extended binary compatibility identity beyond the initial strict toolchain
   fields
