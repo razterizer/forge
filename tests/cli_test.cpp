@@ -375,6 +375,145 @@ namespace
     expect(build_error.str().empty(), "inferred include-root build does not write an error");
   }
 
+  void test_adopt_imports_visual_studio_project()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "hello.vcxproj",
+      "<Project>\n"
+      "  <PropertyGroup><ProjectName>HelloApp</ProjectName>"
+      "<ConfigurationType>Application</ConfigurationType></PropertyGroup>\n"
+      "  <ItemDefinitionGroup><ClCompile>"
+      "<LanguageStandard>stdcpp17</LanguageStandard>"
+      "<AdditionalIncludeDirectories>include;debug;$(Ignored);%(AdditionalIncludeDirectories)"
+      "</AdditionalIncludeDirectories>"
+      "<PreprocessorDefinitions>HELLO_FEATURE;VALUE=42;DEBUG_ONLY;%(PreprocessorDefinitions)"
+      "</PreprocessorDefinitions></ClCompile></ItemDefinitionGroup>\n"
+      "  <ItemDefinitionGroup><ClCompile>"
+      "<AdditionalIncludeDirectories>include;release;%(AdditionalIncludeDirectories)"
+      "</AdditionalIncludeDirectories>"
+      "<PreprocessorDefinitions>HELLO_FEATURE;VALUE=42;RELEASE_ONLY;%(PreprocessorDefinitions)"
+      "</PreprocessorDefinitions></ClCompile></ItemDefinitionGroup>\n"
+      "  <ItemGroup><ClCompile Include=\"src\\main.cpp\" />"
+      "<ClInclude Include=\"include\\hello\\hello.h\" /></ItemGroup>\n"
+      "</Project>\n"
+    );
+    write_file(
+      directory.path() / "src/main.cpp",
+      "#include <hello/hello.h>\n"
+      "#ifndef HELLO_FEATURE\n#error missing imported definition\n#endif\n"
+      "int main() { return value() == VALUE ? 0 : 1; }\n"
+    );
+    write_file(
+      directory.path() / "include/hello/hello.h",
+      "#pragma once\ninline int value() { return 42; }\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt imports a Visual Studio project"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(contains(recipe, "name = \"HelloApp\""), "adopt imports the Visual Studio project name");
+    expect(contains(recipe, "cpp_std = 17"), "adopt imports the Visual Studio C++ standard");
+    expect(contains(recipe, "paths = [\"src/main.cpp\"]"), "adopt normalizes Visual Studio sources");
+    expect(contains(recipe, "include_dirs = [\"include\"]"), "adopt imports include directories");
+    expect(
+      !contains(recipe, "debug") && !contains(recipe, "release"),
+      "adopt excludes configuration-specific include directories"
+    );
+    expect(
+      contains(recipe, "defines = [\"HELLO_FEATURE\", \"VALUE=42\"]"),
+      "adopt imports preprocessor definitions"
+    );
+    expect(
+      !contains(recipe, "DEBUG_ONLY") && !contains(recipe, "RELEASE_ONLY"),
+      "adopt excludes configuration-specific preprocessor definitions"
+    );
+    expect(
+      contains(output.str(), "Imported Visual Studio project hello.vcxproj"),
+      "adopt reports the imported Visual Studio project"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "imported Visual Studio project builds"
+    );
+    expect(build_error.str().empty(), "imported Visual Studio project build does not write an error");
+  }
+
+  void test_adopt_imports_visual_studio_solution()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "Suite.sln",
+      "Microsoft Visual Studio Solution File, Format Version 12.00\n"
+      "Project(\"{TYPE}\") = \"Core\", \"Core\\Core.vcxproj\", \"{CORE}\"\n"
+      "EndProject\n"
+      "Project(\"{TYPE}\") = \"App\", \"App\\App.vcxproj\", \"{APP}\"\n"
+      "EndProject\n"
+    );
+    write_file(
+      directory.path() / "Core/Core.vcxproj",
+      "<Project><PropertyGroup><ProjectName>Core</ProjectName>"
+      "<ConfigurationType>StaticLibrary</ConfigurationType></PropertyGroup>"
+      "<ItemGroup><ClCompile Include=\"src\\core.cpp\" />"
+      "<ClInclude Include=\"include\\Core\\core.h\" /></ItemGroup></Project>\n"
+    );
+    write_file(
+      directory.path() / "Core/src/core.cpp",
+      "#include <Core/core.h>\nint answer() { return 42; }\n"
+    );
+    write_file(directory.path() / "Core/include/Core/core.h", "#pragma once\nint answer();\n");
+    write_file(
+      directory.path() / "App/App.vcxproj",
+      "<Project><PropertyGroup><ProjectName>App</ProjectName>"
+      "<ConfigurationType>Application</ConfigurationType></PropertyGroup>"
+      "<ItemGroup><ClCompile Include=\"main.cpp\" />"
+      "<ProjectReference Include=\"..\\Core\\Core.vcxproj\" /></ItemGroup></Project>\n"
+    );
+    write_file(
+      directory.path() / "App/main.cpp",
+      "#include <Core/core.h>\nint main() { return answer() == 42 ? 0 : 1; }\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt imports a Visual Studio solution"
+    );
+    const auto workspace = read_file(directory.path() / "forge.workspace.toml");
+    const auto app_recipe = read_file(directory.path() / "App/forge.recipe.toml");
+    expect(contains(workspace, "name = \"Suite\""), "solution adoption imports the solution name");
+    expect(
+      contains(workspace, "projects = [\"App\", \"Core\"]"),
+      "solution adoption creates a Forge workspace"
+    );
+    expect(
+      contains(app_recipe, "Core = { path = \"../Core\" }"),
+      "solution adoption imports project references"
+    );
+    expect(
+      contains(output.str(), "Adopted 2 Visual Studio projects"),
+      "solution adoption reports imported projects"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "imported Visual Studio solution builds as a workspace"
+    );
+    expect(build_error.str().empty(), "imported solution build does not write an error");
+  }
+
   void test_adopt_reports_unresolved_dependency_includes()
   {
     TemporaryDirectory directory;
@@ -3120,6 +3259,8 @@ int main()
   test_init_discovers_existing_sources();
   test_init_ignores_generated_directories();
   test_init_infers_local_include_directories();
+  test_adopt_imports_visual_studio_project();
+  test_adopt_imports_visual_studio_solution();
   test_adopt_reports_unresolved_dependency_includes();
   test_adopt_infers_sibling_project_dependencies();
   test_adopt_preserves_ambiguous_sibling_includes();

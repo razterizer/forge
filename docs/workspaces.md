@@ -18,6 +18,10 @@ Every listed directory must remain inside the workspace and contain its own
 `forge.recipe.toml`. Project recipes remain the source of truth for project
 names, targets, versions, dependencies, and build behavior.
 
+`forge adopt` can generate this structure from a Visual Studio solution. Run it
+from a directory containing one `.sln` and no root `.vcxproj`. Every C++
+project must live in a distinct subdirectory inside the solution root.
+
 Build the complete workspace from its root:
 
 ```sh
@@ -62,6 +66,5 @@ Workspace-wide tests skip projects that contain no marked test targets,
 continue through project test failures, and report an aggregate project
 summary.
 
-Releases, adoption, clean, and workspace generation remain project-scoped.
-Those commands can become workspace-aware without changing the workspace
-format.
+Releases and clean remain project-scoped. Adoption can create a workspace from
+a Visual Studio solution without changing the workspace format.

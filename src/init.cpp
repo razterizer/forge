@@ -2,6 +2,7 @@
 
 #include "github.h"
 #include "recipe.h"
+#include "workspace.h"
 
 #include <algorithm>
 #include <cctype>
@@ -64,6 +65,374 @@ namespace forge
         || extension == ".hpp"
         || extension == ".hh"
         || extension == ".hxx";
+    }
+
+    std::string_view trim(std::string_view value)
+    {
+      const auto first = value.find_first_not_of(" \t\r\n");
+
+      if (first == std::string_view::npos)
+      {
+        return {};
+      }
+
+      return value.substr(first, value.find_last_not_of(" \t\r\n") - first + 1);
+    }
+
+    std::string decode_xml(std::string value)
+    {
+      for (const auto& [entity, character] : {
+        std::pair { std::string_view { "&quot;" }, std::string_view { "\"" } },
+        std::pair { std::string_view { "&apos;" }, std::string_view { "'" } },
+        std::pair { std::string_view { "&lt;" }, std::string_view { "<" } },
+        std::pair { std::string_view { "&gt;" }, std::string_view { ">" } },
+        std::pair { std::string_view { "&amp;" }, std::string_view { "&" } }
+      })
+      {
+        std::size_t position = 0;
+
+        while ((position = value.find(entity, position)) != std::string::npos)
+        {
+          value.replace(position, entity.size(), character);
+          position += character.size();
+        }
+      }
+
+      return value;
+    }
+
+    std::vector<std::string> xml_values(std::string_view xml, std::string_view tag)
+    {
+      std::vector<std::string> values;
+      const auto opening = '<' + std::string { tag };
+      const auto closing = "</" + std::string { tag } + '>';
+      std::size_t position = 0;
+
+      while ((position = xml.find(opening, position)) != std::string_view::npos)
+      {
+        const auto open_end = xml.find('>', position + opening.size());
+
+        if (open_end == std::string_view::npos)
+        {
+          break;
+        }
+
+        const auto close = xml.find(closing, open_end + 1);
+
+        if (close == std::string_view::npos)
+        {
+          break;
+        }
+
+        values.push_back(
+          decode_xml(std::string { trim(xml.substr(open_end + 1, close - open_end - 1)) })
+        );
+        position = close + closing.size();
+      }
+
+      return values;
+    }
+
+    std::vector<std::string> xml_attributes(std::string_view xml,
+                                            std::string_view tag,
+                                            std::string_view attribute)
+    {
+      std::vector<std::string> values;
+      const auto opening = '<' + std::string { tag };
+      const auto needle = std::string { attribute } + "=\"";
+      std::size_t position = 0;
+
+      while ((position = xml.find(opening, position)) != std::string_view::npos)
+      {
+        const auto open_end = xml.find('>', position + opening.size());
+
+        if (open_end == std::string_view::npos)
+        {
+          break;
+        }
+
+        const auto attribute_position = xml.find(needle, position + opening.size());
+
+        if (attribute_position != std::string_view::npos && attribute_position < open_end)
+        {
+          const auto value_begin = attribute_position + needle.size();
+          const auto value_end = xml.find('"', value_begin);
+
+          if (value_end != std::string_view::npos && value_end < open_end)
+          {
+            values.push_back(
+              decode_xml(std::string { xml.substr(value_begin, value_end - value_begin) })
+            );
+          }
+        }
+
+        position = open_end + 1;
+      }
+
+      return values;
+    }
+
+    std::vector<std::string> split_msbuild_list(const std::vector<std::string>& values)
+    {
+      std::set<std::string> result;
+
+      for (const auto& value : values)
+      {
+        std::string_view remaining = value;
+
+        while (!remaining.empty())
+        {
+          const auto separator = remaining.find(';');
+          auto item = trim(remaining.substr(0, separator));
+
+          if (!item.empty()
+              && !item.starts_with("%(")
+              && item.find("$(") == std::string_view::npos)
+          {
+            result.insert(std::string { item });
+          }
+
+          if (separator == std::string_view::npos)
+          {
+            break;
+          }
+
+          remaining.remove_prefix(separator + 1);
+        }
+      }
+
+      return { result.begin(), result.end() };
+    }
+
+    std::vector<std::string> common_msbuild_list(const std::vector<std::string>& values)
+    {
+      std::set<std::string> common;
+      bool first = true;
+
+      for (const auto& value : values)
+      {
+        const auto items = split_msbuild_list({ value });
+        const std::set<std::string> current { items.begin(), items.end() };
+
+        if (first)
+        {
+          common = current;
+          first = false;
+          continue;
+        }
+
+        std::set<std::string> intersection;
+        std::set_intersection(
+          common.begin(),
+          common.end(),
+          current.begin(),
+          current.end(),
+          std::inserter(intersection, intersection.end())
+        );
+        common = std::move(intersection);
+      }
+
+      return { common.begin(), common.end() };
+    }
+
+    std::optional<std::string> project_relative_path(
+      const std::filesystem::path& project_directory,
+      const std::filesystem::path& path)
+    {
+      auto normalized_path = path.generic_string();
+      std::replace(normalized_path.begin(), normalized_path.end(), '\\', '/');
+
+      if (normalized_path.empty() || normalized_path.find("$(") != std::string::npos)
+      {
+        return std::nullopt;
+      }
+
+      const auto normalized =
+        (std::filesystem::path { normalized_path }.is_absolute()
+          ? std::filesystem::path { normalized_path }
+          : project_directory / normalized_path).lexically_normal();
+      const auto relative = normalized.lexically_relative(project_directory);
+
+      if (relative.empty() || relative.is_absolute() || *relative.begin() == "..")
+      {
+        return std::nullopt;
+      }
+
+      return relative.generic_string();
+    }
+
+    struct VisualStudioProject
+    {
+      std::filesystem::path path;
+      std::string name;
+      std::string type;
+      int cpp_standard = 20;
+      std::vector<std::string> sources;
+      std::vector<std::string> headers;
+      std::vector<std::string> include_directories;
+      std::vector<std::string> definitions;
+      std::vector<std::filesystem::path> references;
+    };
+
+    std::optional<VisualStudioProject> read_visual_studio_project(
+      const std::filesystem::path& path,
+      std::ostream& error)
+    {
+      std::ifstream file { path };
+
+      if (!file)
+      {
+        error << "forge: could not open Visual Studio project '" << path.string() << "'\n";
+        return std::nullopt;
+      }
+
+      const std::string xml {
+        std::istreambuf_iterator<char> { file },
+        std::istreambuf_iterator<char> {}
+      };
+      VisualStudioProject project;
+      project.path = path;
+      project.name = path.stem().string();
+      const auto directory = path.parent_path();
+
+      for (const auto& name : xml_values(xml, "ProjectName"))
+      {
+        if (!name.empty())
+        {
+          project.name = name;
+          break;
+        }
+      }
+
+      for (const auto& configuration : xml_values(xml, "ConfigurationType"))
+      {
+        if (configuration == "Application")
+        {
+          project.type = "executable";
+          break;
+        }
+
+        if (configuration == "StaticLibrary")
+        {
+          project.type = "static_library";
+          break;
+        }
+
+        if (configuration == "DynamicLibrary")
+        {
+          project.type = "dynamic_library";
+          break;
+        }
+      }
+
+      for (const auto& standard : xml_values(xml, "LanguageStandard"))
+      {
+        if (standard == "stdcpp14")
+        {
+          project.cpp_standard = 14;
+        }
+        else if (standard == "stdcpp17")
+        {
+          project.cpp_standard = 17;
+        }
+        else if (standard == "stdcpp20")
+        {
+          project.cpp_standard = 20;
+        }
+        else if (standard == "stdcpp23" || standard == "stdcpplatest")
+        {
+          project.cpp_standard = 23;
+        }
+      }
+
+      for (const auto& source : xml_attributes(xml, "ClCompile", "Include"))
+      {
+        if (const auto relative = project_relative_path(directory, source))
+        {
+          project.sources.push_back(*relative);
+        }
+      }
+
+      for (const auto& header : xml_attributes(xml, "ClInclude", "Include"))
+      {
+        if (const auto relative = project_relative_path(directory, header))
+        {
+          project.headers.push_back(*relative);
+        }
+      }
+
+      for (const auto& include :
+           common_msbuild_list(xml_values(xml, "AdditionalIncludeDirectories")))
+      {
+        if (const auto relative = project_relative_path(directory, include))
+        {
+          project.include_directories.push_back(*relative);
+        }
+      }
+
+      for (const auto& definition :
+           common_msbuild_list(xml_values(xml, "PreprocessorDefinitions")))
+      {
+        if (is_valid_compile_definition(definition))
+        {
+          project.definitions.push_back(definition);
+        }
+      }
+
+      for (const auto& reference : xml_attributes(xml, "ProjectReference", "Include"))
+      {
+        auto normalized = reference;
+        std::replace(normalized.begin(), normalized.end(), '\\', '/');
+        project.references.push_back((directory / normalized).lexically_normal());
+      }
+
+      std::ranges::sort(project.sources);
+      std::ranges::sort(project.headers);
+      std::ranges::sort(project.include_directories);
+      std::ranges::sort(project.definitions);
+      std::ranges::sort(project.references);
+      project.sources.erase(
+        std::unique(project.sources.begin(), project.sources.end()),
+        project.sources.end()
+      );
+      project.headers.erase(
+        std::unique(project.headers.begin(), project.headers.end()),
+        project.headers.end()
+      );
+      project.include_directories.erase(
+        std::unique(project.include_directories.begin(), project.include_directories.end()),
+        project.include_directories.end()
+      );
+      project.definitions.erase(
+        std::unique(project.definitions.begin(), project.definitions.end()),
+        project.definitions.end()
+      );
+      project.references.erase(
+        std::unique(project.references.begin(), project.references.end()),
+        project.references.end()
+      );
+      return project;
+    }
+
+    std::vector<std::filesystem::path> files_with_extension(
+      const std::filesystem::path& directory,
+      std::string_view extension)
+    {
+      std::vector<std::filesystem::path> paths;
+      std::error_code filesystem_error;
+
+      for (const auto& entry : std::filesystem::directory_iterator { directory, filesystem_error })
+      {
+        if (!filesystem_error
+            && entry.is_regular_file(filesystem_error)
+            && entry.path().extension() == extension)
+        {
+          paths.push_back(entry.path());
+        }
+      }
+
+      std::ranges::sort(paths);
+      return paths;
     }
 
     bool contains_main_function(const std::filesystem::path& path)
@@ -357,6 +726,57 @@ namespace forge
       std::string name;
       std::string path;
     };
+
+    std::vector<SiblingDependency> visual_studio_dependencies(
+      const std::filesystem::path& project_directory,
+      const VisualStudioProject& project)
+    {
+      std::vector<SiblingDependency> dependencies;
+
+      for (const auto& reference : project.references)
+      {
+        std::ostringstream ignored_error;
+        const auto referenced = read_visual_studio_project(reference, ignored_error);
+
+        if (!referenced)
+        {
+          continue;
+        }
+
+        std::error_code filesystem_error;
+        const auto relative = std::filesystem::relative(
+          reference.parent_path(),
+          project_directory,
+          filesystem_error
+        );
+
+        if (!filesystem_error)
+        {
+          dependencies.push_back({ referenced->name, relative.generic_string() });
+        }
+      }
+
+      std::ranges::sort(
+        dependencies,
+        {},
+        [](const SiblingDependency& dependency)
+        {
+          return dependency.name;
+        }
+      );
+      dependencies.erase(
+        std::unique(
+          dependencies.begin(),
+          dependencies.end(),
+          [](const SiblingDependency& left, const SiblingDependency& right)
+          {
+            return left.name == right.name;
+          }
+        ),
+        dependencies.end()
+      );
+      return dependencies;
+    }
 
     struct GitHubDependency
     {
@@ -985,6 +1405,149 @@ namespace forge
       return true;
     }
 
+    std::vector<std::filesystem::path> read_solution_projects(
+      const std::filesystem::path& solution_path,
+      std::ostream& error)
+    {
+      std::ifstream file { solution_path };
+
+      if (!file)
+      {
+        error << "forge: could not open Visual Studio solution '" << solution_path.string() << "'\n";
+        return {};
+      }
+
+      std::vector<std::filesystem::path> projects;
+      std::string line;
+
+      while (std::getline(file, line))
+      {
+        const auto content = trim(line);
+
+        if (!content.starts_with("Project("))
+        {
+          continue;
+        }
+
+        std::vector<std::string> quoted;
+        std::size_t position = 0;
+
+        while ((position = content.find('"', position)) != std::string_view::npos)
+        {
+          const auto end = content.find('"', position + 1);
+
+          if (end == std::string_view::npos)
+          {
+            break;
+          }
+
+          quoted.emplace_back(content.substr(position + 1, end - position - 1));
+          position = end + 1;
+        }
+
+        if (quoted.size() < 3)
+        {
+          continue;
+        }
+
+        std::replace(quoted[2].begin(), quoted[2].end(), '\\', '/');
+        const auto project = std::filesystem::path { quoted[2] };
+
+        if (project.extension() == ".vcxproj")
+        {
+          projects.push_back((solution_path.parent_path() / project).lexically_normal());
+        }
+      }
+
+      std::ranges::sort(projects);
+      projects.erase(std::unique(projects.begin(), projects.end()), projects.end());
+      return projects;
+    }
+
+    int adopt_solution(const std::filesystem::path& workspace_directory,
+                       const std::filesystem::path& solution_path,
+                       const AdoptOptions& options,
+                       const ProcessRunner& process_runner,
+                       std::ostream& output,
+                       std::ostream& error)
+    {
+      const auto workspace_path = workspace_directory / "forge.workspace.toml";
+
+      if (std::filesystem::exists(workspace_path))
+      {
+        error << "forge: '" << workspace_path.string() << "' already exists\n";
+        return 2;
+      }
+
+      const auto projects = read_solution_projects(solution_path, error);
+
+      if (projects.empty())
+      {
+        error << "forge: solution contains no C++ projects\n";
+        return 2;
+      }
+
+      std::set<std::filesystem::path> directories;
+      std::vector<std::string> relative_directories;
+
+      for (const auto& project : projects)
+      {
+        const auto directory = project.parent_path();
+        const auto relative = directory.lexically_relative(workspace_directory);
+
+        if (relative.empty()
+            || relative == "."
+            || relative.is_absolute()
+            || *relative.begin() == "..")
+        {
+          error << "forge: solution projects must live in distinct subdirectories\n";
+          return 2;
+        }
+
+        if (!directories.insert(directory).second)
+        {
+          error << "forge: multiple solution projects share directory '" << directory.string()
+                << "'\n";
+          return 2;
+        }
+
+        relative_directories.push_back(relative.generic_string());
+
+        if (std::filesystem::exists(directory / "forge.recipe.toml"))
+        {
+          error << "forge: '" << (directory / "forge.recipe.toml").string() << "' already exists\n";
+          return 2;
+        }
+      }
+
+      output << "Adopting Visual Studio solution " << solution_path.filename().string() << '\n';
+
+      for (const auto& project : projects)
+      {
+        if (adopt_project(project.parent_path(), options, process_runner, output, error) != 0)
+        {
+          return 2;
+        }
+      }
+
+      const std::string workspace =
+        "#:schema " + std::string { workspace_schema_url } + "\n"
+        "\n"
+        "[workspace]\n"
+        "name = \"" + escape_toml_string(solution_path.stem().string()) + "\"\n"
+        "projects = " + format_sources(relative_directories) + "\n";
+
+      if (!write_file(workspace_path, workspace, error))
+      {
+        return 2;
+      }
+
+      output << "Created " << workspace_path.string() << '\n'
+             << "Adopted " << projects.size() << " Visual Studio project";
+      output << (projects.size() == 1 ? "\n" : "s\n");
+      return 0;
+    }
+
   } // namespace
 
   int adopt_project(const std::filesystem::path& project_directory,
@@ -1000,6 +1563,21 @@ namespace forge
                     std::ostream& output,
                     std::ostream& error)
   {
+    const auto solutions = files_with_extension(project_directory, ".sln");
+    const auto visual_studio_projects = files_with_extension(project_directory, ".vcxproj");
+
+    if (solutions.size() == 1 && visual_studio_projects.empty())
+    {
+      return adopt_solution(
+        project_directory,
+        solutions.front(),
+        options,
+        process_runner,
+        output,
+        error
+      );
+    }
+
     const auto recipe_path = project_directory / "forge.recipe.toml";
 
     std::error_code filesystem_error;
@@ -1020,15 +1598,94 @@ namespace forge
     std::vector<std::string> public_headers;
     std::vector<std::string> headers;
     std::vector<std::string> entry_points;
+    std::optional<VisualStudioProject> visual_studio_project;
 
     if (!discover_sources(project_directory, sources, public_headers, headers, entry_points, error))
     {
       return 2;
     }
 
-    const auto include_directories = infer_include_directories(project_directory, sources, headers);
+    if (visual_studio_projects.size() == 1)
+    {
+      visual_studio_project = read_visual_studio_project(visual_studio_projects.front(), error);
+
+      if (!visual_studio_project)
+      {
+        return 2;
+      }
+
+      sources = visual_studio_project->sources;
+      headers = visual_studio_project->headers;
+      public_headers.clear();
+      entry_points.clear();
+
+      for (const auto& header : headers)
+      {
+        const auto path = std::filesystem::path { header };
+
+        if (!path.empty() && path.begin()->string() == "include")
+        {
+          public_headers.push_back(header);
+        }
+      }
+
+      for (const auto& source : sources)
+      {
+        if (contains_main_function(project_directory / source))
+        {
+          entry_points.push_back(source);
+        }
+      }
+    }
+
+    auto include_directories = infer_include_directories(project_directory, sources, headers);
+
+    if (visual_studio_project)
+    {
+      include_directories.insert(
+        include_directories.end(),
+        visual_studio_project->include_directories.begin(),
+        visual_studio_project->include_directories.end()
+      );
+      std::ranges::sort(include_directories);
+      include_directories.erase(
+        std::unique(include_directories.begin(), include_directories.end()),
+        include_directories.end()
+      );
+    }
+
     auto unresolved = unresolved_includes(project_directory, sources, headers);
-    const auto sibling_dependencies = infer_sibling_dependencies(project_directory, unresolved);
+    auto sibling_dependencies = infer_sibling_dependencies(project_directory, unresolved);
+
+    if (visual_studio_project)
+    {
+      const auto referenced = visual_studio_dependencies(project_directory, *visual_studio_project);
+      sibling_dependencies.insert(
+        sibling_dependencies.end(),
+        referenced.begin(),
+        referenced.end()
+      );
+      std::ranges::sort(
+        sibling_dependencies,
+        {},
+        [](const SiblingDependency& dependency)
+        {
+          return dependency.name;
+        }
+      );
+      sibling_dependencies.erase(
+        std::unique(
+          sibling_dependencies.begin(),
+          sibling_dependencies.end(),
+          [](const SiblingDependency& left, const SiblingDependency& right)
+          {
+            return left.name == right.name;
+          }
+        ),
+        sibling_dependencies.end()
+      );
+    }
+
     const auto suggestions = github_suggestions(project_directory, unresolved);
     const auto github_dependencies = options.github
       ? resolve_github_dependencies(
@@ -1039,7 +1696,9 @@ namespace forge
         output
       )
       : std::vector<GitHubDependency> {};
-    const auto project_name = project_directory.filename().string();
+    const auto project_name = visual_studio_project
+      ? visual_studio_project->name
+      : project_directory.filename().string();
     const auto escaped_project_name = escape_toml_string(project_name);
     const auto formatted_sources = format_sources(sources);
     const auto formatted_headers = format_sources(public_headers);
@@ -1070,7 +1729,9 @@ namespace forge
         recipe
           += "\n[target." + name + "]\n"
           "type = \"executable\"\n"
-          "cpp_std = 20\n"
+          "cpp_std = " + std::to_string(
+            visual_studio_project ? visual_studio_project->cpp_standard : 20
+          ) + "\n"
           "sources = " + format_sources(inferred_target_sources[index]) + "\n";
 
         if (!public_headers.empty())
@@ -1082,19 +1743,28 @@ namespace forge
         {
           recipe += "include_dirs = " + formatted_include_directories + "\n";
         }
+
+        if (visual_studio_project && !visual_studio_project->definitions.empty())
+        {
+          recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
+        }
       }
     }
     else
     {
       const auto type =
-        sources.empty() && !public_headers.empty()
+        visual_studio_project && !visual_studio_project->type.empty()
+          ? visual_studio_project->type
+          : sources.empty() && !public_headers.empty()
           ? "header_only"
           : entry_points.empty() && !sources.empty() && !public_headers.empty()
           ? "static_library"
           : "executable";
       recipe
         += "type = \"" + std::string { type } + "\"\n"
-        "cpp_std = 20\n"
+        "cpp_std = " + std::to_string(
+          visual_studio_project ? visual_studio_project->cpp_standard : 20
+        ) + "\n"
         "\n"
         "[sources]\n"
         "paths = " + formatted_sources + "\n";
@@ -1107,6 +1777,12 @@ namespace forge
       if (!include_directories.empty())
       {
         recipe += "include_dirs = " + formatted_include_directories + "\n";
+      }
+
+      if (visual_studio_project && !visual_studio_project->definitions.empty())
+      {
+        recipe += "\n[build]\n"
+          "defines = " + format_sources(visual_studio_project->definitions) + "\n";
       }
     }
 
@@ -1156,6 +1832,12 @@ namespace forge
     }
 
     output << '\n';
+
+    if (visual_studio_project)
+    {
+      output << "Imported Visual Studio project " << visual_studio_project->path.filename().string()
+             << '\n';
+    }
 
     if (!include_directories.empty())
     {

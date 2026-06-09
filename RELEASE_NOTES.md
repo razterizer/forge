@@ -8,6 +8,9 @@
   runs, and aggregated workspace tests.
 - Added persistent project and named-target preprocessor definitions plus
   repeatable temporary `forge build --define=<symbol>` additions.
+- Made `forge adopt` import common `.vcxproj` metadata and turn supported
+  Visual Studio `.sln` files into Forge workspaces with local project
+  dependencies.
 
 ## 0.4.0
 

@@ -145,7 +145,7 @@ reviewable.
 
 ## Deferred decisions
 
-- Workspace-aware release, clean, adoption, and workspace generation
+- Workspace-aware release and clean
 - Extended `.cbox` compatibility identity and deterministic archive rules
 - Extended binary compatibility identity beyond the initial strict toolchain
   fields

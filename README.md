@@ -144,6 +144,20 @@ shared between generated targets. When Forge cannot confidently infer a
 library interface, it generates an executable recipe and reports the ambiguity
 for manual review.
 
+When a project directory contains one `.vcxproj`, `forge adopt` imports its
+project name, source and header items, output type, C++ standard, project
+references, and concrete project-relative include paths. Preprocessor
+definitions and include paths that are common across every declared Visual
+Studio configuration are imported; configuration-specific values remain for
+manual review. MSBuild property expressions such as `$(SolutionDir)` and
+inherited `%(...)` placeholders are not copied into the recipe.
+
+At a solution root containing one `.sln` and no root `.vcxproj`, `forge adopt`
+adopts each C++ project in its distinct subdirectory and creates a
+`forge.workspace.toml`. Visual Studio `ProjectReference` entries become Forge
+local path dependencies. Solutions containing projects outside the solution
+root or multiple projects sharing one directory require manual restructuring.
+
 `forge init` remains available as a compatibility alias for `forge adopt`.
 
 Build a Forge project:
