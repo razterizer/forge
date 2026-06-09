@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.5.0
+
+- Describe changes.
+
 ## 0.4.0
 
 - Made `forge adopt` the primary command for adopting existing projects while
