@@ -643,6 +643,11 @@ projects produce a target-qualified `.cbox` and its `.sha256` checksum under
 `forge adopt`. Generated `.gitignore` files exclude Forge build state. Tag
 creation remains an explicit opt-in action.
 
+Generated Windows release workflows explicitly initialize an x64 MSVC
+developer environment and select `cl`, so released binaries use Microsoft's
+compiler and runtime instead of whichever compiler happens to appear first on
+the hosted runner.
+
 The generated Linux workflow builds and publishes two compatibility variants:
 `linux-modern` on `ubuntu-latest` and `linux-legacy` on `ubuntu-22.04`. The
 legacy build uses the older distribution's compiler runtime and glibc baseline,

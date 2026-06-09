@@ -26,6 +26,9 @@
   single-target Forge libraries.
 - Added non-destructive GitHub dependency suggestions and explicit
   `forge adopt --github` verification with exact Git commit pins.
+- Made Windows release workflows explicitly initialize and select MSVC,
+  preventing released executables from accidentally using an incompatible
+  compiler runtime found on the hosted runner.
 
 ## 0.3.0
 

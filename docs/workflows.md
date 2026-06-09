@@ -52,6 +52,11 @@ target-qualified `.cbox` and its `.sha256` checksum under `boxes/`. Existing
 workflow and release-note files are left unchanged. Tag creation remains an
 explicit opt-in action.
 
+The Windows adapter explicitly initializes the x64 MSVC developer environment
+and selects `cl` for its bootstrap build. The same environment is inherited by
+`forge prepare-release`, ensuring released Windows artifacts use MSVC rather
+than an incidental compiler from the hosted runner.
+
 The Linux workflow builds two variants before publishing:
 
 - `linux-modern` uses `ubuntu-latest`.

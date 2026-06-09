@@ -803,6 +803,20 @@ namespace
     );
     expect(
       contains(
+        read_file(directory.path() / "hello/.github/workflows/release-windows.yml"),
+        "uses: ilammy/msvc-dev-cmd@v1"
+      ),
+      "new Windows workflow initializes the MSVC environment"
+    );
+    expect(
+      contains(
+        read_file(directory.path() / "hello/.github/workflows/release-windows.yml"),
+        "-DCMAKE_CXX_COMPILER=cl"
+      ),
+      "new Windows workflow selects the MSVC compiler"
+    );
+    expect(
+      contains(
         read_file(directory.path() / "hello/.github/workflows/release-linux.yml"),
         "for box in boxes/*.cbox"
       ),

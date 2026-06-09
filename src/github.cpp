@@ -68,11 +68,31 @@ namespace forge
         "        with:\n"
         "          repository: razterizer/forge\n"
         "          path: .forge-bootstrap\n"
-        "\n"
+        "\n";
+
+      if (platform == "windows")
+      {
+        workflow +=
+          "      - name: Set up MSVC\n"
+          "        uses: ilammy/msvc-dev-cmd@v1\n"
+          "        with:\n"
+          "          arch: x64\n"
+          "\n";
+      }
+
+      workflow +=
         "      - name: Build Forge\n"
         "        run: >-\n"
         "          cmake -S .forge-bootstrap -B .forge-bootstrap/build -G Ninja\n"
-        "          -DCMAKE_BUILD_TYPE=Release -DFORGE_BUILD_TESTS=OFF\n"
+        "          -DCMAKE_BUILD_TYPE=Release -DFORGE_BUILD_TESTS=OFF";
+
+      if (platform == "windows")
+      {
+        workflow += " -DCMAKE_CXX_COMPILER=cl";
+      }
+
+      workflow +=
+        "\n"
         "          && cmake --build .forge-bootstrap/build\n"
         "\n"
         "      - name: Prepare hosted release assets\n";
