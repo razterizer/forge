@@ -40,6 +40,14 @@ namespace forge
       std::string sha256;
     };
 
+    struct BoxComponent
+    {
+      std::string name;
+      std::string type;
+      std::filesystem::path path;
+      std::string sha256;
+    };
+
     struct BoxManifest
     {
       int format = 0;
@@ -52,6 +60,7 @@ namespace forge
       std::optional<ToolchainIdentity> toolchain;
       std::vector<BoxArtifact> artifacts;
       std::vector<BoxDependency> dependencies;
+      std::vector<BoxComponent> components;
     };
 
     std::string_view trim(std::string_view value)
@@ -530,10 +539,46 @@ namespace forge
       return version;
     }
 
+    std::string box_filename(const Recipe& recipe)
+    {
+      auto filename = recipe.name + "-" + package_version(recipe);
+
+      if (recipe.type == "header_only")
+      {
+        filename += "-ho";
+      }
+      else
+      {
+        filename += "-" + target_os() + "-" + target_arch();
+      }
+
+      return filename + ".cbox";
+    }
+
     std::filesystem::path resolve_box_path(const std::filesystem::path& path,
                                            const std::filesystem::path& working_directory)
     {
-      return path.is_absolute() ? path : working_directory / path;
+      if (path.is_absolute())
+      {
+        return path;
+      }
+
+      const auto relative_path = working_directory / path;
+
+      if (std::filesystem::is_regular_file(relative_path) || path.has_parent_path())
+      {
+        return relative_path;
+      }
+
+      const auto generated_box = working_directory / ".forge" / "boxes" / path;
+
+      if (std::filesystem::is_regular_file(generated_box))
+      {
+        return generated_box;
+      }
+
+      const auto published_box = working_directory / "boxes" / path;
+      return std::filesystem::is_regular_file(published_box) ? published_box : relative_path;
     }
 
     bool prepare_empty_directory(const std::filesystem::path& path,
@@ -575,6 +620,7 @@ namespace forge
       std::string section;
       std::optional<std::size_t> artifact_index;
       std::optional<std::size_t> dependency_index;
+      std::optional<std::size_t> component_index;
       std::string line;
       std::size_t line_number = 0;
 
@@ -592,7 +638,7 @@ namespace forge
         {
           section = std::string { trim(trimmed.substr(2, trimmed.size() - 4)) };
 
-          if (section != "artifact" && section != "dependency")
+          if (section != "artifact" && section != "dependency" && section != "component")
           {
             error << "forge: unsupported box manifest section on line " << line_number << '\n';
             return false;
@@ -603,12 +649,21 @@ namespace forge
             manifest.artifacts.emplace_back();
             artifact_index = manifest.artifacts.size() - 1;
             dependency_index.reset();
+            component_index.reset();
           }
-          else
+          else if (section == "dependency")
           {
             manifest.dependencies.emplace_back();
             dependency_index = manifest.dependencies.size() - 1;
             artifact_index.reset();
+            component_index.reset();
+          }
+          else
+          {
+            manifest.components.emplace_back();
+            component_index = manifest.components.size() - 1;
+            artifact_index.reset();
+            dependency_index.reset();
           }
 
           continue;
@@ -623,7 +678,8 @@ namespace forge
               && section != "target"
               && section != "toolchain"
               && section != "artifact"
-              && section != "dependency")
+              && section != "dependency"
+              && section != "component")
           {
             error << "forge: unsupported box manifest section on line " << line_number << '\n';
             return false;
@@ -640,6 +696,7 @@ namespace forge
             manifest.artifacts.emplace_back();
             artifact_index = 0;
             dependency_index.reset();
+            component_index.reset();
           }
           else if (section == "dependency")
           {
@@ -652,11 +709,26 @@ namespace forge
             manifest.dependencies.emplace_back();
             dependency_index = 0;
             artifact_index.reset();
+            component_index.reset();
+          }
+          else if (section == "component")
+          {
+            if (!manifest.components.empty())
+            {
+              error << "forge: duplicate box manifest component section\n";
+              return false;
+            }
+
+            manifest.components.emplace_back();
+            component_index = 0;
+            artifact_index.reset();
+            dependency_index.reset();
           }
           else
           {
             artifact_index.reset();
             dependency_index.reset();
+            component_index.reset();
           }
 
           continue;
@@ -681,6 +753,10 @@ namespace forge
         else if (section == "dependency" && dependency_index)
         {
           identity = section + "." + std::to_string(*dependency_index) + "." + std::string { key };
+        }
+        else if (section == "component" && component_index)
+        {
+          identity = section + "." + std::to_string(*component_index) + "." + std::string { key };
         }
 
         if (!seen.insert(identity).second)
@@ -803,6 +879,25 @@ namespace forge
         {
           valid = parse_string(value, manifest.dependencies[*dependency_index].sha256);
         }
+        else if (section == "component" && component_index && key == "name")
+        {
+          valid = parse_string(value, manifest.components[*component_index].name);
+        }
+        else if (section == "component" && component_index && key == "type")
+        {
+          valid = parse_string(value, manifest.components[*component_index].type);
+        }
+        else if (section == "component" && component_index && key == "path")
+        {
+          std::string component_path;
+          valid = parse_string(value, component_path)
+            && component_path.find('\\') == std::string::npos;
+          manifest.components[*component_index].path = component_path;
+        }
+        else if (section == "component" && component_index && key == "sha256")
+        {
+          valid = parse_string(value, manifest.components[*component_index].sha256);
+        }
         else
         {
           valid = false;
@@ -819,7 +914,6 @@ namespace forge
         "cbox.format",
         "package.name",
         "package.version",
-        "package.type",
         "target.os",
         "target.arch"
       };
@@ -831,6 +925,12 @@ namespace forge
           error << "forge: box manifest is missing '" << field << "'\n";
           return false;
         }
+      }
+
+      if (manifest.format != 3 && !seen.contains("package.type"))
+      {
+        error << "forge: box manifest is missing 'package.type'\n";
+        return false;
       }
 
       if (manifest.type == "shared_library")
@@ -854,7 +954,7 @@ namespace forge
         }
       }
 
-      if (manifest.format != 1 && manifest.format != 2)
+      if (manifest.format != 1 && manifest.format != 2 && manifest.format != 3)
       {
         error << "forge: unsupported box format " << manifest.format << '\n';
         return false;
@@ -873,12 +973,13 @@ namespace forge
 
       if (!is_safe_path_component(manifest.name)
           || !is_safe_path_component(manifest.version)
-          || (manifest.type != "executable"
+          || (manifest.format != 3
+              && manifest.type != "executable"
               && manifest.type != "static_library"
               && manifest.type != "dynamic_library"
               && manifest.type != "imported_library"
               && manifest.type != "header_only")
-          || manifest.artifacts.empty())
+          || (manifest.format == 3 ? manifest.components.empty() : manifest.artifacts.empty()))
       {
         error << "forge: box manifest contains invalid package or artifact values\n";
         return false;
@@ -886,6 +987,7 @@ namespace forge
 
       std::set<std::filesystem::path> artifact_paths;
       std::set<std::string> dependency_names;
+      std::set<std::string> component_names;
       std::size_t executable_count = 0;
       std::size_t library_count = 0;
       std::size_t dynamic_library_count = 0;
@@ -979,7 +1081,44 @@ namespace forge
         }
       }
 
-      if ((manifest.type == "executable"
+      for (std::size_t index = 0; index < manifest.components.size(); ++index)
+      {
+        const auto& component = manifest.components[index];
+        const auto prefix = component.path.empty() ? std::string {} : component.path.begin()->string();
+
+        if (!seen.contains("component." + std::to_string(index) + ".name")
+            || !seen.contains("component." + std::to_string(index) + ".type")
+            || !seen.contains("component." + std::to_string(index) + ".path")
+            || !seen.contains("component." + std::to_string(index) + ".sha256")
+            || !is_safe_path_component(component.name)
+            || (component.type != "executable"
+                && component.type != "static_library"
+                && component.type != "dynamic_library"
+                && component.type != "imported_library"
+                && component.type != "header_only")
+            || !is_safe_archive_path(component.path)
+            || component.path.parent_path().empty()
+            || prefix != "components"
+            || component.path.extension() != ".cbox"
+            || !artifact_paths.insert(component.path).second
+            || !component_names.insert(component.name).second
+            || component.sha256.size() != 64
+            || component.sha256.find_first_not_of("0123456789abcdef") != std::string::npos)
+        {
+          error << "forge: box manifest contains invalid component values\n";
+          return false;
+        }
+      }
+
+      if (manifest.format == 3
+          && (!manifest.artifacts.empty() || !manifest.dependencies.empty()))
+      {
+        error << "forge: format 3 container boxes may contain only components\n";
+        return false;
+      }
+
+      if (manifest.format != 3
+          && ((manifest.type == "executable"
            && (executable_count != 1
                || executable_count + runtime_asset_count != manifest.artifacts.size()))
           || (manifest.type == "static_library"
@@ -998,7 +1137,7 @@ namespace forge
                   || library_count + dynamic_library_count + import_library_count + header_count
                      != manifest.artifacts.size()))
           || (manifest.type == "header_only"
-              && (header_count == 0 || header_count != manifest.artifacts.size())))
+              && (header_count == 0 || header_count != manifest.artifacts.size()))))
       {
         error << "forge: box manifest artifacts do not match package type\n";
         return false;
@@ -1057,6 +1196,24 @@ namespace forge
         }
       }
 
+      for (const auto& component : manifest.components)
+      {
+        if (!std::filesystem::is_regular_file(directory / component.path))
+        {
+          error << "forge: box component '" << component.path.string() << "' is missing\n";
+          return false;
+        }
+
+        expected_files.insert(component.path);
+        auto parent = component.path.parent_path();
+
+        while (!parent.empty())
+        {
+          expected_directories.insert(parent);
+          parent = parent.parent_path();
+        }
+      }
+
       std::set<std::string> expected_archive_entries { "cbox.toml" };
 
       for (const auto& artifact : manifest.artifacts)
@@ -1067,6 +1224,11 @@ namespace forge
       for (const auto& dependency : manifest.dependencies)
       {
         expected_archive_entries.insert(dependency.path.generic_string());
+      }
+
+      for (const auto& component : manifest.components)
+      {
+        expected_archive_entries.insert(component.path.generic_string());
       }
 
       for (const auto& directory_path : expected_directories)
@@ -1153,6 +1315,22 @@ namespace forge
         }
       }
 
+      for (const auto& component : manifest.components)
+      {
+        std::string checksum;
+
+        if (!sha256_file(directory / component.path, checksum, error))
+        {
+          return false;
+        }
+
+        if (checksum != component.sha256)
+        {
+          error << "forge: box component checksum does not match cbox.toml\n";
+          return false;
+        }
+      }
+
       return true;
     }
 
@@ -1210,6 +1388,135 @@ namespace forge
       return true;
     }
 
+    int create_container_box(const std::filesystem::path& project_directory,
+                             const Recipe& recipe,
+                             const ProcessRunner& process_runner,
+                             std::ostream& output,
+                             std::ostream& error)
+    {
+      const auto header_only = std::ranges::all_of(
+        recipe.targets,
+        [](const RecipeTarget& target)
+        {
+          return target.type == "header_only";
+        }
+      );
+      const auto box_name =
+        recipe.name + "-" + package_version(recipe)
+        + (header_only ? "-ho" : "-" + target_os() + "-" + target_arch());
+      const auto boxes_directory = project_directory / ".forge" / "boxes";
+      const auto staging_directory = boxes_directory / "staging" / ("container-" + box_name);
+      const auto archive_path = boxes_directory / (box_name + ".cbox");
+
+      if (!prepare_empty_directory(staging_directory, error))
+      {
+        return 2;
+      }
+
+      std::vector<BoxComponent> components;
+
+      for (const auto& target : recipe.targets)
+      {
+        if (create_box(
+          project_directory,
+          target.name,
+          process_runner,
+          output,
+          error
+        ) != 0)
+        {
+          return 2;
+        }
+
+        Recipe selected = recipe;
+
+        if (!select_recipe_target(selected, target.name, error))
+        {
+          return 2;
+        }
+
+        const auto source = boxes_directory / box_filename(selected);
+        const auto component_path =
+          std::filesystem::path { "components" } / (target.name + ".cbox");
+        const auto destination = staging_directory / component_path;
+        std::error_code filesystem_error;
+        std::filesystem::create_directories(destination.parent_path(), filesystem_error);
+        std::string checksum;
+
+        if (filesystem_error
+            || !copy_file(source, destination, error)
+            || !sha256_file(destination, checksum, error))
+        {
+          error << "forge: could not package component '" << target.name << "'\n";
+          return 2;
+        }
+
+        components.push_back({ target.name, target.type, component_path, checksum });
+      }
+
+      std::ofstream manifest { staging_directory / "cbox.toml" };
+
+      if (!manifest)
+      {
+        error << "forge: could not create container manifest\n";
+        return 2;
+      }
+
+      manifest
+        << "[cbox]\n"
+        << "format = 3\n\n"
+        << "[package]\n"
+        << "name = \"" << recipe.name << "\"\n"
+        << "version = \"" << recipe.version << "\"\n";
+
+      if (recipe.build_number)
+      {
+        manifest << "build = " << *recipe.build_number << "\n";
+      }
+
+      manifest
+        << "\n[target]\n"
+        << "os = \"" << target_os() << "\"\n"
+        << "arch = \"" << target_arch() << "\"\n";
+
+      for (const auto& component : components)
+      {
+        manifest
+          << "\n[[component]]\n"
+          << "name = \"" << component.name << "\"\n"
+          << "type = \"" << component.type << "\"\n"
+          << "path = \"" << component.path.generic_string() << "\"\n"
+          << "sha256 = \"" << component.sha256 << "\"\n";
+      }
+
+      manifest.close();
+      std::error_code filesystem_error;
+      std::filesystem::remove(archive_path, filesystem_error);
+      output << "Creating box " << box_name << '\n' << std::flush;
+
+      if (process_runner(
+        {
+          "cmake",
+          "-E",
+          "tar",
+          "cf",
+          archive_path.string(),
+          "--format=zip",
+          "cbox.toml",
+          "components"
+        },
+        staging_directory,
+        error
+      ) != 0)
+      {
+        error << "forge: box archive creation failed\n";
+        return 2;
+      }
+
+      output << "Created " << archive_path.string() << '\n';
+      return 0;
+    }
+
   } // namespace
 
   int create_box(const std::filesystem::path& project_directory,
@@ -1246,6 +1553,11 @@ namespace forge
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
     {
       return 2;
+    }
+
+    if (!target && recipe.targets.size() > 1)
+    {
+      return create_container_box(project_directory, recipe, process_runner, output, error);
     }
 
     if (!select_recipe_target(recipe, target, error))
@@ -1317,11 +1629,11 @@ namespace forge
       return 2;
     }
 
-    const auto box_name =
-      recipe.name + "-" + package_version(recipe) + "-" + target_os() + "-" + target_arch();
+    const auto archive_filename = box_filename(recipe);
+    const auto box_name = std::filesystem::path { archive_filename }.stem().string();
     const auto boxes_directory = project_directory / ".forge" / "boxes";
     const auto staging_directory = boxes_directory / "staging" / box_name;
-    const auto archive_path = boxes_directory / (box_name + ".cbox");
+    const auto archive_path = boxes_directory / archive_filename;
 
     if (!prepare_empty_directory(staging_directory, error))
     {
@@ -1595,8 +1907,7 @@ namespace forge
       }
 
       const auto source = project_directory / ".forge" / "boxes"
-        / (dependency_recipe.name + "-" + package_version(dependency_recipe) + "-"
-           + target_os() + "-" + target_arch() + ".cbox");
+        / box_filename(dependency_recipe);
 
       if (!stage_dependency(source, dependency_name))
       {
@@ -1742,6 +2053,64 @@ namespace forge
     }
 
     output << "Created " << archive_path.string() << '\n';
+    return 0;
+  }
+
+  int list_boxes(const std::filesystem::path& project_directory,
+                 std::ostream& output,
+                 std::ostream& error)
+  {
+    if (!std::filesystem::is_regular_file(project_directory / "forge.recipe.toml"))
+    {
+      error << "forge: forge.recipe.toml was not found in the current directory\n";
+      return 2;
+    }
+
+    const auto list_directory =
+      [&output](std::string_view heading, const std::filesystem::path& directory)
+      {
+        std::vector<std::filesystem::path> boxes;
+        std::error_code filesystem_error;
+
+        if (std::filesystem::is_directory(directory))
+        {
+          for (const auto& entry : std::filesystem::directory_iterator { directory, filesystem_error })
+          {
+            if (filesystem_error)
+            {
+              break;
+            }
+
+            if (entry.is_regular_file() && entry.path().extension() == ".cbox")
+            {
+              boxes.push_back(entry.path().filename());
+            }
+          }
+        }
+
+        std::ranges::sort(boxes);
+
+        if (!boxes.empty())
+        {
+          output << heading << ":\n";
+
+          for (const auto& box : boxes)
+          {
+            output << "  " << box.string() << '\n';
+          }
+        }
+
+        return boxes.size();
+      };
+
+    const auto generated = list_directory("Generated boxes", project_directory / ".forge" / "boxes");
+    const auto published = list_directory("Published boxes", project_directory / "boxes");
+
+    if (generated + published == 0)
+    {
+      output << "No boxes found\n";
+    }
+
     return 0;
   }
 
@@ -2003,6 +2372,25 @@ namespace forge
       }
     }
 
+    for (const auto& component : manifest.components)
+    {
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(
+        (destination / component.path).parent_path(),
+        filesystem_error
+      );
+
+      if (filesystem_error
+          || !copy_file(
+            validation_directory / component.path,
+            destination / component.path,
+            error
+          ))
+      {
+        return 2;
+      }
+    }
+
     output << "Extracted " << destination.string() << '\n';
     return 0;
   }
@@ -2057,6 +2445,7 @@ namespace forge
         manifest.arch,
         manifest.toolchain,
         {},
+        {},
         {}
       };
 
@@ -2102,7 +2491,107 @@ namespace forge
       );
     }
 
+    for (const auto& component : manifest.components)
+    {
+      BoxMetadata child;
+
+      if (!read_box_metadata(
+        validation_directory / component.path,
+        validation_directory,
+        process_runner,
+        child,
+        error
+      )
+          || child.name != component.name
+          || child.type != component.type)
+      {
+        error << "forge: embedded component '" << component.name
+              << "' does not match its declaration\n";
+        return false;
+      }
+
+      metadata.components.push_back(
+        {
+          component.name,
+          component.type,
+          component.path,
+          component.sha256
+        }
+      );
+    }
+
     return true;
+  }
+
+  bool resolve_box_component(const std::filesystem::path& box_path,
+                             const std::filesystem::path& working_directory,
+                             const std::optional<std::string>& requested,
+                             const ProcessRunner& process_runner,
+                             std::filesystem::path& component_box,
+                             BoxMetadata& metadata,
+                             std::ostream& error)
+  {
+    const auto resolved_box = resolve_box_path(box_path, working_directory);
+    BoxMetadata container;
+
+    if (!read_box_metadata(resolved_box, working_directory, process_runner, container, error))
+    {
+      return false;
+    }
+
+    if (container.components.empty())
+    {
+      component_box = resolved_box;
+      metadata = std::move(container);
+      return true;
+    }
+
+    const auto component = requested
+      ? std::find_if(
+          container.components.begin(),
+          container.components.end(),
+          [&requested](const BoxComponentMetadata& candidate)
+          {
+            return candidate.name == *requested;
+          }
+        )
+      : std::find_if(
+          container.components.begin(),
+          container.components.end(),
+          [&container](const BoxComponentMetadata& candidate)
+          {
+            return candidate.name == container.name
+              && candidate.type != "executable";
+          }
+        );
+
+    if (component == container.components.end())
+    {
+      error << "forge: box contains multiple components; specify one of:";
+
+      for (const auto& candidate : container.components)
+      {
+        if (candidate.type != "executable")
+        {
+          error << ' ' << candidate.name;
+        }
+      }
+
+      error << '\n';
+      return false;
+    }
+
+    std::string checksum;
+
+    if (!sha256_file(resolved_box, checksum, error))
+    {
+      return false;
+    }
+
+    const auto validation_directory =
+      working_directory / ".forge" / "cache" / "box-metadata" / checksum;
+    component_box = validation_directory / component->path;
+    return read_box_metadata(component_box, validation_directory, process_runner, metadata, error);
   }
 
 } // namespace forge

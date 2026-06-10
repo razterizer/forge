@@ -1,7 +1,13 @@
-# CBox format version 2
+# CBox formats
 
-A `.cbox` is a ZIP archive containing one reusable C++ package for one target.
-It is distinct from an application release archive.
+A `.cbox` is a ZIP archive containing one reusable C++ package. Compiled boxes
+are target-specific; header-only boxes are platform-independent. A box is
+distinct from an application release archive.
+
+Format-3 platform boxes bundle all named project targets as independently
+verified component boxes. A consumer selects the library component it needs.
+Format-2 component boxes remain independently usable and carry their required
+dependency boxes.
 
 The implemented profiles support executable, static-library, dynamic-library,
 imported-library, and header-only packages:
@@ -16,7 +22,7 @@ hello-0.1.0-macos-arm64.cbox
 Header-only boxes contain only the manifest and public headers:
 
 ```text
-hello-1.0.0-macos-arm64.cbox
+hello-1.0.0-ho.cbox
 ├── cbox.toml
 └── include/
     └── hello/
@@ -79,6 +85,33 @@ path = "dependencies/doubled.cbox"
 sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 ```
 
+A multi-component platform box uses format 3:
+
+```toml
+[cbox]
+format = 3
+
+[package]
+name = "hello"
+version = "1.0.0"
+
+[target]
+os = "macos"
+arch = "arm64"
+
+[[component]]
+name = "hello"
+type = "static_library"
+path = "components/hello.cbox"
+sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+[[component]]
+name = "hello-tool"
+type = "executable"
+path = "components/hello-tool.cbox"
+sha256 = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+```
+
 Each `[[artifact]]` entry declares one packaged file. Static-library boxes
 contain one `static_library` artifact under `lib/` and one or more
 `public_header` artifacts under `include/`. Dynamic-library boxes contain one
@@ -94,7 +127,8 @@ without requiring Forge to build it. Consumers link every contained static or
 import library and stage every contained dynamic-library runtime.
 
 The manifest determines package identity. The archive filename is only a
-human-readable label.
+human-readable label. Compiled box filenames include their OS and architecture;
+header-only box filenames omit them.
 
 Each `[[dependency]]` entry declares one direct dependency embedded as another
 verified `.cbox`. Child boxes recursively carry their own direct dependencies,
@@ -162,17 +196,23 @@ Verification, publication, and dependency consumption recursively validate each
 embedded box and ensure its package identity, package type, and target match its
 declaration.
 
+`forge box list` shows generated boxes in `.forge/boxes/` and published boxes
+in `boxes/`. Box commands accept either an explicit path or a bare filename;
+bare filenames are resolved from those directories.
+
 `forge box publish <box>` publishes a verified box locally into the
 project-root `boxes/` directory and writes `<box>.sha256` using the standard
 `<checksum>  <filename>` format. The command must run from a Forge project root.
 
 ## Compatibility
 
-One box represents one OS and architecture target. Forge validates both before
-installing a direct local box dependency. Compiler, standard-library, ABI,
-build-type, permissions, and deterministic archive rules remain future
-compatibility dimensions.
+Compiled boxes represent one OS and architecture target. Forge validates both
+before installing a compiled direct local box dependency. Header-only boxes are
+accepted across targets because they contain no compiled artifacts. Compiler,
+standard-library, ABI, build-type, permissions, and deterministic archive rules
+remain future compatibility dimensions.
 
-Forge continues to consume format-1 boxes as self-contained leaf dependencies.
-New boxes are written as format 2. Legacy boxes using `shared_library` as a
-package type or artifact kind remain accepted as aliases for `dynamic_library`.
+Forge continues to consume format-1 boxes as self-contained leaf dependencies
+and format-2 boxes as single components. Multi-target projects are written as
+format-3 containers. Legacy boxes using `shared_library` as a package type or
+artifact kind remain accepted as aliases for `dynamic_library`.

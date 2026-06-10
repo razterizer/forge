@@ -443,6 +443,10 @@ namespace forge
         {
           dependency.commit = parsed_value;
         }
+        else if (kind == "component" && dependency.component.empty())
+        {
+          dependency.component = parsed_value;
+        }
         else
         {
           return false;

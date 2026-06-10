@@ -26,6 +26,14 @@ namespace forge
     std::string sha256;
   };
 
+  struct BoxComponentMetadata
+  {
+    std::string name;
+    std::string type;
+    std::filesystem::path path;
+    std::string sha256;
+  };
+
   struct ToolchainIdentity
   {
     std::string compiler;
@@ -46,6 +54,7 @@ namespace forge
     std::optional<ToolchainIdentity> toolchain;
     std::vector<BoxArtifactMetadata> artifacts;
     std::vector<BoxDependencyMetadata> dependencies;
+    std::vector<BoxComponentMetadata> components;
   };
 
   int create_box(const std::filesystem::path& project_directory,
@@ -65,6 +74,10 @@ namespace forge
   int create_box(const std::filesystem::path& project_directory,
                  const std::optional<std::string>& target,
                  const ProcessRunner& process_runner,
+                 std::ostream& output,
+                 std::ostream& error);
+
+  int list_boxes(const std::filesystem::path& project_directory,
                  std::ostream& output,
                  std::ostream& error);
 
@@ -117,5 +130,13 @@ namespace forge
                          const ProcessRunner& process_runner,
                          BoxMetadata& metadata,
                          std::ostream& error);
+
+  bool resolve_box_component(const std::filesystem::path& box_path,
+                             const std::filesystem::path& working_directory,
+                             const std::optional<std::string>& component,
+                             const ProcessRunner& process_runner,
+                             std::filesystem::path& component_box,
+                             BoxMetadata& metadata,
+                             std::ostream& error);
 
 } // namespace forge

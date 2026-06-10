@@ -26,6 +26,7 @@ namespace forge
     std::string git;
     std::string commit;
     std::string type;
+    std::string component;
   };
 
   struct ImportProfile

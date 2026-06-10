@@ -1780,6 +1780,10 @@ namespace
       std::string_view { "create" },
       std::string_view { "math" }
     };
+    constexpr std::array create_container_box_arguments {
+      std::string_view { "box" },
+      std::string_view { "create" }
+    };
     constexpr std::array create_executable_box_arguments {
       std::string_view { "box" },
       std::string_view { "create" },
@@ -1842,7 +1846,7 @@ namespace
     const auto math_box = directory.path() / ".forge/boxes"
       / ("math-0.1.0-" + current_target() + ".cbox");
     const auto suite_box = directory.path() / ".forge/boxes"
-      / ("suite-0.1.0-" + current_target() + ".cbox");
+      / "suite-0.1.0-ho.cbox";
     expect(std::filesystem::exists(math_box), "named library box is created");
     expect(std::filesystem::exists(suite_box), "internal named dependency box is created");
     const auto math_box_string = math_box.string();
@@ -1860,6 +1864,43 @@ namespace
     expect(
       contains(inspect_output.str(), "name = \"suite\""),
       "named library box embeds its internal dependency"
+    );
+    std::ostringstream container_output;
+    std::ostringstream container_error;
+    expect(
+      forge::cli::run(
+        create_container_box_arguments,
+        directory.path(),
+        container_output,
+        container_error
+      ) == 0,
+      "CLI creates a multi-component platform box"
+    );
+    const auto container_box = directory.path() / ".forge/boxes"
+      / ("suite-0.1.0-" + current_target() + ".cbox");
+    expect(std::filesystem::exists(container_box), "multi-component platform box is created");
+    const auto container_box_string = container_box.string();
+    const std::array inspect_container_arguments {
+      std::string_view { "box" },
+      std::string_view { "inspect" },
+      std::string_view { container_box_string }
+    };
+    std::ostringstream inspect_container_output;
+    std::ostringstream inspect_container_error;
+    expect(
+      forge::cli::run(
+        inspect_container_arguments,
+        directory.path(),
+        inspect_container_output,
+        inspect_container_error
+      ) == 0,
+      "CLI inspects a multi-component platform box"
+    );
+    expect(
+      contains(inspect_container_output.str(), "format = 3")
+      && contains(inspect_container_output.str(), "name = \"math\"")
+      && contains(inspect_container_output.str(), "name = \"examples\""),
+      "multi-component manifest declares named targets"
     );
     expect(
       forge::cli::run(
@@ -2229,11 +2270,33 @@ namespace
       "box filename includes build metadata"
     );
     const auto box_path_string = box_path.string();
+    const auto box_filename = box_path.filename().string();
+
+    constexpr std::array list_arguments {
+      std::string_view { "box" },
+      std::string_view { "list" }
+    };
+    std::ostringstream generated_list_output;
+    std::ostringstream generated_list_error;
+    expect(
+      forge::cli::run(
+        list_arguments,
+        project_directory,
+        generated_list_output,
+        generated_list_error
+      ) == 0,
+      "box list succeeds"
+    );
+    expect(
+      contains(generated_list_output.str(), "Generated boxes:")
+      && contains(generated_list_output.str(), box_filename),
+      "box list reports generated boxes"
+    );
 
     const std::array inspect_arguments {
       std::string_view { "box" },
       std::string_view { "inspect" },
-      std::string_view { box_path_string }
+      std::string_view { box_filename }
     };
     std::ostringstream inspect_output;
     std::ostringstream inspect_error;
@@ -2261,7 +2324,7 @@ namespace
     const std::array publish_arguments {
       std::string_view { "box" },
       std::string_view { "publish" },
-      std::string_view { box_path_string }
+      std::string_view { box_filename }
     };
     std::ostringstream publish_output;
     std::ostringstream publish_error;
@@ -2280,6 +2343,23 @@ namespace
     );
     expect(contains(publish_output.str(), "Published locally "), "box publish reports local publication");
     expect(contains(publish_output.str(), "Checksum "), "box publish reports the checksum");
+
+    std::ostringstream published_list_output;
+    std::ostringstream published_list_error;
+    expect(
+      forge::cli::run(
+        list_arguments,
+        project_directory,
+        published_list_output,
+        published_list_error
+      ) == 0,
+      "box list succeeds after publication"
+    );
+    expect(
+      contains(published_list_output.str(), "Published boxes:")
+      && contains(published_list_output.str(), box_filename),
+      "box list reports published boxes"
+    );
 
     std::ostringstream republish_output;
     std::ostringstream republish_error;
@@ -2469,6 +2549,10 @@ namespace
     }
 
     expect(!box_path.empty(), "header-only box create produces a cbox archive");
+    expect(
+      box_path.filename() == "hello-1.0.0-ho.cbox",
+      "header-only box filename is platform-independent"
+    );
     const auto box_path_string = box_path.string();
     const std::array inspect_arguments {
       std::string_view { "box" },

@@ -390,20 +390,19 @@ namespace forge
         tag_version.resize(build_metadata);
       }
 
-      const auto asset = dependency.name
+      const auto compiled_asset = dependency.name
         + "-" + dependency.version
         + "-" + target_os()
         + "-" + target_arch()
         + ".cbox";
+      const auto header_only_asset = dependency.name + "-" + dependency.version + "-ho.cbox";
       const auto release_url =
         "https://github.com/" + dependency.github + "/releases/download/release-" + tag_version + "/";
-      const auto checksum_url = release_url + asset + ".sha256";
       const auto cache_directory =
         parent_directory / ".forge" / "cache" / "github"
           / std::filesystem::path { dependency.github }
           / dependency.version
           / (target_os() + "-" + target_arch());
-      const auto checksum_path = cache_directory / (asset + ".sha256");
       std::error_code filesystem_error;
       std::filesystem::create_directories(cache_directory, filesystem_error);
 
@@ -415,34 +414,42 @@ namespace forge
 
       output << "Resolving GitHub dependency " << dependency.name << '\n' << std::flush;
 
-      if (!download_file(
-        parent_directory,
-        checksum_url,
-        checksum_path,
-        true,
-        process_runner,
-        error
-      ))
+      for (const auto& asset : { compiled_asset, header_only_asset })
       {
-        error << "forge: could not download checksum for dependency '" << dependency.name << "'\n";
-        return false;
+        const auto checksum_path = cache_directory / (asset + ".sha256");
+        std::ostringstream download_error;
+
+        if (!download_file(
+          parent_directory,
+          release_url + asset + ".sha256",
+          checksum_path,
+          true,
+          process_runner,
+          download_error
+        ))
+        {
+          continue;
+        }
+
+        std::ifstream checksum_file { checksum_path };
+        std::string checksum;
+        std::string filename;
+        checksum_file >> checksum >> filename;
+
+        if (!checksum_file || !is_sha256(checksum) || filename != asset)
+        {
+          error << "forge: dependency '" << dependency.name
+                << "' has an invalid GitHub release checksum file\n";
+          return false;
+        }
+
+        dependency.url = release_url + asset;
+        dependency.sha256 = std::move(checksum);
+        return true;
       }
 
-      std::ifstream checksum_file { checksum_path };
-      std::string checksum;
-      std::string filename;
-      checksum_file >> checksum >> filename;
-
-      if (!checksum_file || !is_sha256(checksum) || filename != asset)
-      {
-        error << "forge: dependency '" << dependency.name
-              << "' has an invalid GitHub release checksum file\n";
-        return false;
-      }
-
-      dependency.url = release_url + asset;
-      dependency.sha256 = std::move(checksum);
-      return true;
+      error << "forge: could not download checksum for dependency '" << dependency.name << "'\n";
+      return false;
     }
 
     std::string_view trim(std::string_view value)
@@ -1379,11 +1386,13 @@ namespace forge
         }
 
         const auto filename = entry.path().filename().string();
+        const auto platform_independent_filename = prefix + ".cbox";
 
         if (!entry.is_regular_file()
             || entry.path().extension() != ".cbox"
             || !filename.starts_with(prefix)
-            || (filename.size() > prefix.size()
+            || (filename != platform_independent_filename
+                && filename.size() > prefix.size()
                 && filename[prefix.size()] != '-'
                 && filename[prefix.size()] != '+'))
         {
@@ -1412,8 +1421,8 @@ namespace forge
             && metadata.version == node.recipe.version
             && metadata.build_number == node.recipe.build_number
             && metadata.type == node.recipe.type
-            && metadata.os == target_os()
-            && metadata.arch == target_arch()
+            && (metadata.type == "header_only"
+                || (metadata.os == target_os() && metadata.arch == target_arch()))
             && dependency_graph_matches(node.recipe, metadata, error))
         {
           node.box = entry.path();
@@ -1586,7 +1595,7 @@ namespace forge
           : !downloaded_box.empty()
           ? downloaded_box
           : (resolved_dependency.box.empty() ? resolved_dependency.path : resolved_dependency.box);
-      const auto directory =
+      auto directory =
         std::filesystem::weakly_canonical(parent_directory / dependency_location, filesystem_error);
 
       if (filesystem_error
@@ -1635,16 +1644,32 @@ namespace forge
         if (is_box)
         {
           BoxMetadata metadata;
+          std::filesystem::path component_box;
+          const auto component = dependency.component.empty()
+            ? std::optional<std::string> { dependency.name }
+            : std::optional<std::string> { dependency.component };
 
-          if (!read_box_metadata(directory, parent_directory, process_runner, metadata, error))
+          if (!resolve_box_component(
+            directory,
+            parent_directory,
+            component,
+            process_runner,
+            component_box,
+            metadata,
+            error
+          ))
           {
             return false;
           }
 
-          if (metadata.name != dependency.name)
+          directory = component_box;
+
+          if (metadata.name != dependency.name
+              && (dependency.component.empty() || metadata.name != dependency.component))
           {
             error << "forge: dependency name '" << dependency.name
-                  << "' does not match box name '" << metadata.name << "'\n";
+                  << "' does not match box name '" << metadata.name
+                  << "' or the selected component\n";
             return false;
           }
 
@@ -1662,7 +1687,8 @@ namespace forge
             return false;
           }
 
-          if (metadata.os != target_os() || metadata.arch != target_arch())
+          if (metadata.type != "header_only"
+              && (metadata.os != target_os() || metadata.arch != target_arch()))
           {
             error << "forge: dependency '" << dependency.name
                   << "' box targets " << metadata.os << '-' << metadata.arch
@@ -1670,7 +1696,7 @@ namespace forge
             return false;
           }
 
-          dependency_recipe.name = metadata.name;
+          dependency_recipe.name = dependency.name;
           dependency_recipe.version = metadata.version;
           dependency_recipe.type = metadata.type;
           dependency_recipe.build_number = metadata.build_number;
@@ -1688,7 +1714,8 @@ namespace forge
                 child.version,
                 {},
                 {},
-                child.type
+                child.type,
+                {}
               }
             );
           }

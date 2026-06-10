@@ -46,8 +46,9 @@ namespace forge::cli
         << "  forge <command>\n"
         << "  forge adopt [--github] [--library-type=<type>]\n"
         << "  forge new <name>\n"
+        << "  forge box list\n"
         << "  forge box create [target]\n"
-        << "  forge box <inspect|verify|extract|publish> <path>\n"
+        << "  forge box <inspect|verify|extract|publish> <path-or-filename>\n"
         << "  forge update [dependency]\n"
         << "  forge build [target] [--profile=<name>] [--define=<symbol> ...]\n"
         << "  forge bump <major|minor|patch>\n"
@@ -60,7 +61,7 @@ namespace forge::cli
         << "  forge --version\n\n"
         << "Commands:\n"
         << "  adopt           Adopt the current project\n"
-        << "  box             Create, inspect, verify, publish locally, or extract boxes\n"
+        << "  box             List, create, inspect, verify, publish locally, or extract boxes\n"
         << "  init            Alias for adopt\n"
         << "  new             Create a new project\n"
         << "  build           Build the current project or workspace\n"
@@ -167,6 +168,11 @@ namespace forge::cli
 
     if (arguments.front() == "box")
     {
+      if (arguments.size() == 2 && arguments[1] == "list")
+      {
+        return list_boxes(working_directory, output, error);
+      }
+
       if ((arguments.size() == 2 || arguments.size() == 3) && arguments[1] == "create")
       {
         const auto target = arguments.size() == 3
@@ -195,8 +201,9 @@ namespace forge::cli
         return publish_box(arguments[2], working_directory, output, error);
       }
 
+      error << "forge: usage: forge box list\n";
       error << "forge: usage: forge box create [target]\n";
-      error << "forge: usage: forge box <inspect|verify|extract|publish> <path>\n";
+      error << "forge: usage: forge box <inspect|verify|extract|publish> <path-or-filename>\n";
       return 2;
     }
 

@@ -843,10 +843,26 @@ static-library, dynamic-library, imported-library, or header-only box:
 ```sh
 /path/to/forge/build/dev/forge box create
 /path/to/forge/build/dev/forge box create hello
-/path/to/forge/build/dev/forge box inspect .forge/boxes/hello-0.1.0-macos-arm64.cbox
-/path/to/forge/build/dev/forge box verify .forge/boxes/hello-0.1.0-macos-arm64.cbox
-/path/to/forge/build/dev/forge box publish .forge/boxes/hello-0.1.0-macos-arm64.cbox
-/path/to/forge/build/dev/forge box extract .forge/boxes/hello-0.1.0-macos-arm64.cbox
+/path/to/forge/build/dev/forge box list
+/path/to/forge/build/dev/forge box inspect hello-0.1.0-macos-arm64.cbox
+/path/to/forge/build/dev/forge box verify hello-0.1.0-macos-arm64.cbox
+/path/to/forge/build/dev/forge box publish hello-0.1.0-macos-arm64.cbox
+/path/to/forge/build/dev/forge box extract hello-0.1.0-macos-arm64.cbox
+```
+
+For projects with multiple named targets, `forge box create` produces one
+platform box containing each target as a selectable component. Use
+`forge box create <target>` to create only one component box. Compiled box
+filenames include their target OS and architecture. Header-only boxes contain
+no target-specific artifacts and use names such as `hello-1.0.0-ho.cbox`.
+Bare box filenames are resolved from `.forge/boxes/` and then `boxes/`;
+explicit paths continue to work.
+
+Select a library from a multi-component box with `component`:
+
+```toml
+[dependencies]
+hello = { box = "../packages/hello-1.0.0-macos-arm64.cbox", component = "hello" }
 ```
 
 `forge box publish <box>` verifies and publishes the box locally by copying it

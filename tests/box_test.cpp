@@ -496,7 +496,7 @@ namespace
       {
         std::ofstream manifest { working_directory / "cbox.toml" };
         manifest
-          << "[cbox]\nformat = 3\n"
+          << "[cbox]\nformat = 4\n"
           << "[package]\nname = \"hello\"\nversion = \"0.1.0\"\ntype = \"executable\"\n"
           << "[target]\nos = \"test\"\narch = \"test\"\n"
           << "[artifact]\npath = \"bin/hello\"\nkind = \"executable\"\n"

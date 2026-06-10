@@ -9,6 +9,11 @@
   file dependencies for executable targets.
 - Made adoption preserve the highest C++ standard required by mirrored native
   and CMake project metadata.
+- Added `forge box list`, bare-filename lookup for box commands, and
+  platform-independent filenames and consumption for header-only boxes.
+- Added format-3 multi-component platform boxes, allowing one project box to
+  carry static libraries, dynamic libraries, executables, and header-only
+  targets while consumers select the library component they need.
 
 ## 0.5.0
 
