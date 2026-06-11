@@ -3036,9 +3036,24 @@ namespace
       forge::cli::run(inspect_arguments, project_directory, inspect_output, inspect_error) == 0,
       "header-only box inspect succeeds"
     );
+    expect(contains(inspect_output.str(), "Target: any"), "header-only box inspection reports any target");
     expect(contains(inspect_output.str(), "type = \"header_only\""), "manifest identifies header-only package");
     expect(contains(inspect_output.str(), "kind = \"public_header\""), "manifest declares a public header");
     expect(!contains(inspect_output.str(), "static_library"), "header-only box does not declare a library");
+    constexpr std::array list_arguments {
+      std::string_view { "box" },
+      std::string_view { "list" }
+    };
+    std::ostringstream list_output;
+    std::ostringstream list_error;
+    expect(
+      forge::cli::run(list_arguments, project_directory, list_output, list_error) == 0,
+      "header-only box list succeeds"
+    );
+    expect(
+      contains(list_output.str(), "hello 1.0.0 [any]  header_only"),
+      "header-only box list reports any target"
+    );
 
     const std::array extract_arguments {
       std::string_view { "box" },

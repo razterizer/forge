@@ -110,8 +110,10 @@ verification and installation.
 GitHub Release dependencies use `{ github = "owner/repository", version =
 "<version>" }`, with optional `package` and `component` identities for aggregate
 project boxes. Forge resolves the conventional target-qualified box and
-checksum assets from the matching `release-<version>` tag, then records the
-exact package, component, target, URL, and checksum in `forge.lock.toml`.
+checksum assets from the matching release tag, including configured
+build-qualified tags with fallback to legacy `release-<version>` tags, then
+records the exact package, component, target, URL, and checksum in
+`forge.lock.toml`.
 Normal builds require and consume matching locked entries without re-resolving
 GitHub. `forge update` and `forge update <dependency>` deliberately refresh
 current-target entries without building the current project, while preserving

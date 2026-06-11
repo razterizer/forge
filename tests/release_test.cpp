@@ -410,6 +410,44 @@ namespace
     expect(error.str().empty(), "successful GitHub release does not write an error");
   }
 
+  void test_release_uses_build_qualified_default_tag()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[build]\nnumber = 7\n"
+      << "\n[release]\nbuild_number_format = \"dotted\"\n";
+    recipe.close();
+    std::ofstream { directory.path() / "RELEASE_NOTES.md" }
+      << "# Release notes\n\n## 0.1.0.7\n\n- Dotted release.\n";
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+    forge::GitReleaseOptions options;
+    options.tag_format = "release-<version>";
+
+    const forge::ProcessRunner runner =
+      [&commands](const std::vector<std::string>& command,
+                  const std::filesystem::path&,
+                  std::ostream&)
+      {
+        commands.push_back(command);
+        return command_contains(command, "show-ref") ? 1 : 0;
+      };
+
+    expect(
+      forge::release_git(directory.path(), options, runner, output, error) == 0,
+      "Git release accepts a build-qualified default tag"
+    );
+    expect(
+      command_contains(commands[4], "release-0.1.0.7")
+      && command_contains(commands[5], "refs/tags/release-0.1.0.7"),
+      "default Git release tag uses the configured dotted version"
+    );
+    expect(error.str().empty(), "build-qualified default tag does not write an error");
+  }
+
   void test_release_tag_rejects_dirty_tree_before_build()
   {
     TemporaryDirectory directory;
@@ -529,6 +567,7 @@ int main()
   test_release_rejects_missing_version_notes();
   test_release_extracts_build_qualified_notes();
   test_release_creates_and_pushes_custom_tag();
+  test_release_uses_build_qualified_default_tag();
   test_release_tag_rejects_dirty_tree_before_build();
   test_release_tag_requires_declared_build_number();
   test_release_tag_explains_existing_release();

@@ -595,8 +595,9 @@ When selecting a box with build metadata, include it in the dependency version:
 answer = { github = "example/answer", version = "1.0.0+build.6" }
 ```
 
-The box filename includes `+build.6`, while the GitHub release tag remains
-`release-1.0.0`.
+The box filename includes `+build.6`. GitHub dependency updates first try the
+build-qualified dotted and SemVer release tags, then fall back to the legacy
+unqualified `release-1.0.0` tag.
 
 ### Common dependency workflows
 
@@ -847,7 +848,9 @@ The `dotted` format generates and extracts headings such as:
 
 Use `build_number_format = "semver"` for `## 1.4.0+build.7`. Without
 `release.build_number_format`, release-note headings remain `## <version>`.
-Setting a format requires `[build].number`.
+Setting a format requires `[build].number`. The configured format also applies
+to the default Git release tag, producing `release-1.4.0.7` or
+`release-1.4.0+build.7`.
 
 Prepare the next version and its release-notes section:
 
@@ -971,7 +974,8 @@ forge release-git --tag="<name>-<version>+build.<build-nr>"
 `forge release` remains a local-only build and packaging command.
 `forge release-git` does not build locally; it pushes a tag that causes GitHub
 Actions to prepare and publish the platform assets. Its default tag is
-`release-<version>`. Custom formats support `<name>`,
+`release-<version>`. When build-qualified releases are configured, `<version>`
+uses the configured dotted or SemVer form. Custom formats support `<name>`,
 `<version>`, `<build-nr>`, `<curr-date>`, `<target>`, and `<configuration>`.
 `<build-nr>` requires `[build].number`; `<curr-date>` uses the current UTC
 date; `<target>` is the current OS and architecture; and `<configuration>` is
@@ -1012,7 +1016,8 @@ Bare box filenames are resolved from `.forge/boxes/` and then `boxes/`;
 explicit paths continue to work.
 `forge box list` validates each box and shows its package, target, type, or
 selectable components. `forge box inspect` prints the same identity as a
-readable summary before the complete verified manifest.
+readable summary before the complete verified manifest. Header-only boxes
+display their target as `any`.
 
 Select a library from a multi-component box with `component`:
 

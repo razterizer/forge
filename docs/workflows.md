@@ -41,7 +41,8 @@ notes file without a matching version section causes release to fail.
 Set `[release].build_number_format = "dotted"` alongside `[build].number` to
 make `forge bump` generate and release commands extract headings such as
 `## 1.4.0.7`. Use `"semver"` for `## 1.4.0+build.7`. The default remains the
-version-only heading.
+version-only heading. The configured form also becomes the default Git release
+tag, such as `release-1.4.0.7`.
 
 `forge new` and `forge adopt` generate thin GitHub Actions adapters:
 
@@ -92,7 +93,8 @@ containing all named targets by default. Selecting a target prepares one
 component box or executable release explicitly.
 `forge release-git` does not build locally; it creates and pushes the tag
 that triggers the generated platform workflows. The default tag is
-`release-<version>`. Formats may use `<name>`, `<version>`, `<build-nr>`,
+`release-<version>`. Build-qualified releases expand `<version>` using their
+configured dotted or SemVer form. Formats may use `<name>`, `<version>`, `<build-nr>`,
 `<curr-date>`, `<target>`, and `<configuration>`. Forge validates the expanded
 tag and clean tracked Git state, then creates an annotated tag from the
 matching release notes and pushes it to `origin`. Custom formats must match

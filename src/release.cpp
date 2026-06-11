@@ -328,7 +328,7 @@ namespace forge
     {
       tag = format;
       replace_placeholder(tag, "<name>", recipe.name);
-      replace_placeholder(tag, "<version>", recipe.version);
+      replace_placeholder(tag, "<version>", release_notes_heading(recipe));
       replace_placeholder(tag, "<curr-date>", current_date());
       replace_placeholder(tag, "<target>", hosted_target());
       replace_placeholder(tag, "<configuration>", "release");

@@ -34,7 +34,8 @@ rules:
 - Build numbers must be non-negative.
 - `[release].build_number_format` may be `"dotted"` or `"semver"` to make
   release-note headings use `<version>.<number>` or
-  `<version>+build.<number>`. It requires `[build].number`.
+  `<version>+build.<number>`. It also qualifies default Git release tags and
+  requires `[build].number`.
 - Projects may declare local static-library, dynamic-library, imported-library,
   and header-only dependencies using name and either project-path or cbox-path
   inline tables.

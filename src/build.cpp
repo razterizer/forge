@@ -386,14 +386,6 @@ namespace forge
         return false;
       }
 
-      auto tag_version = dependency.version;
-      const auto build_metadata = tag_version.find("+build.");
-
-      if (build_metadata != std::string::npos)
-      {
-        tag_version.resize(build_metadata);
-      }
-
       const auto package = dependency.package.empty() ? dependency.name : dependency.package;
       const auto compiled_asset = package
         + "-" + dependency.version
@@ -401,8 +393,26 @@ namespace forge
         + "-" + target_arch()
         + ".cbox";
       const auto header_only_asset = package + "-" + dependency.version + "-ho.cbox";
-      const auto release_url =
-        "https://github.com/" + dependency.github + "/releases/download/release-" + tag_version + "/";
+      std::vector<std::string> tag_versions;
+      const auto build_metadata = dependency.version.find("+build.");
+
+      if (build_metadata != std::string::npos)
+      {
+        const auto version = dependency.version.substr(0, build_metadata);
+        const auto build = dependency.version.substr(
+          build_metadata + std::string { "+build." }.size()
+        );
+        tag_versions.push_back(version + "." + build);
+        tag_versions.push_back(dependency.version);
+        tag_versions.push_back(version);
+      }
+      else
+      {
+        tag_versions.push_back(dependency.version);
+      }
+
+      const auto release_base =
+        "https://github.com/" + dependency.github + "/releases/download/release-";
       const auto cache_directory =
         parent_directory / ".forge" / "cache" / "github"
           / std::filesystem::path { dependency.github }
@@ -431,38 +441,43 @@ namespace forge
 
       output << '\n' << std::flush;
 
-      for (const auto& asset : { compiled_asset, header_only_asset })
+      for (const auto& tag_version : tag_versions)
       {
-        const auto checksum_path = cache_directory / (asset + ".sha256");
-        std::ostringstream download_error;
+        const auto release_url = release_base + tag_version + "/";
 
-        if (!download_file(
-          parent_directory,
-          release_url + asset + ".sha256",
-          checksum_path,
-          true,
-          process_runner,
-          download_error
-        ))
+        for (const auto& asset : { compiled_asset, header_only_asset })
         {
-          continue;
+          const auto checksum_path = cache_directory / (asset + ".sha256");
+          std::ostringstream download_error;
+
+          if (!download_file(
+            parent_directory,
+            release_url + asset + ".sha256",
+            checksum_path,
+            true,
+            process_runner,
+            download_error
+          ))
+          {
+            continue;
+          }
+
+          std::ifstream checksum_file { checksum_path };
+          std::string checksum;
+          std::string filename;
+          checksum_file >> checksum >> filename;
+
+          if (!checksum_file || !is_sha256(checksum) || filename != asset)
+          {
+            error << "forge: dependency '" << dependency.name
+                  << "' has an invalid GitHub release checksum file\n";
+            return false;
+          }
+
+          dependency.url = release_url + asset;
+          dependency.sha256 = std::move(checksum);
+          return true;
         }
-
-        std::ifstream checksum_file { checksum_path };
-        std::string checksum;
-        std::string filename;
-        checksum_file >> checksum >> filename;
-
-        if (!checksum_file || !is_sha256(checksum) || filename != asset)
-        {
-          error << "forge: dependency '" << dependency.name
-                << "' has an invalid GitHub release checksum file\n";
-          return false;
-        }
-
-        dependency.url = release_url + asset;
-        dependency.sha256 = std::move(checksum);
-        return true;
       }
 
       error << "forge: could not download checksum for dependency '" << dependency.name << "'\n";

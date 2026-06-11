@@ -2129,7 +2129,11 @@ namespace forge
             output << "  " << box.string() << "  " << metadata.name
                    << ' ' << version(metadata);
 
-            if (!metadata.os.empty() && !metadata.arch.empty())
+            if (metadata.type == "header_only")
+            {
+              output << " [any]";
+            }
+            else if (!metadata.os.empty() && !metadata.arch.empty())
             {
               output << " [" << metadata.os << '-' << metadata.arch << ']';
             }
@@ -2229,7 +2233,11 @@ namespace forge
 
     output << '\n';
 
-    if (!manifest.os.empty() && !manifest.arch.empty())
+    if (manifest.type == "header_only")
+    {
+      output << "Target: any\n";
+    }
+    else if (!manifest.os.empty() && !manifest.arch.empty())
     {
       output << "Target: " << manifest.os << '-' << manifest.arch << '\n';
     }

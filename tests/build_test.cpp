@@ -924,7 +924,7 @@ namespace
 
     const auto asset = "answer-1.2.3+build.6-" + target + ".cbox";
     const std::string release_url =
-      "https://github.com/example/answer/releases/download/release-1.2.3/";
+      "https://github.com/example/answer/releases/download/release-1.2.3.6/";
     std::ofstream existing_lock { directory.path() / "forge.lock.toml" };
     existing_lock
       << "format = 1\n\n"

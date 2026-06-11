@@ -2,6 +2,10 @@
 
 ## 0.7.0
 
+- Made header-only boxes display their target as `any`.
+- Made default Git release tags follow configured dotted or SemVer
+  build-qualified release versions, with GitHub dependency resolution retaining
+  fallback support for older unqualified release tags.
 - Added portable end-to-end verification that publishes one aggregate format-3
   box and consumes its header-only, static-library, and dynamic-library
   components both locally and through a locked GitHub Release dependency.
