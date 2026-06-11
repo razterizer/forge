@@ -216,19 +216,27 @@ namespace forge::cli
       if (command == "workflow")
       {
         output
-          << "Run CI workflow steps locally or add Forge-managed workflow features.\n\n"
+          << "Run CI workflow steps locally and manage Forge-owned workflow features.\n\n"
           << "Usage:\n"
           << "  forge workflow prepare-release [target]\n"
-          << "  forge workflow add-feature release-boxes --file=<workflow> [--apply]\n\n"
+          << "  forge workflow list-features\n"
+          << "  forge workflow status --file=<workflow>\n"
+          << "  forge workflow add-feature release-boxes --file=<workflow> [--apply]\n"
+          << "  forge workflow update-feature release-boxes --file=<workflow> [--apply]\n"
+          << "  forge workflow remove-feature release-boxes --file=<workflow> [--apply]\n\n"
           << "Commands:\n"
           << "  prepare-release  Build hosted release assets locally\n"
-          << "  add-feature      Preview or inject a self-contained Forge-managed job\n\n"
+          << "  list-features    List available managed workflow features\n"
+          << "  status           Inspect managed feature state in one workflow\n"
+          << "  add-feature      Preview or inject a managed feature\n"
+          << "  update-feature   Preview or replace an outdated managed feature\n"
+          << "  remove-feature   Preview or remove a managed feature\n\n"
           << "prepare-release builds the hosted assets and focused release notes that\n"
           << "generated platform workflows upload. Run it locally only to inspect or\n"
           << "debug those assets before using 'forge release-git'.\n\n"
-          << "add-feature previews changes by default. Pass --apply to update the\n"
-          << "selected workflow. release-boxes injects the managed job\n"
-          << "'forge-release-boxes'.\n";
+          << "Feature changes preview by default. Pass --apply to write the selected\n"
+          << "workflow. Forge updates or removes only jobs carrying matching\n"
+          << "forge-managed metadata.\n";
         return true;
       }
 
@@ -635,7 +643,29 @@ namespace forge::cli
 
     if (arguments.front() == "workflow")
     {
-      if (arguments.size() >= 3 && arguments[1] == "add-feature")
+      if (arguments.size() == 2 && arguments[1] == "list-features")
+      {
+        return list_github_workflow_features(output);
+      }
+
+      const auto workflow_feature_operation =
+        arguments.size() >= 2 && arguments[1] == "add-feature"
+          ? std::optional { GithubWorkflowFeatureOperation::add }
+        : arguments.size() >= 2 && arguments[1] == "update-feature"
+          ? std::optional { GithubWorkflowFeatureOperation::update }
+        : arguments.size() >= 2 && arguments[1] == "remove-feature"
+          ? std::optional { GithubWorkflowFeatureOperation::remove }
+        : std::nullopt;
+
+      if (workflow_feature_operation && arguments.size() < 3)
+      {
+        error
+          << "forge: usage: forge workflow " << arguments[1] << " release-boxes "
+          << "--file=<workflow> [--apply]\n";
+        return 2;
+      }
+
+      if (workflow_feature_operation && arguments.size() >= 3)
       {
         const auto feature = arguments[2];
         std::optional<std::filesystem::path> workflow_file;
@@ -662,7 +692,7 @@ namespace forge::cli
           else
           {
             error
-              << "forge: usage: forge workflow add-feature release-boxes "
+              << "forge: usage: forge workflow " << arguments[1] << " release-boxes "
               << "--file=<workflow> [--apply]\n";
             return 2;
           }
@@ -671,16 +701,41 @@ namespace forge::cli
         if (!workflow_file)
         {
           error
-            << "forge: usage: forge workflow add-feature release-boxes "
+            << "forge: usage: forge workflow " << arguments[1] << " release-boxes "
             << "--file=<workflow> [--apply]\n";
           return 2;
         }
 
-        return add_github_workflow_feature(
+        return change_github_workflow_feature(
           working_directory,
+          *workflow_feature_operation,
           feature,
           *workflow_file,
           apply,
+          output,
+          error
+        );
+      }
+
+      if (arguments.size() >= 2 && arguments[1] == "status")
+      {
+        if (arguments.size() != 3 || !arguments[2].starts_with("--file="))
+        {
+          error << "forge: usage: forge workflow status --file=<workflow>\n";
+          return 2;
+        }
+
+        const auto value = arguments[2].substr(std::string_view { "--file=" }.size());
+
+        if (value.empty())
+        {
+          error << "forge: workflow file cannot be empty\n";
+          return 2;
+        }
+
+        return status_github_workflow_features(
+          working_directory,
+          std::filesystem::path { value },
           output,
           error
         );

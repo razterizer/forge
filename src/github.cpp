@@ -3,6 +3,7 @@
 #include <array>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -106,7 +107,7 @@ namespace forge
     {
       return
         "  forge-release-boxes:\n"
-        "    # forge-managed: release-boxes@1\n"
+        "    # forge-managed: release-boxes@2\n"
         "    name: Publish Forge cboxes\n"
         "    if: startsWith(github.ref, 'refs/tags/')\n"
         "    runs-on: ubuntu-latest\n"
@@ -115,10 +116,19 @@ namespace forge
         "    steps:\n"
         "      - name: Checkout repository\n"
         "        uses: actions/checkout@v4\n"
+        "      - name: Resolve latest Forge release\n"
+        "        id: forge-release\n"
+        "        uses: actions/github-script@v7\n"
+        "        with:\n"
+        "          result-encoding: string\n"
+        "          script: >-\n"
+        "            return (await github.rest.repos.getLatestRelease({\n"
+        "            owner: 'razterizer', repo: 'forge' })).data.tag_name\n"
         "      - name: Checkout Forge\n"
         "        uses: actions/checkout@v4\n"
         "        with:\n"
         "          repository: razterizer/forge\n"
+        "          ref: ${{ steps.forge-release.outputs.result }}\n"
         "          path: .forge-bootstrap\n"
         "      - name: Build Forge\n"
         "        run: >-\n"
@@ -135,6 +145,38 @@ namespace forge
           "          tag: ${{ github.ref_name }}\n";
     }
 
+    struct WorkflowFeature
+    {
+      std::string_view name;
+      std::string_view description;
+      std::string_view job_id;
+      std::string_view marker;
+      std::string (*job)();
+    };
+
+    const std::array workflow_features {
+      WorkflowFeature {
+        "release-boxes",
+        "Publish Forge cboxes and checksums from Git tag workflows",
+        "forge-release-boxes",
+        "# forge-managed: release-boxes@2",
+        release_boxes_job
+      }
+    };
+
+    const WorkflowFeature* find_workflow_feature(std::string_view name)
+    {
+      for (const auto& feature : workflow_features)
+      {
+        if (feature.name == name)
+        {
+          return &feature;
+        }
+      }
+
+      return nullptr;
+    }
+
     bool is_job_key(std::string_view line, std::string_view job_id)
     {
       if (!line.starts_with("  ") || line.starts_with("    "))
@@ -148,20 +190,46 @@ namespace forge
         || key == "\"" + std::string { job_id } + "\":";
     }
 
-    bool inject_job(std::string_view workflow,
-                    std::string_view job_id,
-                    std::string_view managed_marker,
-                    std::string_view job,
-                    std::string& updated,
-                    bool& already_present,
-                    std::ostream& error)
+    bool is_any_job_key(std::string_view line)
+    {
+      if (!line.starts_with("  ") || line.starts_with("    "))
+      {
+        return false;
+      }
+
+      const auto key = trim(line.substr(2));
+      return !key.empty() && !key.starts_with('#') && key.ends_with(':');
+    }
+
+    bool is_job_boundary_comment(std::string_view line)
+    {
+      return line.starts_with('#')
+        || (line.starts_with("  #") && !line.starts_with("    #"));
+    }
+
+    struct WorkflowInspection
     {
       std::size_t jobs_content = std::string_view::npos;
-      std::size_t insertion = workflow.size();
+      std::size_t insertion = 0;
+      std::size_t job_start = std::string_view::npos;
+      std::size_t job_end = std::string_view::npos;
+      bool managed = false;
+      bool current_marker = false;
+      bool current_contents = false;
+    };
+
+    bool inspect_workflow(std::string_view workflow,
+                          std::string_view job_id,
+                          std::string_view feature,
+                          std::string_view current_marker,
+                          std::string_view current_job,
+                          WorkflowInspection& inspection,
+                          std::ostream& error)
+    {
+      inspection.insertion = workflow.size();
       std::size_t offset = 0;
       bool found_jobs = false;
-      bool found_job = false;
-      bool found_marker = false;
+      bool inside_job = false;
 
       while (offset < workflow.size())
       {
@@ -183,27 +251,45 @@ namespace forge
           }
 
           found_jobs = true;
-          jobs_content = newline == std::string_view::npos ? workflow.size() : newline + 1;
+          inspection.jobs_content = newline == std::string_view::npos ? workflow.size() : newline + 1;
         }
         else if (found_jobs && top_level)
         {
-          insertion = offset;
+          inspection.insertion = offset;
+
+          if (inside_job)
+          {
+            inspection.job_end = offset;
+          }
+
           break;
         }
         else if (found_jobs && is_job_key(line, job_id))
         {
-          found_job = true;
+          if (inspection.job_start != std::string_view::npos)
+          {
+            error << "forge: workflow contains multiple jobs named '" << job_id << "'\n";
+            return false;
+          }
+
+          inspection.job_start = offset;
+          inside_job = true;
         }
-        else if (found_job
-                 && line.starts_with("  ")
-                 && !line.starts_with("    ")
-                 && content.ends_with(':'))
+        else if (inside_job && is_any_job_key(line))
         {
-          found_job = false;
+          inspection.job_end = offset;
+          inside_job = false;
         }
-        else if (found_job && content == managed_marker)
+        else if (inside_job && is_job_boundary_comment(line))
         {
-          found_marker = true;
+          inspection.job_end = offset;
+          inside_job = false;
+        }
+        else if (inside_job
+                 && content.starts_with("# forge-managed: " + std::string { feature } + "@"))
+        {
+          inspection.managed = true;
+          inspection.current_marker = content == current_marker;
         }
 
         if (newline == std::string_view::npos)
@@ -220,23 +306,100 @@ namespace forge
         return false;
       }
 
-      if (found_job)
+      if (inside_job)
       {
-        if (!found_marker)
-        {
-          error << "forge: workflow job '" << job_id << "' exists but is not Forge-managed\n";
-          return false;
-        }
-
-        already_present = true;
-        updated = std::string { workflow };
-        return true;
+        inspection.job_end = inspection.insertion;
       }
 
-      already_present = false;
-      updated = std::string { workflow.substr(0, insertion) };
+      if (inspection.job_start != std::string_view::npos)
+      {
+        auto existing = workflow.substr(
+          inspection.job_start,
+          inspection.job_end - inspection.job_start
+        );
 
-      if (updated.size() > jobs_content && !updated.ends_with("\n\n"))
+        while (existing.ends_with('\n'))
+        {
+          existing.remove_suffix(1);
+        }
+
+        auto expected = current_job;
+
+        while (expected.ends_with('\n'))
+        {
+          expected.remove_suffix(1);
+        }
+
+        inspection.current_contents = existing == expected;
+      }
+
+      return true;
+    }
+
+    bool validate_workflow_path(const std::filesystem::path& project_directory,
+                                const std::filesystem::path& workflow_file,
+                                std::filesystem::path& path,
+                                std::ostream& error)
+    {
+      if (!is_safe_project_path(workflow_file))
+      {
+        error << "forge: workflow file must stay inside the project\n";
+        return false;
+      }
+
+      path = project_directory / workflow_file;
+
+      if (!is_inside_project(project_directory, path))
+      {
+        error << "forge: workflow file must stay inside the project\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    std::optional<std::string> read_workflow(const std::filesystem::path& path,
+                                             const std::filesystem::path& workflow_file,
+                                             std::ostream& error)
+    {
+      std::ifstream input { path };
+
+      if (!input)
+      {
+        error << "forge: could not read workflow '" << workflow_file.string() << "'\n";
+        return std::nullopt;
+      }
+
+      return std::string {
+        std::istreambuf_iterator<char> { input },
+        std::istreambuf_iterator<char> {}
+      };
+    }
+
+    bool write_workflow(const std::filesystem::path& path,
+                        const std::filesystem::path& workflow_file,
+                        std::string_view workflow,
+                        std::ostream& error)
+    {
+      std::ofstream file { path };
+      file << workflow;
+
+      if (!file)
+      {
+        error << "forge: could not write workflow '" << workflow_file.string() << "'\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    std::string add_job(std::string_view workflow,
+                        const WorkflowInspection& inspection,
+                        std::string_view job)
+    {
+      std::string updated { workflow.substr(0, inspection.insertion) };
+
+      if (updated.size() > inspection.jobs_content && !updated.ends_with("\n\n"))
       {
         if (!updated.ends_with('\n'))
         {
@@ -248,13 +411,13 @@ namespace forge
 
       updated += job;
 
-      if (insertion < workflow.size())
+      if (inspection.insertion < workflow.size())
       {
         updated += '\n';
-        updated += workflow.substr(insertion);
+        updated += workflow.substr(inspection.insertion);
       }
 
-      return true;
+      return updated;
     }
 
     std::string release_workflow(std::string_view platform,
@@ -282,10 +445,20 @@ namespace forge
         "      - name: Checkout repository\n"
         "        uses: actions/checkout@v4\n"
         "\n"
+        "      - name: Resolve latest Forge release\n"
+        "        id: forge-release\n"
+        "        uses: actions/github-script@v7\n"
+        "        with:\n"
+        "          result-encoding: string\n"
+        "          script: >-\n"
+        "            return (await github.rest.repos.getLatestRelease({\n"
+        "            owner: 'razterizer', repo: 'forge' })).data.tag_name\n"
+        "\n"
         "      - name: Checkout Forge\n"
         "        uses: actions/checkout@v4\n"
         "        with:\n"
         "          repository: razterizer/forge\n"
+        "          ref: ${{ steps.forge-release.outputs.result }}\n"
         "          path: .forge-bootstrap\n"
         "\n";
 
@@ -348,10 +521,20 @@ namespace forge
         "      - name: Checkout repository\n"
         "        uses: actions/checkout@v4\n"
         "\n"
+        "      - name: Resolve latest Forge release\n"
+        "        id: forge-release\n"
+        "        uses: actions/github-script@v7\n"
+        "        with:\n"
+        "          result-encoding: string\n"
+        "          script: >-\n"
+        "            return (await github.rest.repos.getLatestRelease({\n"
+        "            owner: 'razterizer', repo: 'forge' })).data.tag_name\n"
+        "\n"
         "      - name: Checkout Forge\n"
         "        uses: actions/checkout@v4\n"
         "        with:\n"
         "          repository: razterizer/forge\n"
+        "          ref: ${{ steps.forge-release.outputs.result }}\n"
         "          path: .forge-bootstrap\n"
         "\n"
         "      - name: Build Forge\n"
@@ -431,87 +614,245 @@ namespace forge
 
   } // namespace
 
-  int add_github_workflow_feature(const std::filesystem::path& project_directory,
-                                  std::string_view feature,
-                                  const std::filesystem::path& workflow_file,
-                                  bool apply,
-                                  std::ostream& output,
-                                  std::ostream& error)
+  int list_github_workflow_features(std::ostream& output)
   {
-    if (feature != "release-boxes")
+    output << "Available workflow features:\n";
+
+    for (const auto& feature : workflow_features)
+    {
+      output << "  " << feature.name << "  " << feature.description << '\n';
+    }
+
+    return 0;
+  }
+
+  int status_github_workflow_features(const std::filesystem::path& project_directory,
+                                      const std::filesystem::path& workflow_file,
+                                      std::ostream& output,
+                                      std::ostream& error)
+  {
+    std::filesystem::path path;
+
+    if (!validate_workflow_path(project_directory, workflow_file, path, error))
+    {
+      return 2;
+    }
+
+    const auto workflow = read_workflow(path, workflow_file, error);
+
+    if (!workflow)
+    {
+      return 2;
+    }
+
+    output << "Workflow feature status for " << workflow_file.string() << ":\n";
+
+    for (const auto& feature : workflow_features)
+    {
+      WorkflowInspection inspection;
+
+      if (!inspect_workflow(
+        *workflow,
+        feature.job_id,
+        feature.name,
+        feature.marker,
+        feature.job(),
+        inspection,
+        error
+      ))
+      {
+        return 2;
+      }
+
+      output << "  " << feature.name << "  ";
+
+      if (inspection.job_start == std::string_view::npos)
+      {
+        output << "missing\n";
+      }
+      else if (!inspection.managed)
+      {
+        output << "unmanaged collision\n";
+      }
+      else if (inspection.current_marker && inspection.current_contents)
+      {
+        output << "current\n";
+      }
+      else
+      {
+        output << "outdated\n";
+      }
+    }
+
+    return 0;
+  }
+
+  int change_github_workflow_feature(const std::filesystem::path& project_directory,
+                                     GithubWorkflowFeatureOperation operation,
+                                     std::string_view feature,
+                                     const std::filesystem::path& workflow_file,
+                                     bool apply,
+                                     std::ostream& output,
+                                     std::ostream& error)
+  {
+    const auto definition = find_workflow_feature(feature);
+
+    if (!definition)
     {
       error << "forge: unknown workflow feature '" << feature << "'\n";
       return 2;
     }
 
-    if (!is_safe_project_path(workflow_file))
+    std::filesystem::path path;
+
+    if (!validate_workflow_path(project_directory, workflow_file, path, error))
     {
-      error << "forge: workflow file must stay inside the project\n";
       return 2;
     }
 
-    const auto path = project_directory / workflow_file;
+    const auto workflow = read_workflow(path, workflow_file, error);
 
-    if (!is_inside_project(project_directory, path))
+    if (!workflow)
     {
-      error << "forge: workflow file must stay inside the project\n";
       return 2;
     }
 
-    std::ifstream input { path };
+    const auto job = definition->job();
+    WorkflowInspection inspection;
 
-    if (!input)
-    {
-      error << "forge: could not read workflow '" << workflow_file.string() << "'\n";
-      return 2;
-    }
-
-    const std::string workflow {
-      std::istreambuf_iterator<char> { input },
-      std::istreambuf_iterator<char> {}
-    };
-    std::string updated;
-    bool already_present = false;
-
-    if (!inject_job(
-      workflow,
-      "forge-release-boxes",
-      "# forge-managed: release-boxes@1",
-      release_boxes_job(),
-      updated,
-      already_present,
+    if (!inspect_workflow(
+      *workflow,
+      definition->job_id,
+      definition->name,
+      definition->marker,
+      job,
+      inspection,
       error
     ))
     {
       return 2;
     }
 
-    if (already_present)
+    std::string updated;
+
+    if (operation == GithubWorkflowFeatureOperation::add)
     {
-      output << "Workflow feature release-boxes is already present in "
-             << workflow_file.string() << '\n';
-      return 0;
+      if (inspection.job_start != std::string_view::npos)
+      {
+        if (!inspection.managed)
+        {
+          error << "forge: workflow job '" << definition->job_id
+                << "' exists but is not Forge-managed\n";
+          return 2;
+        }
+
+        output << "Workflow feature " << feature << " is already present in "
+               << workflow_file.string();
+
+        if (!inspection.current_marker || !inspection.current_contents)
+        {
+          output << " but is outdated; use workflow update-feature " << feature;
+        }
+
+        output << '\n';
+        return 0;
+      }
+
+      updated = add_job(*workflow, inspection, job);
     }
+    else if (operation == GithubWorkflowFeatureOperation::update)
+    {
+      if (inspection.job_start == std::string_view::npos)
+      {
+        error << "forge: workflow feature " << feature
+              << " is not present; use workflow add-feature\n";
+        return 2;
+      }
+
+      if (!inspection.managed)
+      {
+        error << "forge: workflow job '" << definition->job_id
+              << "' exists but is not Forge-managed\n";
+        return 2;
+      }
+
+      if (inspection.current_marker && inspection.current_contents)
+      {
+        output << "Workflow feature " << feature << " is current in "
+               << workflow_file.string() << '\n';
+        return 0;
+      }
+
+      updated = std::string { workflow->substr(0, inspection.job_start) };
+      updated += job;
+
+      if (inspection.job_end < workflow->size())
+      {
+        updated += '\n';
+      }
+
+      updated += workflow->substr(inspection.job_end);
+    }
+    else
+    {
+      if (inspection.job_start == std::string_view::npos)
+      {
+        output << "Workflow feature " << feature << " is not present in "
+               << workflow_file.string() << '\n';
+        return 0;
+      }
+
+      if (!inspection.managed)
+      {
+        error << "forge: workflow job '" << definition->job_id
+              << "' exists but is not Forge-managed\n";
+        return 2;
+      }
+
+      updated = std::string { workflow->substr(0, inspection.job_start) };
+      updated += workflow->substr(inspection.job_end);
+    }
+
+    const auto operation_name =
+      operation == GithubWorkflowFeatureOperation::add ? "add"
+      : operation == GithubWorkflowFeatureOperation::update ? "update"
+      : "remove";
+    const auto completed_name =
+      operation == GithubWorkflowFeatureOperation::add ? "Added"
+      : operation == GithubWorkflowFeatureOperation::update ? "Updated"
+      : "Removed";
 
     if (!apply)
     {
-      output
-        << "Would add workflow feature release-boxes to " << workflow_file.string() << "\n\n"
-        << release_boxes_job()
-        << "\nRun again with --apply to update the workflow.\n";
+      const auto preposition =
+        operation == GithubWorkflowFeatureOperation::add ? "to "
+        : operation == GithubWorkflowFeatureOperation::remove ? "from "
+        : "in ";
+      output << "Would " << operation_name << " workflow feature " << feature << ' '
+             << preposition
+             << workflow_file.string() << '\n';
+
+      if (operation != GithubWorkflowFeatureOperation::remove)
+      {
+        output << '\n' << job;
+      }
+
+      output << "\nRun again with --apply to update the workflow.\n";
       return 0;
     }
 
-    std::ofstream file { path };
-    file << updated;
-
-    if (!file)
+    if (!write_workflow(path, workflow_file, updated, error))
     {
-      error << "forge: could not write workflow '" << workflow_file.string() << "'\n";
       return 2;
     }
 
-    output << "Added workflow feature release-boxes to " << workflow_file.string() << '\n';
+    const auto preposition =
+      operation == GithubWorkflowFeatureOperation::add ? "to "
+      : operation == GithubWorkflowFeatureOperation::remove ? "from "
+      : "in ";
+    output << completed_name << " workflow feature " << feature << ' '
+           << preposition
+           << workflow_file.string() << '\n';
     return 0;
   }
 

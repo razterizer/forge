@@ -1652,7 +1652,9 @@ namespace
     const auto updated = read_file(workflow);
     expect(
       contains(updated, "  forge-release-boxes:\n")
-      && contains(updated, "# forge-managed: release-boxes@1")
+      && contains(updated, "# forge-managed: release-boxes@2")
+      && contains(updated, "Resolve latest Forge release")
+      && contains(updated, "ref: ${{ steps.forge-release.outputs.result }}")
       && contains(updated, "if: startsWith(github.ref, 'refs/tags/')")
       && contains(updated, "forge workflow prepare-release")
       && contains(updated, "artifacts: boxes/*.cbox,boxes/*.sha256"),
@@ -1726,6 +1728,157 @@ namespace
       contains(unsafe_error.str(), "must stay inside the project"),
       "workflow feature explains an unsafe file path"
     );
+
+    constexpr std::array update_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "update-feature" },
+      std::string_view { "release-boxes" },
+      std::string_view { "--file=.github/workflows/custom-release.yml" },
+      std::string_view { "--apply" }
+    };
+    std::ostringstream update_output;
+    std::ostringstream update_error;
+    expect(
+      forge::cli::run(update_arguments, directory.path(), update_output, update_error) == 2,
+      "workflow feature update refuses a user-owned job collision"
+    );
+    expect(
+      contains(update_error.str(), "exists but is not Forge-managed"),
+      "workflow feature update explains a user-owned job collision"
+    );
+
+    constexpr std::array remove_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "remove-feature" },
+      std::string_view { "release-boxes" },
+      std::string_view { "--file=.github/workflows/custom-release.yml" },
+      std::string_view { "--apply" }
+    };
+    std::ostringstream remove_output;
+    std::ostringstream remove_error;
+    expect(
+      forge::cli::run(remove_arguments, directory.path(), remove_output, remove_error) == 2,
+      "workflow feature removal refuses a user-owned job collision"
+    );
+    expect(
+      contains(remove_error.str(), "exists but is not Forge-managed"),
+      "workflow feature removal explains a user-owned job collision"
+    );
+  }
+
+  void test_workflow_feature_lifecycle()
+  {
+    TemporaryDirectory directory;
+    const auto workflow = directory.path() / ".github/workflows/custom-release.yml";
+    write_file(
+      workflow,
+      "name: custom release\n"
+      "jobs:\n"
+      "  custom-release:\n"
+      "    runs-on: ubuntu-latest\n"
+    );
+    constexpr std::string_view file_argument = "--file=.github/workflows/custom-release.yml";
+    constexpr std::array list_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "list-features" }
+    };
+    constexpr std::array status_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "status" },
+      file_argument
+    };
+    constexpr std::array add_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "add-feature" },
+      std::string_view { "release-boxes" },
+      file_argument,
+      std::string_view { "--apply" }
+    };
+    constexpr std::array update_preview_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "update-feature" },
+      std::string_view { "release-boxes" },
+      file_argument
+    };
+    constexpr std::array update_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "update-feature" },
+      std::string_view { "release-boxes" },
+      file_argument,
+      std::string_view { "--apply" }
+    };
+    constexpr std::array remove_preview_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "remove-feature" },
+      std::string_view { "release-boxes" },
+      file_argument
+    };
+    constexpr std::array remove_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "remove-feature" },
+      std::string_view { "release-boxes" },
+      file_argument,
+      std::string_view { "--apply" }
+    };
+
+    std::ostringstream list_output;
+    std::ostringstream list_error;
+    expect(
+      forge::cli::run(list_arguments, directory.path(), list_output, list_error) == 0
+      && contains(list_output.str(), "release-boxes"),
+      "workflow feature listing describes release-boxes"
+    );
+
+    std::ostringstream missing_output;
+    std::ostringstream missing_error;
+    forge::cli::run(status_arguments, directory.path(), missing_output, missing_error);
+    expect(contains(missing_output.str(), "release-boxes  missing"), "workflow status reports missing feature");
+
+    std::ostringstream add_output;
+    std::ostringstream add_error;
+    forge::cli::run(add_arguments, directory.path(), add_output, add_error);
+    const auto current = read_file(workflow);
+    std::ostringstream current_output;
+    std::ostringstream current_error;
+    forge::cli::run(status_arguments, directory.path(), current_output, current_error);
+    expect(contains(current_output.str(), "release-boxes  current"), "workflow status reports current feature");
+
+    auto outdated = current;
+    const auto marker = outdated.find("# forge-managed: release-boxes@2");
+    outdated.replace(marker, std::string_view { "# forge-managed: release-boxes@2" }.size(),
+                     "# forge-managed: release-boxes@1");
+    write_file(workflow, outdated);
+    std::ostringstream outdated_output;
+    std::ostringstream outdated_error;
+    forge::cli::run(status_arguments, directory.path(), outdated_output, outdated_error);
+    expect(contains(outdated_output.str(), "release-boxes  outdated"), "workflow status reports outdated feature");
+
+    std::ostringstream update_preview_output;
+    std::ostringstream update_preview_error;
+    forge::cli::run(update_preview_arguments, directory.path(), update_preview_output, update_preview_error);
+    expect(read_file(workflow) == outdated, "workflow feature update preview does not modify the workflow");
+    expect(contains(update_preview_output.str(), "Would update workflow feature"), "workflow update preview explains change");
+
+    std::ostringstream update_output;
+    std::ostringstream update_error;
+    forge::cli::run(update_arguments, directory.path(), update_output, update_error);
+    expect(read_file(workflow) == current, "workflow feature update restores the current managed job");
+
+    std::ostringstream remove_preview_output;
+    std::ostringstream remove_preview_error;
+    forge::cli::run(remove_preview_arguments, directory.path(), remove_preview_output, remove_preview_error);
+    expect(read_file(workflow) == current, "workflow feature removal preview does not modify the workflow");
+    expect(contains(remove_preview_output.str(), "Would remove workflow feature"), "workflow removal preview explains change");
+
+    std::ostringstream remove_output;
+    std::ostringstream remove_error;
+    forge::cli::run(remove_arguments, directory.path(), remove_output, remove_error);
+    const auto removed = read_file(workflow);
+    expect(
+      !contains(removed, "forge-release-boxes")
+      && contains(removed, "custom-release:"),
+      "workflow feature removal removes only the managed job"
+    );
   }
 
   void test_new()
@@ -1765,6 +1918,13 @@ namespace
     expect(
       std::filesystem::exists(directory.path() / "hello/.github/workflows/release-macos.yml"),
       "new creates GitHub release workflows"
+    );
+    expect(
+      contains(
+        read_file(directory.path() / "hello/.github/workflows/release-macos.yml"),
+        "ref: ${{ steps.forge-release.outputs.result }}"
+      ),
+      "new workflows bootstrap the latest published Forge release"
     );
     expect(
       contains(
@@ -4226,6 +4386,7 @@ int main()
   test_init_preserves_existing_release_support();
   test_workflow_adds_release_boxes_feature();
   test_workflow_feature_refuses_unmanaged_collision();
+  test_workflow_feature_lifecycle();
   test_new();
   test_new_refuses_existing_path();
   test_new_requires_simple_name();

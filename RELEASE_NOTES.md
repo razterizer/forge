@@ -6,6 +6,10 @@
   `[release].build_number_format`.
 - Added safe preview and injection of a Forge-managed cbox publication job into
   existing GitHub workflows.
+- Added workflow feature listing, status inspection, safe managed-job updates,
+  and safe managed-job removal.
+- Made generated and managed release workflows bootstrap the latest published
+  Forge release instead of the repository default branch.
 
 ## 0.6.0
 

@@ -113,6 +113,9 @@ Add cbox publication to an existing custom workflow without replacing its
 user-owned jobs:
 
 ```sh
+forge workflow list-features
+forge workflow status --file=.github/workflows/release-linux.yml
+
 forge workflow add-feature release-boxes \
   --file=.github/workflows/release-linux.yml
 
@@ -122,10 +125,27 @@ forge workflow add-feature release-boxes \
 ```
 
 Preview is the default. Applying injects a self-contained
-`forge-release-boxes` job marked with `# forge-managed: release-boxes@1`.
+`forge-release-boxes` job marked with `# forge-managed: release-boxes@2`.
 The job runs only for Git tag refs, even if the containing workflow has broader
-triggers. Repeated application is safe. Forge refuses to overwrite an existing
+triggers. It resolves and checks out the latest published Forge release before
+preparing boxes. Repeated application is safe. Forge refuses to overwrite an existing
 `forge-release-boxes` job that lacks its managed metadata.
+
+Inspect and maintain an injected feature as Forge evolves:
+
+```sh
+forge workflow status --file=.github/workflows/release-linux.yml
+forge workflow update-feature release-boxes \
+  --file=.github/workflows/release-linux.yml \
+  --apply
+forge workflow remove-feature release-boxes \
+  --file=.github/workflows/release-linux.yml \
+  --apply
+```
+
+Status reports `missing`, `current`, `outdated`, or `unmanaged collision`.
+Update and remove also preview by default and touch only a job carrying the
+matching Forge-managed marker.
 
 `forge release-git --tag-force` deliberately replaces the existing local and
 remote release tag. Use it only when repairing a broken published release.

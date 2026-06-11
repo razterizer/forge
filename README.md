@@ -911,17 +911,31 @@ Existing custom GitHub workflows can receive a self-contained Forge-managed
 cbox publication job without being replaced:
 
 ```sh
+forge workflow list-features
+forge workflow status --file=.github/workflows/release-linux.yml
+
 forge workflow add-feature release-boxes \
   --file=.github/workflows/release-linux.yml
 
 forge workflow add-feature release-boxes \
   --file=.github/workflows/release-linux.yml \
   --apply
+
+forge workflow update-feature release-boxes \
+  --file=.github/workflows/release-linux.yml \
+  --apply
+
+forge workflow remove-feature release-boxes \
+  --file=.github/workflows/release-linux.yml \
+  --apply
 ```
 
-The first command previews the injected `forge-release-boxes` job. `--apply`
-writes it. Forge recognizes only jobs carrying its `forge-managed` metadata as
-managed and refuses to overwrite a user-owned job with the same ID.
+Feature changes preview unless `--apply` is given. Status reports each feature
+as `missing`, `current`, `outdated`, or an `unmanaged collision`. Forge
+recognizes only jobs carrying matching `forge-managed` metadata as managed and
+refuses to update or remove a user-owned job with the same ID. Managed release
+jobs resolve and check out the latest published Forge release before building
+their assets.
 
 Trigger the generated GitHub release workflows by creating and pushing an
 annotated Git release tag:
