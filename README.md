@@ -98,7 +98,14 @@ Run:
 
 ```sh
 ./build/dev/forge --help
+./build/dev/forge adopt --help
+./build/dev/forge box --help
+./build/dev/forge release-git --help
 ```
+
+Top-level help summarizes the command surface. `forge <command> --help`
+provides command-specific behavior, options, and examples without requiring a
+recipe or workspace in the current directory.
 
 Forge can also build and release itself using the root `forge.recipe.toml`:
 

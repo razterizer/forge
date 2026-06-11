@@ -44,36 +44,196 @@ namespace forge::cli
       output
         << "Forge - a project workflow system for C++\n\n"
         << "Usage:\n"
-        << "  forge <command>\n"
-        << "  forge adopt [--github] [--library-type=<type>]\n"
-        << "  forge new <name>\n"
-        << "  forge box list\n"
-        << "  forge box create [target]\n"
-        << "  forge box <inspect|verify|extract|publish> <path-or-filename>\n"
-        << "  forge update [dependency]\n"
-        << "  forge build [target] [--profile=<name>] [--define=<symbol> ...]\n"
-        << "  forge bump <major|minor|patch>\n"
-        << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n"
-        << "  forge release [target]\n"
-        << "  forge workflow prepare-release [target]\n"
-        << "  forge run [target|project[/target]] [--profile=<name>] [-- arguments...]\n"
-        << "  forge test [target|project[/target]] [--profile=<name>] [-- arguments...]\n"
+        << "  forge <command> [options]\n"
+        << "  forge <command> --help\n"
         << "  forge --help\n"
         << "  forge --version\n\n"
         << "Commands:\n"
-        << "  adopt           Adopt the current project\n"
-        << "  box             List, create, inspect, verify, publish locally, or extract boxes\n"
+        << "  adopt           Discover an existing project and create Forge metadata\n"
+        << "  box             Create, inspect, verify, publish, and extract cboxes\n"
         << "  init            Alias for adopt\n"
-        << "  new             Create a new project\n"
-        << "  build           Build the current project or workspace\n"
+        << "  new             Create a new Forge C++ project\n"
+        << "  build           Build a project, target, or workspace selection\n"
         << "  bump            Bump the project version and prepare release notes\n"
-        << "  clean           Remove generated project state\n"
-        << "  run             Run a project or workspace project\n"
-        << "  test            Build and run project or workspace tests\n"
-        << "  update          Refresh locked GitHub dependencies\n"
-        << "  release         Create a local release artifact\n"
-        << "  workflow        Run a CI workflow step locally\n"
-        << "  release-git     Create and push a release tag\n";
+        << "  clean           Remove all generated Forge state for a project\n"
+        << "  run             Build and run an executable project or target\n"
+        << "  test            Build and run marked test targets\n"
+        << "  update          Resolve and lock GitHub cbox dependencies\n"
+        << "  release         Build and package a local executable release\n"
+        << "  workflow        Run a hosted CI workflow step locally\n"
+        << "  release-git     Create and push a tag that triggers hosted releases\n\n"
+        << "Run 'forge <command> --help' for command-specific usage and examples.\n";
+    }
+
+    bool print_command_help(std::string_view command, std::ostream& output)
+    {
+      if (command == "adopt" || command == "init")
+      {
+        output
+          << "Discover an existing C++ project and create Forge metadata.\n\n"
+          << "Usage:\n"
+          << "  forge adopt [--github] [--library-type=<type>]\n\n"
+          << "Options:\n"
+          << "  --github               Verify inferred GitHub source dependencies\n"
+          << "  --library-type=<type>  Resolve an ambiguous library as header_only,\n"
+          << "                         static_library, or dynamic_library\n\n"
+          << "Adoption inspects existing sources, CMake, Visual Studio, and Xcode\n"
+          << "metadata, then creates Forge recipes, workspaces, and missing release\n"
+          << "support without overwriting existing Forge files. It does not rewrite\n"
+          << "or remove the project's existing build infrastructure.\n\n"
+          << "Examples:\n"
+          << "  forge adopt\n"
+          << "  forge adopt --library-type=static_library\n"
+          << "  forge adopt --github\n";
+        return true;
+      }
+
+      if (command == "box")
+      {
+        output
+          << "Create and operate on verified Forge cbox packages.\n\n"
+          << "Usage:\n"
+          << "  forge box list\n"
+          << "  forge box create [target]\n"
+          << "  forge box <inspect|verify|extract|publish> <path-or-filename>\n\n"
+          << "Commands:\n"
+          << "  list     List local and published boxes\n"
+          << "  create   Build and package the project or selected target\n"
+          << "  inspect  Print verified cbox metadata\n"
+          << "  verify   Validate a cbox without installing it\n"
+          << "  extract  Validate and extract a cbox\n"
+          << "  publish  Copy a verified cbox and checksum into boxes/\n\n"
+          << "Bare filenames are resolved from .forge/boxes/ and then boxes/.\n";
+        return true;
+      }
+
+      if (command == "new")
+      {
+        output
+          << "Create a new Forge C++ executable project.\n\n"
+          << "Usage:\n"
+          << "  forge new <name>\n\n"
+          << "Creates a new directory containing a starter source, recipe, release\n"
+          << "notes, GitHub release workflows, and generated-file ignore rules.\n";
+        return true;
+      }
+
+      if (command == "build")
+      {
+        output
+          << "Build the current project, selected target, or workspace selection.\n\n"
+          << "Usage:\n"
+          << "  forge build [target] [--profile=<name>] [--define=<symbol> ...]\n\n"
+          << "Options:\n"
+          << "  --profile=<name>   Select matching dependency and build profiles\n"
+          << "  --define=<symbol>  Add a temporary NAME or NAME=value definition\n";
+        return true;
+      }
+
+      if (command == "run")
+      {
+        output
+          << "Build and run an executable project or target.\n\n"
+          << "Usage:\n"
+          << "  forge run [target|project[/target]] [--profile=<name>] [-- arguments...]\n\n"
+          << "Arguments after '--' are forwarded to the executable. Workspace runs\n"
+          << "require a project or project/target selection.\n";
+        return true;
+      }
+
+      if (command == "test")
+      {
+        output
+          << "Build and run marked test targets.\n\n"
+          << "Usage:\n"
+          << "  forge test [target|project[/target]] [--profile=<name>] [-- arguments...]\n\n"
+          << "Without a selection, runs every executable target marked test = true.\n"
+          << "Arguments after '--' are forwarded to each selected test executable.\n";
+        return true;
+      }
+
+      if (command == "update")
+      {
+        output
+          << "Resolve and lock GitHub cbox dependencies for the current target.\n\n"
+          << "Usage:\n"
+          << "  forge update [dependency]\n\n"
+          << "Writes exact URLs, targets, and checksums to forge.lock.toml without\n"
+          << "building the current project. Existing entries for other targets are\n"
+          << "preserved.\n";
+        return true;
+      }
+
+      if (command == "bump")
+      {
+        output
+          << "Bump the semantic project version and prepare release notes.\n\n"
+          << "Usage:\n"
+          << "  forge bump <major|minor|patch>\n\n"
+          << "Updates forge.recipe.toml, increments the build number, and adds a new\n"
+          << "topmost section to RELEASE_NOTES.md.\n";
+        return true;
+      }
+
+      if (command == "clean")
+      {
+        output
+          << "Remove all generated Forge state for the current project.\n\n"
+          << "Usage:\n"
+          << "  forge clean\n\n"
+          << "Removes .forge/ build output, generated files, dependency installs,\n"
+          << "boxes, release artifacts, and caches. Source files are preserved.\n";
+        return true;
+      }
+
+      if (command == "release")
+      {
+        output
+          << "Build and package a local executable release.\n\n"
+          << "Usage:\n"
+          << "  forge release [target]\n\n"
+          << "Creates a local ZIP under .forge/release/. This command does not create\n"
+          << "a Git tag or publish a GitHub Release.\n";
+        return true;
+      }
+
+      if (command == "release-git" || command == "release-github")
+      {
+        output
+          << "Create and push a Git tag that triggers generated hosted workflows.\n\n"
+          << "Usage:\n"
+          << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n\n"
+          << "Options:\n"
+          << "  --tag=<format>        Use a custom release tag format\n"
+          << "  --tag-force[=<format>] Replace an existing local and remote tag\n\n"
+          << "The generated workflows run 'forge workflow prepare-release' on each\n"
+          << "platform and publish their assets. A normal hosted release requires\n"
+          << "only this command.\n";
+        return true;
+      }
+
+      if (command == "workflow")
+      {
+        output
+          << "Run a hosted CI workflow step locally.\n\n"
+          << "Usage:\n"
+          << "  forge workflow prepare-release [target]\n\n"
+          << "prepare-release builds the hosted assets and focused release notes that\n"
+          << "generated platform workflows upload. Run it locally only to inspect or\n"
+          << "debug those assets before using 'forge release-git'.\n";
+        return true;
+      }
+
+      if (command == "prepare-release")
+      {
+        output
+          << "'forge prepare-release' is a deprecated compatibility alias.\n\n"
+          << "Use:\n"
+          << "  forge workflow prepare-release [target]\n";
+        return true;
+      }
+
+      return false;
     }
 
     bool is_command(std::string_view candidate)
@@ -154,6 +314,16 @@ namespace forge::cli
     {
       error << "forge: unknown command '" << arguments.front() << "'\n";
       return 2;
+    }
+
+    if ((arguments.size() == 2
+         && (arguments[1] == "--help" || arguments[1] == "-h"))
+        || (arguments.size() == 3
+            && (arguments.front() == "box" || arguments.front() == "workflow")
+            && (arguments[2] == "--help" || arguments[2] == "-h")))
+    {
+      print_command_help(arguments.front(), output);
+      return 0;
     }
 
     if (arguments.front() == "new")

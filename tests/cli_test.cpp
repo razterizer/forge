@@ -105,17 +105,81 @@ namespace
 
     expect(forge::cli::run({}, output, error) == 0, "empty arguments show help");
     expect(contains(output.str(), "forge <command>"), "help includes usage");
-    expect(contains(output.str(), "forge adopt"), "help presents adopt as the primary command");
+    expect(
+      contains(output.str(), "adopt           Discover an existing project"),
+      "help presents adopt as the primary discovery command"
+    );
     expect(contains(output.str(), "init            Alias for adopt"), "help documents the init alias");
     expect(
-      contains(output.str(), "forge workflow prepare-release [target]"),
-      "help documents hosted release preparation as a workflow step"
+      contains(output.str(), "forge <command> --help"),
+      "help points to command-specific documentation"
     );
     expect(
       !contains(output.str(), "forge prepare-release [target]"),
       "help hides the deprecated prepare-release alias"
     );
     expect(error.str().empty(), "help does not write an error");
+  }
+
+  void test_command_help()
+  {
+    constexpr std::array commands {
+      std::string_view { "adopt" },
+      std::string_view { "box" },
+      std::string_view { "new" },
+      std::string_view { "build" },
+      std::string_view { "run" },
+      std::string_view { "test" },
+      std::string_view { "update" },
+      std::string_view { "bump" },
+      std::string_view { "clean" },
+      std::string_view { "release" },
+      std::string_view { "release-git" },
+      std::string_view { "workflow" },
+      std::string_view { "prepare-release" }
+    };
+
+    for (const auto command : commands)
+    {
+      const std::array arguments { command, std::string_view { "--help" } };
+      std::ostringstream output;
+      std::ostringstream error;
+
+      expect(forge::cli::run(arguments, output, error) == 0, "command help succeeds");
+      expect(contains(output.str(), "Usage:") || command == "prepare-release", "command help prints usage");
+      expect(error.str().empty(), "command help does not write an error");
+    }
+
+    constexpr std::array nested_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "prepare-release" },
+      std::string_view { "--help" }
+    };
+    std::ostringstream nested_output;
+    std::ostringstream nested_error;
+
+    expect(
+      forge::cli::run(nested_arguments, nested_output, nested_error) == 0,
+      "nested workflow help succeeds"
+    );
+    expect(
+      contains(nested_output.str(), "forge workflow prepare-release [target]"),
+      "nested workflow help documents its subcommand"
+    );
+    expect(nested_error.str().empty(), "nested workflow help does not write an error");
+
+    constexpr std::array adopt_arguments {
+      std::string_view { "adopt" },
+      std::string_view { "--help" }
+    };
+    std::ostringstream adopt_output;
+    std::ostringstream adopt_error;
+    forge::cli::run(adopt_arguments, adopt_output, adopt_error);
+    expect(
+      contains(adopt_output.str(), "does not rewrite")
+      && contains(adopt_output.str(), "existing build infrastructure"),
+      "adopt help explains its non-migration boundary"
+    );
   }
 
   void test_cli_builds_workspace()
@@ -3885,6 +3949,7 @@ namespace
 int main()
 {
   test_help();
+  test_command_help();
   test_cli_builds_workspace();
   test_cli_rejects_invalid_compile_definition();
   test_cli_runs_and_tests_workspace();
