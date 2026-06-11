@@ -804,9 +804,8 @@ The command also writes the focused release notes used by GitHub Actions to
 creation, verification, and local publication steps automatically. You do not
 need to run those commands individually before a release.
 
-Multi-target projects must select a target for local and hosted releases.
-Generated GitHub workflows should likewise call `forge prepare-release
-<target>` for the intended published target.
+Multi-target projects publish their complete format-3 project box by default.
+Select one target to publish only that component box or executable release.
 
 Trigger the generated GitHub release workflows by creating and pushing an
 annotated Git release tag:

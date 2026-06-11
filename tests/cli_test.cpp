@@ -1797,6 +1797,9 @@ namespace
       std::string_view { "prepare-release" },
       std::string_view { "math" }
     };
+    constexpr std::array prepare_aggregate_release_arguments {
+      std::string_view { "prepare-release" }
+    };
     std::ostringstream build_output;
     std::ostringstream build_error;
     std::ostringstream run_output;
@@ -1809,6 +1812,8 @@ namespace
     std::ostringstream release_error;
     std::ostringstream prepare_output;
     std::ostringstream prepare_error;
+    std::ostringstream prepare_aggregate_output;
+    std::ostringstream prepare_aggregate_error;
 
     expect(
       forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
@@ -1946,6 +1951,25 @@ namespace
       std::filesystem::exists(directory.path() / "boxes" / math_box.filename()),
       "named library hosted assets publish its box"
     );
+    expect(
+      forge::cli::run(
+        prepare_aggregate_release_arguments,
+        directory.path(),
+        prepare_aggregate_output,
+        prepare_aggregate_error
+      ) == 0,
+      "CLI prepares hosted assets for a multi-component platform box"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / "boxes" / container_box.filename()),
+      "multi-component hosted assets publish the aggregate box"
+    );
+    expect(
+      std::filesystem::exists(
+        directory.path() / "boxes" / (container_box.filename().string() + ".sha256")
+      ),
+      "multi-component hosted assets publish the aggregate checksum"
+    );
     expect(build_error.str().empty(), "named target CLI build does not write an error");
     expect(run_error.str().empty(), "named target CLI run does not write an error");
     expect(test_error.str().empty(), "successful CLI test does not write an error");
@@ -1953,6 +1977,10 @@ namespace
     expect(inspect_error.str().empty(), "successful named target box inspection does not write an error");
     expect(release_error.str().empty(), "successful named target release does not write an error");
     expect(prepare_error.str().empty(), "successful named target hosted assets do not write an error");
+    expect(
+      prepare_aggregate_error.str().empty(),
+      "successful multi-component hosted assets do not write an error"
+    );
   }
 
   void test_update_rejects_unknown_dependency()

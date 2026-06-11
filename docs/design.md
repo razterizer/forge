@@ -115,59 +115,85 @@ consume matching locked entries without re-resolving GitHub. `forge update`
 and `forge update <dependency>` deliberately refresh current-target entries
 without building the current project, while preserving other targets.
 
-## Initial roadmap
+## Remaining roadmap
 
-1. v0.1: `forge new`, `forge adopt`, `forge build`, `forge run`, and
-   `forge release`
-2. v0.2: local path dependencies
-3. v0.3: `.cbox` creation and consumption
-4. v0.4: dynamic-library projects and dynamically linked boxes on macOS,
-   Linux, and Windows
-5. v0.5: compatible local box caching
-6. v0.6: Git dependencies
-7. v0.7: lock file generation and reproducible resolution
-8. v0.8: imported vendor SDK and precompiled binary boxes
-9. v0.9: reproducible runtime assembly for executables and releases
-10. v0.10: declarative build, test, release, and publication workflows
+Forge has implemented the original local workflow, dependency, adoption,
+workspace, box, runtime-assembly, and hosted-release milestones. The remaining
+roadmap focuses on making those features compose cleanly and stabilizing them
+for 1.0.
 
-The dependency-management roadmap aims to replace scattered source
-submodules, copied libraries, implicit linker configuration, and manually
-maintained runtime directories with one declared dependency graph. Recipes
-will state whether dependencies link statically or dynamically, while lock
-files will record exact source revisions, box identities, and checksums.
+### v0.7: Complete multi-component package publication
 
-Imported binary recipes will describe vendor SDKs and other projects that
-cannot be built by Forge. These recipes will map headers, static libraries,
-dynamic libraries, import libraries, and runtime binaries into verified boxes.
-Forge will then assemble the required runtime libraries automatically when
-building, running, and releasing an executable.
+- Make GitHub dependencies select and lock a named component from a project
+  box.
+- Record package identity, component identity, target, URL, and checksum in
+  `forge.lock.toml`.
+- Improve `forge box list` and `forge box inspect` output for components.
+- Verify aggregate boxes and component consumption on Linux, macOS, and
+  Windows.
 
-The `imported_library` profile packages target-specific local headers and
-precompiled artifacts without invoking a compiler. Consumers link every
-contained static or import library and stage every dynamic-library runtime.
+Release criterion: Core and Termin8or can publish one box per platform, and a
+consumer can select their library components from local or GitHub-hosted boxes.
 
-Compiled boxes carry a strict toolchain identity: compiler identifier, exact
-compiler version, C++ standard, build configuration, and standard-library or
-runtime ABI. Builds reject compiled dependencies whose identity differs from
-the actual consuming CMake toolchain. Lockfiles continue to pin the complete
-box checksum, which transitively pins its embedded toolchain identity.
+### v0.8: Complete workspace and adoption lifecycle
 
-Workflow support will absorb repeated CI and release glue currently maintained
-by projects such as Termin8or. The intended surface includes build/test
-matrices, locked and development dependency modes, release asset selection,
-release-note extraction, version generation, checksums, tags, publication, and
-declarative runtime asset staging for build, run, boxes, and release.
-Actions that modify Git history or publish remotely must remain explicit and
-reviewable.
+- Add workspace-aware `forge clean`, release preparation, and publication.
+- Make repeated `forge adopt` runs preserve intentional recipe and workflow
+  edits while reporting newly discovered metadata.
+- Improve ambiguous source ownership and dependency resolution prompts.
+- Finish CMake, Visual Studio solution, and Xcode workspace interoperability
+  for mixed and mirrored project layouts.
+- Add concise progress and actionable summaries to long build, update, and
+  workspace operations.
 
-## Deferred decisions
+Release criterion: Core, Termin8or, and Asciiroid_Belt can be adopted, built,
+tested, run, cleaned, and prepared for release together without maintaining a
+parallel hand-written build graph.
 
-- Workspace-aware release and clean
-- Extended `.cbox` compatibility identity and deterministic archive rules
-- Extended binary compatibility identity beyond the initial strict toolchain
-  fields
-- Version constraint syntax
-- Registry protocol and shared binary cache behavior
-- Vendor SDK redistribution rules
-- Generic pre-build and post-build hooks, if declarative Forge features do not
-  cover the concrete use cases
+### v0.9: Complete reproducible dependency management
+
+- Support dependencies of `imported_library` packages.
+- Extend lockfiles to all remotely resolved artifacts and selected components.
+- Define version-constraint syntax and deterministic update behavior.
+- Make compiler and ABI compatibility policies explicit and configurable
+  without silently accepting unsafe combinations.
+- Improve dependency diagnostics for conflicts, unavailable components, and
+  incompatible boxes.
+
+Release criterion: a committed recipe and lockfile reproduce the same complete
+dependency graph and selected artifacts on every supported host.
+
+### v0.10: Complete declarative workflows
+
+- Add declarative release variants and platform-specific contents.
+- Generate release manifests containing artifacts, checksums, components,
+  dependencies, and toolchain identities.
+- Add dry-run support for release preparation, tagging, and publication.
+- Add generated version headers.
+- Make generated CI files thin, updateable adapters around locally runnable
+  Forge commands.
+
+Release criterion: projects no longer need custom build, test, packaging,
+tagging, or publication scripts for supported workflows.
+
+### v1.0: Stabilize and harden
+
+- Freeze and document the recipe, workspace, lockfile, and cbox compatibility
+  contracts, with explicit migration behavior.
+- Make box and release archives deterministic and add ZIP64 support.
+- Audit path handling, extraction, checksums, and remote-resolution security.
+- Establish supported compiler, runtime, OS, and architecture matrices.
+- Expand end-to-end tests and dogfood Forge releases using Forge itself.
+- Complete reference documentation and troubleshooting guidance.
+
+Release criterion: Forge can serve as the primary cross-platform workflow and
+dependency system for its own repository and the Core, Termin8or, and
+Asciiroid_Belt project family.
+
+## Post-1.0 directions
+
+- Registry protocol and shared binary caches.
+- Package signing and provenance.
+- Vendor SDK redistribution-policy metadata.
+- Generic pre-build and post-build hooks only where declarative Forge features
+  cannot represent the use case safely.

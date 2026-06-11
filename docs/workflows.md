@@ -81,8 +81,9 @@ forge release-git --tag="release-<version>-<curr-date>"
 `forge prepare-release` prepares the type-appropriate artifacts and focused
 release notes expected by hosted release workflows. It performs the necessary
 build, box creation, verification, and local publication steps automatically.
-Multi-target projects must select a target, and their generated workflows
-should call `forge prepare-release <target>` for the intended published target.
+Multi-target projects prepare and publish a complete format-3 platform box
+containing all named targets by default. Selecting a target prepares one
+component box or executable release explicitly.
 `forge release-git` does not build locally; it creates and pushes the tag
 that triggers the generated platform workflows. The default tag is
 `release-<version>`. Formats may use `<name>`, `<version>`, `<build-nr>`,
@@ -101,10 +102,12 @@ manual local publication.
 `forge release-git --tag-force` deliberately replaces the existing local and
 remote release tag. Use it only when repairing a broken published release.
 
-2. Release variants and platform-specific release contents.
-3. Generated release manifests.
-4. Dry-run support for Git tagging.
-5. Generated version headers.
+## Remaining workflow roadmap
+
+1. Release variants and platform-specific release contents.
+2. Generated release manifests.
+3. Dry-run support for release preparation, tagging, and publication.
+4. Generated version headers.
 
 Local commands and CI should execute the same Forge-defined workflow. CI files
 should become thin adapters that install Forge and invoke the appropriate

@@ -706,7 +706,9 @@ namespace forge
       return 2;
     }
 
-    if (!select_recipe_target(recipe, target, error))
+    const auto aggregate_box = !target && recipe.targets.size() > 1;
+
+    if (!aggregate_box && !select_recipe_target(recipe, target, error))
     {
       return 2;
     }
@@ -721,7 +723,48 @@ namespace forge
       return 2;
     }
 
-    if (recipe.type == "executable")
+    if (aggregate_box)
+    {
+      if (create_box(project_directory, target, process_runner, output, error) != 0)
+      {
+        return 2;
+      }
+
+      const auto boxes_directory = project_directory / ".forge" / "boxes";
+      auto package_version = recipe.version;
+
+      if (recipe.build_number)
+      {
+        package_version += "+build." + std::to_string(*recipe.build_number);
+      }
+
+      auto header_only = true;
+
+      for (const auto& component : recipe.targets)
+      {
+        if (component.type != "header_only")
+        {
+          header_only = false;
+          break;
+        }
+      }
+
+      const auto box = boxes_directory
+        / (recipe.name + "-" + package_version
+           + (header_only ? "-ho" : "-" + hosted_target()) + ".cbox");
+
+      if (!std::filesystem::is_regular_file(box))
+      {
+        error << "forge: could not locate the created aggregate box\n";
+        return 2;
+      }
+
+      if (publish_box(box, project_directory, process_runner, output, error) != 0)
+      {
+        return 2;
+      }
+    }
+    else if (recipe.type == "executable")
     {
       if (release_project(project_directory, target, process_runner, output, error) != 0)
       {
