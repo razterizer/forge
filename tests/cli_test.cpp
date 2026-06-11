@@ -168,6 +168,24 @@ namespace
     );
     expect(nested_error.str().empty(), "nested workflow help does not write an error");
 
+    constexpr std::array feature_help_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "add-feature" },
+      std::string_view { "release-boxes" },
+      std::string_view { "--help" }
+    };
+    std::ostringstream feature_help_output;
+    std::ostringstream feature_help_error;
+    expect(
+      forge::cli::run(feature_help_arguments, feature_help_output, feature_help_error) == 0,
+      "workflow feature help succeeds"
+    );
+    expect(
+      contains(feature_help_output.str(), "workflow add-feature release-boxes"),
+      "workflow feature help documents release-boxes injection"
+    );
+    expect(feature_help_error.str().empty(), "workflow feature help does not write an error");
+
     constexpr std::array adopt_arguments {
       std::string_view { "adopt" },
       std::string_view { "--help" }
@@ -1575,6 +1593,138 @@ namespace
     expect(
       std::filesystem::exists(directory.path() / ".github/workflows/release-windows.yml"),
       "adopt creates missing GitHub workflows"
+    );
+  }
+
+  void test_workflow_adds_release_boxes_feature()
+  {
+    TemporaryDirectory directory;
+    const auto workflow = directory.path() / ".github/workflows/custom-release.yml";
+    write_file(
+      workflow,
+      "name: custom release\n"
+      "on: push\n"
+      "jobs:\n"
+      "  custom-release:\n"
+      "    runs-on: ubuntu-latest\n"
+      "    steps:\n"
+      "      - run: echo custom\n"
+      "concurrency: custom-release\n"
+      "env:\n"
+      "  CUSTOM: true\n"
+    );
+    constexpr std::array preview_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "add-feature" },
+      std::string_view { "release-boxes" },
+      std::string_view { "--file=.github/workflows/custom-release.yml" }
+    };
+    constexpr std::array apply_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "add-feature" },
+      std::string_view { "release-boxes" },
+      std::string_view { "--file=.github/workflows/custom-release.yml" },
+      std::string_view { "--apply" }
+    };
+    const auto original = read_file(workflow);
+    std::ostringstream preview_output;
+    std::ostringstream preview_error;
+
+    expect(
+      forge::cli::run(preview_arguments, directory.path(), preview_output, preview_error) == 0,
+      "workflow feature preview succeeds"
+    );
+    expect(read_file(workflow) == original, "workflow feature preview does not modify the workflow");
+    expect(
+      contains(preview_output.str(), "Would add workflow feature release-boxes")
+      && contains(preview_output.str(), "forge-release-boxes:")
+      && contains(preview_output.str(), "Run again with --apply"),
+      "workflow feature preview shows the managed job and apply command"
+    );
+    expect(preview_error.str().empty(), "workflow feature preview does not write an error");
+
+    std::ostringstream apply_output;
+    std::ostringstream apply_error;
+    expect(
+      forge::cli::run(apply_arguments, directory.path(), apply_output, apply_error) == 0,
+      "workflow feature application succeeds"
+    );
+    const auto updated = read_file(workflow);
+    expect(
+      contains(updated, "  forge-release-boxes:\n")
+      && contains(updated, "# forge-managed: release-boxes@1")
+      && contains(updated, "if: startsWith(github.ref, 'refs/tags/')")
+      && contains(updated, "forge workflow prepare-release")
+      && contains(updated, "artifacts: boxes/*.cbox,boxes/*.sha256"),
+      "workflow feature application injects the managed release-boxes job"
+    );
+    expect(
+      contains(updated, "      - run: echo custom\n")
+      && contains(updated, "env:\n  CUSTOM: true\n")
+      && contains(updated, "concurrency: custom-release\n")
+      && updated.find("forge-release-boxes:") < updated.find("concurrency:"),
+      "workflow feature application preserves user content and top-level sections"
+    );
+    expect(apply_error.str().empty(), "workflow feature application does not write an error");
+
+    std::ostringstream repeat_output;
+    std::ostringstream repeat_error;
+    expect(
+      forge::cli::run(apply_arguments, directory.path(), repeat_output, repeat_error) == 0,
+      "repeated workflow feature application succeeds"
+    );
+    expect(read_file(workflow) == updated, "repeated workflow feature application is idempotent");
+    expect(
+      contains(repeat_output.str(), "already present"),
+      "repeated workflow feature application reports existing managed job"
+    );
+    expect(repeat_error.str().empty(), "repeated workflow feature application writes no error");
+  }
+
+  void test_workflow_feature_refuses_unmanaged_collision()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / ".github/workflows/custom-release.yml",
+      "jobs:\n"
+      "  'forge-release-boxes':\n"
+      "    runs-on: ubuntu-latest\n"
+    );
+    constexpr std::array arguments {
+      std::string_view { "workflow" },
+      std::string_view { "add-feature" },
+      std::string_view { "release-boxes" },
+      std::string_view { "--file=.github/workflows/custom-release.yml" },
+      std::string_view { "--apply" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "workflow feature refuses a user-owned job collision"
+    );
+    expect(
+      contains(error.str(), "exists but is not Forge-managed"),
+      "workflow feature explains a user-owned job collision"
+    );
+
+    constexpr std::array unsafe_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "add-feature" },
+      std::string_view { "release-boxes" },
+      std::string_view { "--file=../outside.yml" },
+      std::string_view { "--apply" }
+    };
+    std::ostringstream unsafe_output;
+    std::ostringstream unsafe_error;
+    expect(
+      forge::cli::run(unsafe_arguments, directory.path(), unsafe_output, unsafe_error) == 2,
+      "workflow feature rejects a file outside the project"
+    );
+    expect(
+      contains(unsafe_error.str(), "must stay inside the project"),
+      "workflow feature explains an unsafe file path"
     );
   }
 
@@ -4074,6 +4224,8 @@ int main()
   test_init_groups_sources_by_local_include_graph();
   test_init_refuses_to_overwrite();
   test_init_preserves_existing_release_support();
+  test_workflow_adds_release_boxes_feature();
+  test_workflow_feature_refuses_unmanaged_collision();
   test_new();
   test_new_refuses_existing_path();
   test_new_requires_simple_name();

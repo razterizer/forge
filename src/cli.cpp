@@ -3,6 +3,7 @@
 #include "bump.h"
 #include "build.h"
 #include "clean.h"
+#include "github.h"
 #include "init.h"
 #include "new.h"
 #include "recipe.h"
@@ -60,7 +61,7 @@ namespace forge::cli
         << "  test            Build and run marked test targets\n"
         << "  update          Resolve and lock GitHub cbox dependencies\n"
         << "  release         Build and package a local executable release\n"
-        << "  workflow        Run a hosted CI workflow step locally\n"
+        << "  workflow        Run or extend hosted CI workflows\n"
         << "  release-git     Create and push a tag that triggers hosted releases\n\n"
         << "Run 'forge <command> --help' for command-specific usage and examples.\n";
     }
@@ -215,12 +216,19 @@ namespace forge::cli
       if (command == "workflow")
       {
         output
-          << "Run a hosted CI workflow step locally.\n\n"
+          << "Run CI workflow steps locally or add Forge-managed workflow features.\n\n"
           << "Usage:\n"
-          << "  forge workflow prepare-release [target]\n\n"
+          << "  forge workflow prepare-release [target]\n"
+          << "  forge workflow add-feature release-boxes --file=<workflow> [--apply]\n\n"
+          << "Commands:\n"
+          << "  prepare-release  Build hosted release assets locally\n"
+          << "  add-feature      Preview or inject a self-contained Forge-managed job\n\n"
           << "prepare-release builds the hosted assets and focused release notes that\n"
           << "generated platform workflows upload. Run it locally only to inspect or\n"
-          << "debug those assets before using 'forge release-git'.\n";
+          << "debug those assets before using 'forge release-git'.\n\n"
+          << "add-feature previews changes by default. Pass --apply to update the\n"
+          << "selected workflow. release-boxes injects the managed job\n"
+          << "'forge-release-boxes'.\n";
         return true;
       }
 
@@ -318,9 +326,8 @@ namespace forge::cli
 
     if ((arguments.size() == 2
          && (arguments[1] == "--help" || arguments[1] == "-h"))
-        || (arguments.size() == 3
-            && (arguments.front() == "box" || arguments.front() == "workflow")
-            && (arguments[2] == "--help" || arguments[2] == "-h")))
+        || ((arguments.front() == "box" || arguments.front() == "workflow")
+            && (arguments.back() == "--help" || arguments.back() == "-h")))
     {
       print_command_help(arguments.front(), output);
       return 0;
@@ -628,6 +635,57 @@ namespace forge::cli
 
     if (arguments.front() == "workflow")
     {
+      if (arguments.size() >= 3 && arguments[1] == "add-feature")
+      {
+        const auto feature = arguments[2];
+        std::optional<std::filesystem::path> workflow_file;
+        bool apply = false;
+
+        for (const auto argument : arguments.subspan(3))
+        {
+          if (argument == "--apply" && !apply)
+          {
+            apply = true;
+          }
+          else if (argument.starts_with("--file=") && !workflow_file)
+          {
+            const auto value = argument.substr(std::string_view { "--file=" }.size());
+
+            if (value.empty())
+            {
+              error << "forge: workflow file cannot be empty\n";
+              return 2;
+            }
+
+            workflow_file = std::filesystem::path { value };
+          }
+          else
+          {
+            error
+              << "forge: usage: forge workflow add-feature release-boxes "
+              << "--file=<workflow> [--apply]\n";
+            return 2;
+          }
+        }
+
+        if (!workflow_file)
+        {
+          error
+            << "forge: usage: forge workflow add-feature release-boxes "
+            << "--file=<workflow> [--apply]\n";
+          return 2;
+        }
+
+        return add_github_workflow_feature(
+          working_directory,
+          feature,
+          *workflow_file,
+          apply,
+          output,
+          error
+        );
+      }
+
       if (arguments.size() < 2
           || arguments[1] != "prepare-release"
           || arguments.size() > 3

@@ -107,6 +107,26 @@ diagnostics and manual local publication.
 
 `forge prepare-release` remains available as a deprecated compatibility alias.
 
+## Existing workflows
+
+Add cbox publication to an existing custom workflow without replacing its
+user-owned jobs:
+
+```sh
+forge workflow add-feature release-boxes \
+  --file=.github/workflows/release-linux.yml
+
+forge workflow add-feature release-boxes \
+  --file=.github/workflows/release-linux.yml \
+  --apply
+```
+
+Preview is the default. Applying injects a self-contained
+`forge-release-boxes` job marked with `# forge-managed: release-boxes@1`.
+The job runs only for Git tag refs, even if the containing workflow has broader
+triggers. Repeated application is safe. Forge refuses to overwrite an existing
+`forge-release-boxes` job that lacks its managed metadata.
+
 `forge release-git --tag-force` deliberately replaces the existing local and
 remote release tag. Use it only when repairing a broken published release.
 

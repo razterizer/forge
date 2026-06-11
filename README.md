@@ -907,6 +907,22 @@ need to run those commands individually before a release.
 Multi-target projects publish their complete format-3 project box by default.
 Select one target to publish only that component box or executable release.
 
+Existing custom GitHub workflows can receive a self-contained Forge-managed
+cbox publication job without being replaced:
+
+```sh
+forge workflow add-feature release-boxes \
+  --file=.github/workflows/release-linux.yml
+
+forge workflow add-feature release-boxes \
+  --file=.github/workflows/release-linux.yml \
+  --apply
+```
+
+The first command previews the injected `forge-release-boxes` job. `--apply`
+writes it. Forge recognizes only jobs carrying its `forge-managed` metadata as
+managed and refuses to overwrite a user-owned job with the same ID.
+
 Trigger the generated GitHub release workflows by creating and pushing an
 annotated Git release tag:
 

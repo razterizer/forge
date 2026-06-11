@@ -4,6 +4,8 @@
 
 - Added optional dotted or SemVer build-qualified release-note headings through
   `[release].build_number_format`.
+- Added safe preview and injection of a Forge-managed cbox publication job into
+  existing GitHub workflows.
 
 ## 0.6.0
 
