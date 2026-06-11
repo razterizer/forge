@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.7.0
+
+- Describe changes.
+
 ## 0.6.0
 
 - Made adoption preserve library targets alongside inferred examples and tests,

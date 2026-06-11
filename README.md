@@ -568,6 +568,76 @@ answer = { github = "example/answer", version = "1.0.0+build.6" }
 The box filename includes `+build.6`, while the GitHub release tag remains
 `release-1.0.0`.
 
+### Common dependency workflows
+
+Use a sibling source checkout while actively developing both projects:
+
+```text
+checkout/
+├── Core/
+│   └── forge.recipe.toml
+└── App/
+    └── forge.recipe.toml
+```
+
+```toml
+# App/forge.recipe.toml
+[dependencies]
+Core = { path = "../Core" }
+```
+
+Forge builds the sibling project when needed, then links its selected library
+target. The runnable [`examples/workspace/`](examples/workspace/) example uses
+this workflow.
+
+Use a sibling cbox when the consumer should use a built package without
+building or observing the sibling sources:
+
+```toml
+# App/forge.recipe.toml
+[dependencies]
+answer = { box = "../packages/answer.cbox" }
+```
+
+Build the producer's box, copy or publish it to the declared path, then build
+the consumer. See [`examples/sibling-cbox/`](examples/sibling-cbox/) for a
+complete runnable example. A cbox dependency is useful for testing exactly what
+will be distributed and for keeping consumer builds isolated from producer
+source changes.
+
+After Core has a Forge-generated GitHub Release containing cboxes, a consumer
+can use the published package instead of requiring a sibling checkout:
+
+```toml
+[dependencies]
+Core = { github = "razterizer/Core", version = "<published-version>" }
+```
+
+If Core publishes a multi-component project box, select the library component:
+
+```toml
+[dependencies]
+Core = {
+  github = "razterizer/Core",
+  version = "<published-version>",
+  component = "<library-target>"
+}
+```
+
+Then resolve and commit the exact platform asset:
+
+```sh
+forge update Core
+forge build
+git add forge.lock.toml
+```
+
+This published-package example becomes runnable after Core creates its first
+Forge-generated GitHub Release. Dependency keys and `component` values must
+match the names declared by Core's Forge recipe. See
+[`examples/published-core-cbox/`](examples/published-core-cbox/) for the focused
+setup checklist.
+
 ### Local dependency example
 
 A workspace may contain a static library, a header-only library, and an
