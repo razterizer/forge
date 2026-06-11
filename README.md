@@ -12,6 +12,7 @@
 ![Commit Activity](https://img.shields.io/github/commit-activity/t/razterizer/forge)
 ![Last Commit](https://img.shields.io/github/last-commit/razterizer/forge?color=blue)
 ![Contributors](https://img.shields.io/github/contributors/razterizer/forge?color=blue)
+![Static Badge](https://img.shields.io/badge/ai_usage-heavy_(vibe_coding)-lightblue)
 
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/razterizer/forge/total)
 
