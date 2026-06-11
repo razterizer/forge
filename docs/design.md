@@ -138,6 +138,8 @@ consumer can select their library components from local or GitHub-hosted boxes.
 - Add workspace-aware `forge clean`, release preparation, and publication.
 - Make repeated `forge adopt` runs preserve intentional recipe and workflow
   edits while reporting newly discovered metadata.
+- Infer the project version from the latest valid `RELEASE_NOTES.md` heading
+  when stronger project metadata does not declare one.
 - Improve ambiguous source ownership and dependency resolution prompts.
 - Finish CMake, Visual Studio solution, and Xcode workspace interoperability
   for mixed and mirrored project layouts.

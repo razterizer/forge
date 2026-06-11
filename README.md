@@ -141,6 +141,10 @@ cd path/to/project
 modifying project sources. It inspects source files for `main()` entry points
 and reports stable line-based progress suitable for terminals and CI logs:
 
+The remaining adoption roadmap includes using the latest valid
+`RELEASE_NOTES.md` heading as a fallback project version. Versions declared by
+existing Forge or native project metadata take precedence.
+
 ```text
 [1/6] Inspecting project
 [2/6] Scanning sources and headers
