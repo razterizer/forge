@@ -837,9 +837,15 @@ namespace forge
       {
         valid = parse_sources(value, recipe.release_files);
       }
-      else if (section == "release" && key == "include_build_number")
+      else if (section == "release" && key == "build_number_format")
       {
-        valid = parse_boolean(value, recipe.release_notes_include_build_number);
+        std::string format;
+        valid = parse_string(value, format) && (format == "semver" || format == "dotted");
+
+        if (valid)
+        {
+          recipe.release_notes_build_number_format = std::move(format);
+        }
       }
 
       if (!valid)
@@ -855,9 +861,9 @@ namespace forge
       return false;
     }
 
-    if (recipe.release_notes_include_build_number && !recipe.build_number)
+    if (recipe.release_notes_build_number_format && !recipe.build_number)
     {
-      error << "forge: release.include_build_number requires build.number\n";
+      error << "forge: release.build_number_format requires build.number\n";
       return false;
     }
 

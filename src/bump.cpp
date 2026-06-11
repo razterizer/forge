@@ -413,9 +413,11 @@ namespace forge
     std::string updated_notes;
     auto release_heading = version;
 
-    if (recipe.release_notes_include_build_number && build_number)
+    if (recipe.release_notes_build_number_format && build_number)
     {
-      release_heading += "+build." + std::to_string(*build_number);
+      release_heading += *recipe.release_notes_build_number_format == "dotted"
+        ? "." + std::to_string(*build_number)
+        : "+build." + std::to_string(*build_number);
     }
 
     if (!prepare_release_notes(notes_content, release_heading, updated_notes, error)

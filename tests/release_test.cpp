@@ -308,11 +308,11 @@ namespace
     std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
     recipe
       << "\n[build]\nnumber = 7\n"
-      << "\n[release]\ninclude_build_number = true\n";
+      << "\n[release]\nbuild_number_format = \"dotted\"\n";
     recipe.close();
     std::ofstream { directory.path() / "RELEASE_NOTES.md" }
       << "# Release notes\n\n"
-      << "## 0.1.0+build.7\n\n"
+      << "## 0.1.0.7\n\n"
       << "- Build-qualified release.\n\n"
       << "## 0.1.0\n\n"
       << "- Unqualified release.\n";

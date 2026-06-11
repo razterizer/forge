@@ -181,9 +181,11 @@ namespace forge
     {
       auto heading = recipe.version;
 
-      if (recipe.release_notes_include_build_number && recipe.build_number)
+      if (recipe.release_notes_build_number_format && recipe.build_number)
       {
-        heading += "+build." + std::to_string(*recipe.build_number);
+        heading += *recipe.release_notes_build_number_format == "dotted"
+          ? "." + std::to_string(*recipe.build_number)
+          : "+build." + std::to_string(*recipe.build_number);
       }
 
       return heading;

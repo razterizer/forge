@@ -813,17 +813,18 @@ build-qualified release-note headings:
 number = 7
 
 [release]
-include_build_number = true
+build_number_format = "dotted"
 ```
 
-Forge then generates and extracts headings such as:
+The `dotted` format generates and extracts headings such as:
 
 ```markdown
-## 1.4.0+build.7
+## 1.4.0.7
 ```
 
-Without `release.include_build_number`, release-note headings remain
-`## <version>`. Enabling it requires `[build].number`.
+Use `build_number_format = "semver"` for `## 1.4.0+build.7`. Without
+`release.build_number_format`, release-note headings remain `## <version>`.
+Setting a format requires `[build].number`.
 
 Prepare the next version and its release-notes section:
 

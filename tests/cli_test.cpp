@@ -3884,7 +3884,7 @@ namespace
       "[sources]\n"
       "paths = [\"main.cpp\"]\n\n"
       "[release]\n"
-      "include_build_number = true\n"
+      "build_number_format = \"dotted\"\n"
     );
     constexpr std::array arguments {
       std::string_view { "bump" },
@@ -3898,14 +3898,70 @@ namespace
       "bump creates build-qualified release notes when requested"
     );
     expect(
-      contains(read_file(directory.path() / "RELEASE_NOTES.md"), "## 1.3.6+build.22"),
+      contains(read_file(directory.path() / "RELEASE_NOTES.md"), "## 1.3.6.22"),
       "release-note heading includes the incremented build number"
     );
     expect(
-      contains(output.str(), "Prepared RELEASE_NOTES.md section 1.3.6+build.22"),
+      contains(output.str(), "Prepared RELEASE_NOTES.md section 1.3.6.22"),
       "bump reports the build-qualified release-note heading"
     );
     expect(error.str().empty(), "build-qualified release-note bump does not write an error");
+
+    TemporaryDirectory semver_directory;
+    write_file(
+      semver_directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"hello\"\n"
+      "version = \"1.3.5\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[build]\n"
+      "number = 21\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[release]\n"
+      "build_number_format = \"semver\"\n"
+    );
+    std::ostringstream semver_output;
+    std::ostringstream semver_error;
+    expect(
+      forge::cli::run(arguments, semver_directory.path(), semver_output, semver_error) == 0,
+      "bump supports SemVer build-qualified release notes"
+    );
+    expect(
+      contains(read_file(semver_directory.path() / "RELEASE_NOTES.md"), "## 1.3.6+build.22"),
+      "SemVer release-note heading includes build metadata"
+    );
+    expect(semver_error.str().empty(), "SemVer release-note bump does not write an error");
+
+    TemporaryDirectory missing_build_directory;
+    write_file(
+      missing_build_directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"hello\"\n"
+      "version = \"1.3.5\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[release]\n"
+      "build_number_format = \"dotted\"\n"
+    );
+    std::ostringstream missing_build_output;
+    std::ostringstream missing_build_error;
+    expect(
+      forge::cli::run(
+        arguments,
+        missing_build_directory.path(),
+        missing_build_output,
+        missing_build_error
+      ) == 2,
+      "release-note build-number format requires a build number"
+    );
+    expect(
+      contains(missing_build_error.str(), "requires build.number"),
+      "missing build number is explained"
+    );
   }
 
   void test_bump_rejects_invalid_or_duplicate_version()

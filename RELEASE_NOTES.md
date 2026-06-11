@@ -2,8 +2,8 @@
 
 ## 0.7.0
 
-- Added optional build-qualified release-note headings through
-  `[release].include_build_number`.
+- Added optional dotted or SemVer build-qualified release-note headings through
+  `[release].build_number_format`.
 
 ## 0.6.0
 
