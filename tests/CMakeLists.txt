@@ -53,3 +53,11 @@ target_link_libraries(forge_workspace_unit_tests PRIVATE forge::core)
 
 add_test(NAME forge.workspace.unit COMMAND forge_workspace_unit_tests)
 set_tests_properties(forge.workspace.unit PROPERTIES LABELS unit)
+
+add_executable(forge_aggregate_box_e2e_tests
+    aggregate_box_e2e_test.cpp
+)
+target_link_libraries(forge_aggregate_box_e2e_tests PRIVATE forge::core)
+
+add_test(NAME forge.aggregate-box.e2e COMMAND forge_aggregate_box_e2e_tests)
+set_tests_properties(forge.aggregate-box.e2e PROPERTIES LABELS "integration;unit")

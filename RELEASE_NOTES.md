@@ -2,6 +2,9 @@
 
 ## 0.7.0
 
+- Added portable end-to-end verification that publishes one aggregate format-3
+  box and consumes its header-only, static-library, and dynamic-library
+  components both locally and through a locked GitHub Release dependency.
 - Added optional dotted or SemVer build-qualified release-note headings through
   `[release].build_number_format`.
 - Added safe preview and injection of a Forge-managed cbox publication job into
