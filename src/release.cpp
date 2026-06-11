@@ -177,6 +177,18 @@ namespace forge
       return line.starts_with("##") && !line.starts_with("###");
     }
 
+    std::string release_notes_heading(const Recipe& recipe)
+    {
+      auto heading = recipe.version;
+
+      if (recipe.release_notes_include_build_number && recipe.build_number)
+      {
+        heading += "+build." + std::to_string(*recipe.build_number);
+      }
+
+      return heading;
+    }
+
     bool extract_release_notes(const std::filesystem::path& source,
                                std::string_view version,
                                std::optional<std::string>& notes,
@@ -633,7 +645,7 @@ namespace forge
 
     if (!extract_release_notes(
       project_directory / "RELEASE_NOTES.md",
-      recipe.version,
+      release_notes_heading(recipe),
       release_notes,
       error
     ))
@@ -851,7 +863,7 @@ namespace forge
 
     if (!extract_release_notes(
       project_directory / "RELEASE_NOTES.md",
-      recipe.version,
+      release_notes_heading(recipe),
       release_notes,
       error
     ))
@@ -905,7 +917,7 @@ namespace forge
 
     if (!extract_release_notes(
       project_directory / "RELEASE_NOTES.md",
-      recipe.version,
+      release_notes_heading(recipe),
       release_notes,
       error
     ))

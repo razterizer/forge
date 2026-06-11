@@ -196,12 +196,12 @@ namespace forge
     }
 
     bool prepare_release_notes(const std::optional<std::string>& existing,
-                               std::string_view version,
+                               std::string_view release_heading,
                                std::string& updated,
                                std::ostream& error)
     {
       const auto section =
-        "## " + std::string { version } + "\n\n"
+        "## " + std::string { release_heading } + "\n\n"
         "- Describe changes.\n\n";
 
       if (!existing)
@@ -220,9 +220,9 @@ namespace forge
         const auto newline = remaining.find('\n');
         const auto line = remaining.substr(0, newline);
 
-        if (is_release_heading(line, version))
+        if (is_release_heading(line, release_heading))
         {
-          error << "forge: release notes for version '" << version << "' already exist\n";
+          error << "forge: release notes for version '" << release_heading << "' already exist\n";
           return false;
         }
 
@@ -411,8 +411,14 @@ namespace forge
     }
 
     std::string updated_notes;
+    auto release_heading = version;
 
-    if (!prepare_release_notes(notes_content, version, updated_notes, error)
+    if (recipe.release_notes_include_build_number && build_number)
+    {
+      release_heading += "+build." + std::to_string(*build_number);
+    }
+
+    if (!prepare_release_notes(notes_content, release_heading, updated_notes, error)
         || !replace_files(recipe_path, updated_recipe, notes_path, updated_notes, error))
     {
       return 2;
@@ -425,7 +431,7 @@ namespace forge
       output << " (build " << *build_number << ')';
     }
 
-    output << '\n' << "Prepared RELEASE_NOTES.md section " << version << '\n';
+    output << '\n' << "Prepared RELEASE_NOTES.md section " << release_heading << '\n';
     return 0;
   }
 

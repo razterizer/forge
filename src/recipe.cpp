@@ -837,6 +837,10 @@ namespace forge
       {
         valid = parse_sources(value, recipe.release_files);
       }
+      else if (section == "release" && key == "include_build_number")
+      {
+        valid = parse_boolean(value, recipe.release_notes_include_build_number);
+      }
 
       if (!valid)
       {
@@ -848,6 +852,12 @@ namespace forge
     if (recipe.name.empty() || recipe.version.empty())
     {
       error << "forge: recipe is missing required project fields\n";
+      return false;
+    }
+
+    if (recipe.release_notes_include_build_number && !recipe.build_number)
+    {
+      error << "forge: release.include_build_number requires build.number\n";
       return false;
     }
 

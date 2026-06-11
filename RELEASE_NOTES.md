@@ -2,7 +2,8 @@
 
 ## 0.7.0
 
-- Describe changes.
+- Added optional build-qualified release-note headings through
+  `[release].include_build_number`.
 
 ## 0.6.0
 

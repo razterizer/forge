@@ -88,6 +88,7 @@ namespace forge
     std::map<std::string, BuildProfile> build_profiles;
     std::vector<RuntimeFile> runtime_files;
     std::vector<std::filesystem::path> release_files;
+    bool release_notes_include_build_number = false;
     std::vector<RecipeTarget> targets;
     std::vector<RecipeTarget> internal_targets;
     std::vector<std::string> selected_internal_dependencies;

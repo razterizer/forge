@@ -38,6 +38,10 @@ build, tag, or publish anything.
 to `.forge/release/RELEASE_NOTES.md` for GitHub release publication. A present
 notes file without a matching version section causes release to fail.
 
+Set `[release].include_build_number = true` alongside `[build].number` to make
+`forge bump` generate and release commands extract headings such as
+`## 1.4.0+build.7`. The default remains the version-only heading.
+
 `forge new` and `forge adopt` generate thin GitHub Actions adapters:
 
 - `.github/workflows/release-linux.yml`

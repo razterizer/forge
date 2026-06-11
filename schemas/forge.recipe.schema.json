@@ -370,6 +370,10 @@
         "files": {
           "$ref": "#/$defs/projectPaths",
           "description": "Project-relative files and directories copied into the release archive."
+        },
+        "include_build_number": {
+          "type": "boolean",
+          "description": "Use version+build.<number> headings when generating and extracting release notes."
         }
       }
     }

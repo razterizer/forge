@@ -3869,6 +3869,45 @@ namespace
     );
   }
 
+  void test_bump_includes_build_number_in_release_notes()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"hello\"\n"
+      "version = \"1.3.5\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[build]\n"
+      "number = 21\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[release]\n"
+      "include_build_number = true\n"
+    );
+    constexpr std::array arguments {
+      std::string_view { "bump" },
+      std::string_view { "patch" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "bump creates build-qualified release notes when requested"
+    );
+    expect(
+      contains(read_file(directory.path() / "RELEASE_NOTES.md"), "## 1.3.6+build.22"),
+      "release-note heading includes the incremented build number"
+    );
+    expect(
+      contains(output.str(), "Prepared RELEASE_NOTES.md section 1.3.6+build.22"),
+      "bump reports the build-qualified release-note heading"
+    );
+    expect(error.str().empty(), "build-qualified release-note bump does not write an error");
+  }
+
   void test_bump_rejects_invalid_or_duplicate_version()
   {
     TemporaryDirectory directory;
@@ -4011,6 +4050,7 @@ int main()
   test_run_and_release_with_dynamic_dependency();
   test_bump_updates_recipe_and_release_notes();
   test_bump_creates_release_notes();
+  test_bump_includes_build_number_in_release_notes();
   test_bump_rejects_invalid_or_duplicate_version();
   test_bump_rejects_invalid_component();
   test_unknown_command();

@@ -301,6 +301,56 @@ namespace
     expect(contains(error.str(), "were not found"), "release explains missing version notes");
   }
 
+  void test_release_extracts_build_qualified_notes()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[build]\nnumber = 7\n"
+      << "\n[release]\ninclude_build_number = true\n";
+    recipe.close();
+    std::ofstream { directory.path() / "RELEASE_NOTES.md" }
+      << "# Release notes\n\n"
+      << "## 0.1.0+build.7\n\n"
+      << "- Build-qualified release.\n\n"
+      << "## 0.1.0\n\n"
+      << "- Unqualified release.\n";
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [&directory](const std::vector<std::string>& command,
+                   const std::filesystem::path&,
+                   std::ostream&)
+      {
+        if (command.size() > 1 && command[1] == "--build")
+        {
+          std::filesystem::create_directories(directory.path() / ".forge/build");
+#ifdef _WIN32
+          std::ofstream executable { directory.path() / ".forge/build/hello.exe" };
+#else
+          std::ofstream executable { directory.path() / ".forge/build/hello" };
+#endif
+        }
+
+        return 0;
+      };
+
+    expect(
+      forge::release_project(directory.path(), runner, output, error) == 0,
+      "release accepts a build-qualified release-note heading"
+    );
+    std::ifstream notes { directory.path() / ".forge/release/RELEASE_NOTES.md" };
+    std::ostringstream notes_text;
+    notes_text << notes.rdbuf();
+    expect(
+      contains(notes_text.str(), "Build-qualified release.")
+      && !contains(notes_text.str(), "Unqualified release."),
+      "release extracts only the matching build-qualified notes"
+    );
+    expect(error.str().empty(), "build-qualified release notes do not write an error");
+  }
+
   void test_release_creates_and_pushes_custom_tag()
   {
     TemporaryDirectory directory;
@@ -477,6 +527,7 @@ int main()
   test_release_reports_archive_failure();
   test_release_rejects_file_outside_project();
   test_release_rejects_missing_version_notes();
+  test_release_extracts_build_qualified_notes();
   test_release_creates_and_pushes_custom_tag();
   test_release_tag_rejects_dirty_tree_before_build();
   test_release_tag_requires_declared_build_number();

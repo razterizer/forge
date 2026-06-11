@@ -805,6 +805,26 @@ the recipe version. It packages only that section and writes a copy to
 - Initial release.
 ```
 
+Projects that publish several builds of one semantic version may opt into
+build-qualified release-note headings:
+
+```toml
+[build]
+number = 7
+
+[release]
+include_build_number = true
+```
+
+Forge then generates and extracts headings such as:
+
+```markdown
+## 1.4.0+build.7
+```
+
+Without `release.include_build_number`, release-note headings remain
+`## <version>`. Enabling it requires `[build].number`.
+
 Prepare the next version and its release-notes section:
 
 ```sh

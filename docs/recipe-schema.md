@@ -32,6 +32,8 @@ rules:
   `forge build --define=<symbol>` options temporarily add private definitions
   to selected root builds without changing their recipes.
 - Build numbers must be non-negative.
+- `[release].include_build_number = true` makes release-note headings use
+  `<version>+build.<number>` and requires `[build].number`.
 - Projects may declare local static-library, dynamic-library, imported-library,
   and header-only dependencies using name and either project-path or cbox-path
   inline tables.
