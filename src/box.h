@@ -137,6 +137,7 @@ namespace forge
                              const ProcessRunner& process_runner,
                              std::filesystem::path& component_box,
                              BoxMetadata& metadata,
-                             std::ostream& error);
+                             std::ostream& error,
+                             BoxMetadata* container_metadata = nullptr);
 
 } // namespace forge

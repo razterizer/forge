@@ -108,12 +108,15 @@ uses the checksum as an immutable local cache key before applying normal box
 verification and installation.
 
 GitHub Release dependencies use `{ github = "owner/repository", version =
-"<version>" }`. Forge resolves the conventional target-qualified box and
+"<version>" }`, with optional `package` and `component` identities for aggregate
+project boxes. Forge resolves the conventional target-qualified box and
 checksum assets from the matching `release-<version>` tag, then records the
-exact target, URL, and checksum in `forge.lock.toml`. Normal builds require and
-consume matching locked entries without re-resolving GitHub. `forge update`
-and `forge update <dependency>` deliberately refresh current-target entries
-without building the current project, while preserving other targets.
+exact package, component, target, URL, and checksum in `forge.lock.toml`.
+Normal builds require and consume matching locked entries without re-resolving
+GitHub. `forge update` and `forge update <dependency>` deliberately refresh
+current-target entries without building the current project, while preserving
+other targets. Lockfile format 2 records package and component identity;
+format-1 lockfiles remain readable and are upgraded on the next update.
 
 ## Remaining roadmap
 
@@ -124,10 +127,6 @@ for 1.0.
 
 ### v0.7: Complete multi-component package publication
 
-- Make GitHub dependencies select and lock a named component from a project
-  box.
-- Record package identity, component identity, target, URL, and checksum in
-  `forge.lock.toml`.
 - Improve `forge box list` and `forge box inspect` output for components.
 - Verify aggregate boxes and component consumption on Linux, macOS, and
   Windows.

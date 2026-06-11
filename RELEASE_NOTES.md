@@ -10,6 +10,8 @@
   and safe managed-job removal.
 - Made generated and managed release workflows bootstrap the latest published
   Forge release instead of the repository default branch.
+- Added GitHub aggregate-cbox component selection and lockfile format 2, which
+  records package and component identities alongside target, URL, and checksum.
 
 ## 0.6.0
 

@@ -544,8 +544,27 @@ answer = { github = "example/answer", version = "1.0.0" }
 
 Forge resolves the target-qualified `.cbox` and sibling `.sha256` asset from
 the `release-1.0.0` GitHub Release when explicitly updated, verifies and caches
-the box, and writes the exact target, URL, and checksum to `forge.lock.toml`.
+the box, and writes the exact package, selected component, target, URL, and
+checksum to `forge.lock.toml`.
 Commit the lockfile so normal builds remain reproducible.
+
+Select a named library from a multi-component project box by declaring both the
+published package identity and desired component:
+
+```toml
+[dependencies]
+answer = {
+  github = "example/suite",
+  package = "suite",
+  component = "answer",
+  version = "1.0.0"
+}
+```
+
+`package` defaults to the dependency name for normal single-package releases.
+The dependency key remains the name used by the consuming project. Forge writes
+these identities in lockfile format 2; existing format-1 lockfiles remain
+readable and are upgraded by the next `forge update`.
 
 Resolve or refresh every GitHub dependency for the current target:
 

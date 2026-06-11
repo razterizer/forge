@@ -49,6 +49,8 @@ rules:
 - GitHub Release cbox dependencies require `github = "owner/repository"` and a
   packaged `version`. `forge update` writes their exact target-specific
   resolutions to `forge.lock.toml`; normal builds require those locked entries.
+  Multi-component GitHub releases may declare `package` for the aggregate cbox
+  identity and `component` for the named library selected from it.
 - Executable projects may declare project-relative `[runtime].files`, which
   Forge stages beside the executable and includes in boxes and releases.
   String entries preserve their paths; `{ source, destination }` entries map a

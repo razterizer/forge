@@ -51,6 +51,8 @@ namespace forge
     {
       std::string name;
       std::string github;
+      std::string package;
+      std::string component;
       std::string version;
       std::string target;
       std::string url;
@@ -375,7 +377,9 @@ namespace forge
                                    std::ostream& error)
     {
       if (!is_github_repository(dependency.github)
-          || !is_github_package_version(dependency.version))
+          || !is_github_package_version(dependency.version)
+          || (!dependency.package.empty() && !is_safe_dependency_name(dependency.package))
+          || (!dependency.component.empty() && !is_safe_dependency_name(dependency.component)))
       {
         error << "forge: dependency '" << dependency.name
               << "' has an invalid GitHub repository or version\n";
@@ -390,12 +394,13 @@ namespace forge
         tag_version.resize(build_metadata);
       }
 
-      const auto compiled_asset = dependency.name
+      const auto package = dependency.package.empty() ? dependency.name : dependency.package;
+      const auto compiled_asset = package
         + "-" + dependency.version
         + "-" + target_os()
         + "-" + target_arch()
         + ".cbox";
-      const auto header_only_asset = dependency.name + "-" + dependency.version + "-ho.cbox";
+      const auto header_only_asset = package + "-" + dependency.version + "-ho.cbox";
       const auto release_url =
         "https://github.com/" + dependency.github + "/releases/download/release-" + tag_version + "/";
       const auto cache_directory =
@@ -412,7 +417,19 @@ namespace forge
         return false;
       }
 
-      output << "Resolving GitHub dependency " << dependency.name << '\n' << std::flush;
+      output << "Resolving GitHub dependency " << dependency.name;
+
+      if (!dependency.package.empty() || !dependency.component.empty())
+      {
+        output << " from package " << package;
+
+        if (!dependency.component.empty())
+        {
+          output << " component " << dependency.component;
+        }
+      }
+
+      output << '\n' << std::flush;
 
       for (const auto& asset : { compiled_asset, header_only_asset })
       {
@@ -486,6 +503,18 @@ namespace forge
     std::string current_target()
     {
       return target_os() + "-" + target_arch();
+    }
+
+    std::string package_version(const BoxMetadata& metadata)
+    {
+      auto version = metadata.version;
+
+      if (metadata.build_number)
+      {
+        version += "+build." + std::to_string(*metadata.build_number);
+      }
+
+      return version;
     }
 
     bool is_safe_project_path(const std::filesystem::path& path)
@@ -612,7 +641,7 @@ namespace forge
       std::optional<LockedDependency> dependency;
       std::string line;
       std::size_t line_number = 0;
-      bool valid_format = false;
+      int format = 0;
 
       const auto store_dependency =
         [&dependency, &error]() -> bool
@@ -624,6 +653,8 @@ namespace forge
 
           if (dependency->name.empty()
               || dependency->github.empty()
+              || (!dependency->package.empty() && !is_safe_dependency_name(dependency->package))
+              || (!dependency->component.empty() && !is_safe_dependency_name(dependency->component))
               || dependency->version.empty()
               || dependency->target.empty()
               || dependency->url.empty()
@@ -631,6 +662,11 @@ namespace forge
           {
             error << "forge: forge.lock.toml contains an incomplete dependency\n";
             return false;
+          }
+
+          if (dependency->package.empty())
+          {
+            dependency->package = dependency->name;
           }
 
           const auto key = lock_key(dependency->name, dependency->target);
@@ -677,9 +713,9 @@ namespace forge
         const auto key = trim(content.substr(0, equals));
         const auto value = trim(content.substr(equals + 1));
 
-        if (!dependency && key == "format" && value == "1")
+        if (!dependency && key == "format" && (value == "1" || value == "2"))
         {
-          valid_format = true;
+          format = value == "1" ? 1 : 2;
           continue;
         }
 
@@ -689,6 +725,8 @@ namespace forge
             || !parse_lock_string(value, parsed)
             || (key != "name"
                 && key != "github"
+                && key != "package"
+                && key != "component"
                 && key != "version"
                 && key != "target"
                 && key != "url"
@@ -705,6 +743,14 @@ namespace forge
         else if (key == "github")
         {
           dependency->github = std::move(parsed);
+        }
+        else if (key == "package")
+        {
+          dependency->package = std::move(parsed);
+        }
+        else if (key == "component")
+        {
+          dependency->component = std::move(parsed);
         }
         else if (key == "version")
         {
@@ -724,9 +770,9 @@ namespace forge
         }
       }
 
-      if (!store_dependency() || !valid_format)
+      if (!store_dependency() || format == 0)
       {
-        if (!valid_format)
+        if (format == 0)
         {
           error << "forge: forge.lock.toml has an unsupported or missing format\n";
         }
@@ -754,7 +800,7 @@ namespace forge
         return false;
       }
 
-      lock << "format = 1\n";
+      lock << "format = 2\n";
 
       for (const auto& entry : dependency_session->locked_dependencies)
       {
@@ -763,6 +809,14 @@ namespace forge
           << "\n[[dependency]]\n"
           << "name = \"" << dependency.name << "\"\n"
           << "github = \"" << dependency.github << "\"\n"
+          << "package = \"" << dependency.package << "\"\n";
+
+        if (!dependency.component.empty())
+        {
+          lock << "component = \"" << dependency.component << "\"\n";
+        }
+
+        lock
           << "version = \"" << dependency.version << "\"\n"
           << "target = \"" << dependency.target << "\"\n"
           << "url = \"" << dependency.url << "\"\n"
@@ -837,6 +891,8 @@ namespace forge
           {
             dependency.name,
             dependency.github,
+            dependency.package.empty() ? dependency.name : dependency.package,
+            dependency.component,
             dependency.version,
             target,
             dependency.url,
@@ -856,6 +912,8 @@ namespace forge
       }
 
       if (locked->second.github != dependency.github
+          || locked->second.package != (dependency.package.empty() ? dependency.name : dependency.package)
+          || locked->second.component != dependency.component
           || locked->second.version != dependency.version)
       {
         error << "forge: dependency '" << dependency.name
@@ -866,7 +924,14 @@ namespace forge
 
       dependency.url = locked->second.url;
       dependency.sha256 = locked->second.sha256;
-      output << "Using locked dependency " << dependency.name << " for " << target << '\n';
+      output << "Using locked dependency " << dependency.name;
+
+      if (!dependency.component.empty())
+      {
+        output << " component " << dependency.component;
+      }
+
+      output << " for " << target << '\n';
       return true;
     }
 
@@ -1644,6 +1709,7 @@ namespace forge
         if (is_box)
         {
           BoxMetadata metadata;
+          BoxMetadata container_metadata;
           std::filesystem::path component_box;
           const auto component = dependency.component.empty()
             ? std::optional<std::string> { dependency.name }
@@ -1656,13 +1722,32 @@ namespace forge
             process_runner,
             component_box,
             metadata,
-            error
+            error,
+            &container_metadata
           ))
           {
             return false;
           }
 
           directory = component_box;
+
+          if (!resolved_dependency.github.empty())
+          {
+            const auto package = resolved_dependency.package.empty()
+              ? resolved_dependency.name
+              : resolved_dependency.package;
+
+            if (container_metadata.name != package
+                || package_version(container_metadata) != resolved_dependency.version)
+            {
+              error << "forge: dependency '" << dependency.name
+                    << "' requires package '" << package << "' version '"
+                    << resolved_dependency.version << "', but the GitHub box contains package '"
+                    << container_metadata.name << "' version '"
+                    << package_version(container_metadata) << "'\n";
+              return false;
+            }
+          }
 
           if (metadata.name != dependency.name
               && (dependency.component.empty() || metadata.name != dependency.component))
@@ -1673,10 +1758,14 @@ namespace forge
             return false;
           }
 
-          if (!dependency.version.empty() && metadata.version != dependency.version)
+          const auto contained_version = !resolved_dependency.github.empty()
+            ? package_version(metadata)
+            : metadata.version;
+
+          if (!dependency.version.empty() && contained_version != dependency.version)
           {
             error << "forge: dependency '" << dependency.name << "' requires version '"
-                  << dependency.version << "', but box contains version '" << metadata.version << "'\n";
+                  << dependency.version << "', but box contains version '" << contained_version << "'\n";
             return false;
           }
 
@@ -1710,6 +1799,7 @@ namespace forge
                 child.path,
                 {},
                 child.sha256,
+                {},
                 {},
                 child.version,
                 {},

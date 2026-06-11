@@ -2529,7 +2529,8 @@ namespace forge
                              const ProcessRunner& process_runner,
                              std::filesystem::path& component_box,
                              BoxMetadata& metadata,
-                             std::ostream& error)
+                             std::ostream& error,
+                             BoxMetadata* container_metadata)
   {
     const auto resolved_box = resolve_box_path(box_path, working_directory);
     BoxMetadata container;
@@ -2537,6 +2538,11 @@ namespace forge
     if (!read_box_metadata(resolved_box, working_directory, process_runner, container, error))
     {
       return false;
+    }
+
+    if (container_metadata != nullptr)
+    {
+      *container_metadata = container;
     }
 
     if (container.components.empty())

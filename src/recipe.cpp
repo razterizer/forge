@@ -431,6 +431,10 @@ namespace forge
         {
           dependency.github = parsed_value;
         }
+        else if (kind == "package" && dependency.package.empty())
+        {
+          dependency.package = parsed_value;
+        }
         else if (kind == "version" && dependency.version.empty())
         {
           dependency.version = parsed_value;
@@ -484,6 +488,7 @@ namespace forge
              && dependency.url.empty()
              && dependency.sha256.empty()
              && dependency.github.empty()
+             && dependency.package.empty()
              && dependency.version.empty()
              && dependency.git.empty()
              && dependency.commit.empty())
@@ -491,6 +496,7 @@ namespace forge
                 && !dependency.url.empty()
                 && !dependency.sha256.empty()
                 && dependency.github.empty()
+                && dependency.package.empty()
                 && dependency.version.empty()
                 && dependency.git.empty()
                 && dependency.commit.empty())
@@ -505,6 +511,7 @@ namespace forge
                 && dependency.url.empty()
                 && dependency.sha256.empty()
                 && dependency.github.empty()
+                && dependency.package.empty()
                 && dependency.version.empty()
                 && !dependency.git.empty()
                 && exact_commit));

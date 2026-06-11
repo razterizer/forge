@@ -159,9 +159,9 @@ namespace forge::cli
           << "Resolve and lock GitHub cbox dependencies for the current target.\n\n"
           << "Usage:\n"
           << "  forge update [dependency]\n\n"
-          << "Writes exact URLs, targets, and checksums to forge.lock.toml without\n"
-          << "building the current project. Existing entries for other targets are\n"
-          << "preserved.\n";
+          << "Writes exact package identities, selected components, URLs, targets,\n"
+          << "and checksums to forge.lock.toml without building the current project.\n"
+          << "Existing entries for other targets are preserved.\n";
         return true;
       }
 
