@@ -45,7 +45,7 @@ notes file without a matching version section causes release to fail.
 - `.github/workflows/release-windows.yml`
 
 Each workflow reacts to `release-*` and `v*` tags, bootstraps Forge, runs
-`forge prepare-release`, and publishes its output to the matching GitHub
+`forge workflow prepare-release`, and publishes its output to the matching GitHub
 Release. Executable projects produce a target-qualified ZIP archive.
 Static-library, dynamic-library, and header-only projects produce a
 target-qualified `.cbox` and its `.sha256` checksum under `boxes/`. Existing
@@ -54,7 +54,7 @@ explicit opt-in action.
 
 The Windows adapter explicitly initializes the x64 MSVC developer environment
 and selects `cl` for its bootstrap build. The same environment is inherited by
-`forge prepare-release`, ensuring released Windows artifacts use MSVC rather
+`forge workflow prepare-release`, ensuring released Windows artifacts use MSVC rather
 than an incidental compiler from the hosted runner.
 
 The Linux workflow builds two variants before publishing:
@@ -71,16 +71,17 @@ GitHub releases are explicit and separate from local releases:
 ```sh
 forge release
 forge release examples
-forge prepare-release
-forge prepare-release examples
+forge workflow prepare-release
+forge workflow prepare-release examples
 forge release-git
 forge release-git --tag="release-<version>-<curr-date>"
 ```
 
 `forge release` builds and packages only on the local machine.
-`forge prepare-release` prepares the type-appropriate artifacts and focused
-release notes expected by hosted release workflows. It performs the necessary
-build, box creation, verification, and local publication steps automatically.
+`forge workflow prepare-release` prepares the type-appropriate artifacts and
+focused release notes expected by hosted release workflows. It performs the
+necessary build, box creation, verification, and local publication steps
+automatically.
 Multi-target projects prepare and publish a complete format-3 platform box
 containing all named targets by default. Selecting a target prepares one
 component box or executable release explicitly.
@@ -94,10 +95,12 @@ matching release notes and pushes it to `origin`. Custom formats must match
 publish hosted artifacts.
 
 For a normal hosted release, only `forge release-git` is required. The
-generated workflows invoke `forge prepare-release` on each platform. Running
-`forge prepare-release` locally is useful for inspecting the artifacts before
-tagging, while the individual box commands remain useful for diagnostics and
-manual local publication.
+generated workflows invoke `forge workflow prepare-release` on each platform.
+Running `forge workflow prepare-release` locally is useful for inspecting the
+artifacts before tagging, while the individual box commands remain useful for
+diagnostics and manual local publication.
+
+`forge prepare-release` remains available as a deprecated compatibility alias.
 
 `forge release-git --tag-force` deliberately replaces the existing local and
 remote release tag. Use it only when repairing a broken published release.

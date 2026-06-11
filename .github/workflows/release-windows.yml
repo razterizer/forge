@@ -34,7 +34,7 @@ jobs:
       - name: Prepare hosted release assets
         shell: pwsh
         run: |
-          ./build/dev/forge.exe prepare-release
+          ./build/dev/forge.exe workflow prepare-release
 
       - name: Publish GitHub release
         uses: ncipollo/release-action@v1

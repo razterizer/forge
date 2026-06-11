@@ -104,7 +104,7 @@ namespace forge
 
       workflow +=
         "        run: |\n"
-        "          " + std::string { forge_executable } + " prepare-release\n"
+        "          " + std::string { forge_executable } + " workflow prepare-release\n"
         "\n"
         "      - name: Publish GitHub release\n"
         "        uses: ncipollo/release-action@v1\n"
@@ -143,7 +143,7 @@ namespace forge
         "\n"
         "      - name: Prepare hosted release assets\n"
         "        run: |\n"
-        "          ./.forge-bootstrap/build/forge prepare-release\n"
+        "          ./.forge-bootstrap/build/forge workflow prepare-release\n"
         "          mkdir hosted-assets\n"
         "          for archive in .forge/release/*.zip; do\n"
         "            [ -e \"$archive\" ] || continue\n"

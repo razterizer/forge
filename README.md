@@ -324,7 +324,7 @@ forge test
 forge test unit_tests -- --quick
 forge box create hello
 forge release examples
-forge prepare-release hello
+forge workflow prepare-release hello
 ```
 
 Named targets use isolated directories under `.forge/generated/<target>` and
@@ -336,8 +336,8 @@ executable target marked with `test = true`, continues after failures, and
 reports an aggregate result. `forge box create <target>` packages a named
 target and recursively embeds boxes for its internal library dependencies.
 `forge release <target>` packages a selected named executable, while
-`forge prepare-release <target>` prepares hosted assets for a selected named
-executable or library.
+`forge workflow prepare-release <target>` prepares hosted assets for a
+selected named executable or library.
 
 Remove all generated project state, including builds, dependencies, boxes,
 release artifacts, and caches:
@@ -773,7 +773,7 @@ project-wide match.
 
 `forge new` and `forge adopt` create `RELEASE_NOTES.md` and Linux, macOS, and
 Windows release workflows under `.github/workflows`. Pushing a `release-*` or
-`v*` tag builds Forge, runs `forge prepare-release`, and publishes the resulting
+`v*` tag builds Forge, runs `forge workflow prepare-release`, and publishes the resulting
 artifacts to the matching GitHub Release. Executable projects produce a
 target-qualified ZIP archive. Static-library, dynamic-library, and header-only
 projects produce a target-qualified `.cbox` and its `.sha256` checksum under
@@ -795,14 +795,16 @@ published in the same GitHub Release.
 Prepare the same hosted release assets locally:
 
 ```sh
-forge prepare-release
-forge prepare-release examples
+forge workflow prepare-release
+forge workflow prepare-release examples
 ```
 
 The command also writes the focused release notes used by GitHub Actions to
 `.forge/release/RELEASE_NOTES.md`. It performs the necessary build, box
 creation, verification, and local publication steps automatically. You do not
 need to run those commands individually before a release.
+
+`forge prepare-release` remains available as a deprecated compatibility alias.
 
 Multi-target projects publish their complete format-3 project box by default.
 Select one target to publish only that component box or executable release.

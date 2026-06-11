@@ -28,7 +28,7 @@ jobs:
 
       - name: Prepare hosted release assets
         run: |
-          ./build/dev/forge prepare-release
+          ./build/dev/forge workflow prepare-release
           mkdir hosted-assets
           for archive in .forge/release/*.zip; do
             [ -e "$archive" ] || continue
@@ -62,7 +62,7 @@ jobs:
 
       - name: Prepare hosted release assets
         run: |
-          ./build/dev/forge prepare-release
+          ./build/dev/forge workflow prepare-release
           mkdir hosted-assets
           for archive in .forge/release/*.zip; do
             [ -e "$archive" ] || continue

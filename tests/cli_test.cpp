@@ -107,6 +107,14 @@ namespace
     expect(contains(output.str(), "forge <command>"), "help includes usage");
     expect(contains(output.str(), "forge adopt"), "help presents adopt as the primary command");
     expect(contains(output.str(), "init            Alias for adopt"), "help documents the init alias");
+    expect(
+      contains(output.str(), "forge workflow prepare-release [target]"),
+      "help documents hosted release preparation as a workflow step"
+    );
+    expect(
+      !contains(output.str(), "forge prepare-release [target]"),
+      "help hides the deprecated prepare-release alias"
+    );
     expect(error.str().empty(), "help does not write an error");
   }
 
@@ -1547,7 +1555,7 @@ namespace
     expect(
       contains(
         read_file(directory.path() / "hello/.github/workflows/release-windows.yml"),
-        "forge.exe prepare-release"
+        "forge.exe workflow prepare-release"
       ),
       "new workflows prepare type-aware release assets"
     );
@@ -1794,10 +1802,12 @@ namespace
       std::string_view { "examples" }
     };
     constexpr std::array prepare_release_arguments {
+      std::string_view { "workflow" },
       std::string_view { "prepare-release" },
       std::string_view { "math" }
     };
     constexpr std::array prepare_aggregate_release_arguments {
+      std::string_view { "workflow" },
       std::string_view { "prepare-release" }
     };
     std::ostringstream build_output;
@@ -2089,7 +2099,10 @@ namespace
       std::string_view { "new" },
       std::string_view { "hello" }
     };
-    constexpr std::array release_arguments { std::string_view { "prepare-release" } };
+    constexpr std::array release_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "prepare-release" }
+    };
     std::ostringstream new_output;
     std::ostringstream new_error;
     std::ostringstream release_output;
@@ -2124,6 +2137,24 @@ namespace
     );
     expect(contains(release_output.str(), "Prepared release assets"), "hosted assets report success");
     expect(release_error.str().empty(), "hosted executable release does not write an error");
+  }
+
+  void test_prepare_release_alias_warns()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "prepare-release" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "deprecated prepare-release alias remains accepted"
+    );
+    expect(
+      contains(error.str(), "'prepare-release' is deprecated")
+      && contains(error.str(), "forge workflow prepare-release"),
+      "deprecated prepare-release alias points to the workflow command"
+    );
   }
 
   void test_release_rejects_empty_tag_format()
@@ -2510,7 +2541,10 @@ namespace
     );
 #endif
 
-    constexpr std::array release_arguments { std::string_view { "prepare-release" } };
+    constexpr std::array release_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "prepare-release" }
+    };
     std::ostringstream release_output;
     std::ostringstream release_error;
     expect(
@@ -3891,6 +3925,7 @@ int main()
   test_run_new_project();
   test_release_new_project();
   test_prepare_executable_release();
+  test_prepare_release_alias_warns();
   test_release_rejects_empty_tag_format();
   test_release_github_rejects_empty_tag_format();
   test_release_git_force_rejects_empty_tag_format();

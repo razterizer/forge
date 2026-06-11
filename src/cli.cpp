@@ -33,6 +33,7 @@ namespace forge::cli
       std::string_view { "test" },
       std::string_view { "update" },
       std::string_view { "release" },
+      std::string_view { "workflow" },
       std::string_view { "prepare-release" },
       std::string_view { "release-git" },
       std::string_view { "release-github" },
@@ -54,7 +55,7 @@ namespace forge::cli
         << "  forge bump <major|minor|patch>\n"
         << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n"
         << "  forge release [target]\n"
-        << "  forge prepare-release [target]\n"
+        << "  forge workflow prepare-release [target]\n"
         << "  forge run [target|project[/target]] [--profile=<name>] [-- arguments...]\n"
         << "  forge test [target|project[/target]] [--profile=<name>] [-- arguments...]\n"
         << "  forge --help\n"
@@ -71,7 +72,7 @@ namespace forge::cli
         << "  test            Build and run project or workspace tests\n"
         << "  update          Refresh locked GitHub dependencies\n"
         << "  release         Create a local release artifact\n"
-        << "  prepare-release Prepare hosted release assets\n"
+        << "  workflow        Run a CI workflow step locally\n"
         << "  release-git     Create and push a release tag\n";
     }
 
@@ -455,6 +456,24 @@ namespace forge::cli
       return build_project(working_directory, options, output, error);
     }
 
+    if (arguments.front() == "workflow")
+    {
+      if (arguments.size() < 2
+          || arguments[1] != "prepare-release"
+          || arguments.size() > 3
+          || (arguments.size() == 3 && arguments[2].starts_with("-")))
+      {
+        error << "forge: usage: forge workflow prepare-release [target]\n";
+        return 2;
+      }
+
+      const auto target = arguments.size() == 3
+        ? std::optional<std::string> { arguments[2] }
+        : std::nullopt;
+
+      return prepare_release(working_directory, target, output, error);
+    }
+
     if (arguments.front() == "release" || arguments.front() == "prepare-release")
     {
       if (arguments.size() == 2 && arguments[1].starts_with("-"))
@@ -478,6 +497,9 @@ namespace forge::cli
         return release_project(working_directory, target, output, error);
       }
 
+      error
+        << "forge: warning: 'prepare-release' is deprecated; "
+        << "use 'forge workflow prepare-release'\n";
       return prepare_release(working_directory, target, output, error);
     }
 
