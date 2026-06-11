@@ -1006,6 +1006,9 @@ filenames include their target OS and architecture. Header-only boxes contain
 no target-specific artifacts and use names such as `hello-1.0.0-ho.cbox`.
 Bare box filenames are resolved from `.forge/boxes/` and then `boxes/`;
 explicit paths continue to work.
+`forge box list` validates each box and shows its package, target, type, or
+selectable components. `forge box inspect` prints the same identity as a
+readable summary before the complete verified manifest.
 
 Select a library from a multi-component box with `component`:
 

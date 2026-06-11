@@ -2066,8 +2066,24 @@ namespace forge
       return 2;
     }
 
+    const auto version =
+      [](const BoxMetadata& metadata)
+      {
+        auto result = metadata.version;
+
+        if (metadata.build_number)
+        {
+          result += "+build." + std::to_string(*metadata.build_number);
+        }
+
+        return result;
+      };
     const auto list_directory =
-      [&output](std::string_view heading, const std::filesystem::path& directory)
+      [&output, &error, &project_directory, &version](
+        std::string_view heading,
+        const std::filesystem::path& directory,
+        bool& valid
+      )
       {
         std::vector<std::filesystem::path> boxes;
         std::error_code filesystem_error;
@@ -2096,15 +2112,67 @@ namespace forge
 
           for (const auto& box : boxes)
           {
-            output << "  " << box.string() << '\n';
+            BoxMetadata metadata;
+
+            if (!read_box_metadata(
+              directory / box,
+              project_directory,
+              run_process,
+              metadata,
+              error
+            ))
+            {
+              valid = false;
+              return boxes.size();
+            }
+
+            output << "  " << box.string() << "  " << metadata.name
+                   << ' ' << version(metadata);
+
+            if (!metadata.os.empty() && !metadata.arch.empty())
+            {
+              output << " [" << metadata.os << '-' << metadata.arch << ']';
+            }
+            else
+            {
+              output << " [portable]";
+            }
+
+            if (metadata.components.empty())
+            {
+              output << "  " << metadata.type;
+            }
+            else
+            {
+              output << "  components:";
+
+              for (const auto& component : metadata.components)
+              {
+                output << ' ' << component.name << " (" << component.type << ')';
+              }
+            }
+
+            output << '\n';
           }
         }
 
         return boxes.size();
       };
 
-    const auto generated = list_directory("Generated boxes", project_directory / ".forge" / "boxes");
-    const auto published = list_directory("Published boxes", project_directory / "boxes");
+    bool valid = true;
+    const auto generated = list_directory(
+      "Generated boxes",
+      project_directory / ".forge" / "boxes",
+      valid
+    );
+    const auto published = valid
+      ? list_directory("Published boxes", project_directory / "boxes", valid)
+      : 0;
+
+    if (!valid)
+    {
+      return 2;
+    }
 
     if (generated + published == 0)
     {
@@ -2151,7 +2219,40 @@ namespace forge
       return 2;
     }
 
-    output << manifest_content;
+    output << "Box: " << resolved_box.filename().string() << '\n'
+           << "Package: " << manifest.name << ' ' << manifest.version;
+
+    if (manifest.build_number)
+    {
+      output << "+build." << *manifest.build_number;
+    }
+
+    output << '\n';
+
+    if (!manifest.os.empty() && !manifest.arch.empty())
+    {
+      output << "Target: " << manifest.os << '-' << manifest.arch << '\n';
+    }
+    else
+    {
+      output << "Target: portable\n";
+    }
+
+    if (manifest.components.empty())
+    {
+      output << "Type: " << manifest.type << '\n';
+    }
+    else
+    {
+      output << "Components:\n";
+
+      for (const auto& component : manifest.components)
+      {
+        output << "  " << component.name << " (" << component.type << ")\n";
+      }
+    }
+
+    output << "\nManifest:\n" << manifest_content;
     return 0;
   }
 

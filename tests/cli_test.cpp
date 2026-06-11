@@ -2287,9 +2287,35 @@ namespace
     );
     expect(
       contains(inspect_container_output.str(), "format = 3")
+      && contains(inspect_container_output.str(), "Package: suite 0.1.0")
+      && contains(inspect_container_output.str(), "Components:")
+      && contains(inspect_container_output.str(), "math (dynamic_library)")
+      && contains(inspect_container_output.str(), "examples (executable)")
       && contains(inspect_container_output.str(), "name = \"math\"")
       && contains(inspect_container_output.str(), "name = \"examples\""),
-      "multi-component manifest declares named targets"
+      "multi-component inspection summarizes and declares named targets"
+    );
+    constexpr std::array list_box_arguments {
+      std::string_view { "box" },
+      std::string_view { "list" }
+    };
+    std::ostringstream list_box_output;
+    std::ostringstream list_box_error;
+    expect(
+      forge::cli::run(
+        list_box_arguments,
+        directory.path(),
+        list_box_output,
+        list_box_error
+      ) == 0,
+      "CLI lists multi-component platform boxes"
+    );
+    expect(
+      contains(list_box_output.str(), container_box.filename().string())
+      && contains(list_box_output.str(), "components:")
+      && contains(list_box_output.str(), "math (dynamic_library)")
+      && contains(list_box_output.str(), "examples (executable)"),
+      "box list summarizes selectable components"
     );
     expect(
       forge::cli::run(
@@ -2722,8 +2748,10 @@ namespace
     );
     expect(
       contains(generated_list_output.str(), "Generated boxes:")
-      && contains(generated_list_output.str(), box_filename),
-      "box list reports generated boxes"
+      && contains(generated_list_output.str(), box_filename)
+      && contains(generated_list_output.str(), "hello 0.1.0+build.6")
+      && contains(generated_list_output.str(), "executable"),
+      "box list reports generated box package metadata"
     );
 
     const std::array inspect_arguments {
@@ -2738,6 +2766,12 @@ namespace
       "box inspect succeeds"
     );
     expect(contains(inspect_output.str(), "format = 2"), "box inspect prints the manifest");
+    expect(
+      contains(inspect_output.str(), "Package: hello 0.1.0+build.6")
+      && contains(inspect_output.str(), "Type: executable")
+      && contains(inspect_output.str(), "Manifest:"),
+      "box inspect prints a package summary before the manifest"
+    );
     expect(contains(inspect_output.str(), "build = 6"), "box inspect prints the build number");
     expect(contains(inspect_output.str(), "sha256 = \""), "box inspect prints the artifact checksum");
 

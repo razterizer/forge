@@ -127,7 +127,6 @@ for 1.0.
 
 ### v0.7: Complete multi-component package publication
 
-- Improve `forge box list` and `forge box inspect` output for components.
 - Verify aggregate boxes and component consumption on Linux, macOS, and
   Windows.
 

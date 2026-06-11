@@ -196,9 +196,11 @@ Verification, publication, and dependency consumption recursively validate each
 embedded box and ensure its package identity, package type, and target match its
 declaration.
 
-`forge box list` shows generated boxes in `.forge/boxes/` and published boxes
-in `boxes/`. Box commands accept either an explicit path or a bare filename;
-bare filenames are resolved from those directories.
+`forge box list` validates boxes in `.forge/boxes/` and `boxes/`, then shows
+their package identity, target, type, or selectable component names and types.
+`forge box inspect` prints a readable identity/component summary before the
+complete verified manifest. Box commands accept either an explicit path or a
+bare filename; bare filenames are resolved from those directories.
 
 `forge box publish <box>` publishes a verified box locally into the
 project-root `boxes/` directory and writes `<box>.sha256` using the standard

@@ -416,7 +416,14 @@ namespace
       forge::inspect_box(box, directory.path(), runner, output, error) == 0,
       "box inspect succeeds"
     );
-    expect(contains(output.str(), "format = 1"), "box inspect prints the manifest");
+    expect(
+      contains(output.str(), "Package: hello 0.1.0")
+      && contains(output.str(), "Target: test-test")
+      && contains(output.str(), "Type: executable")
+      && contains(output.str(), "Manifest:")
+      && contains(output.str(), "format = 1"),
+      "box inspect prints a summary and the manifest"
+    );
   }
 
   void test_verify_rejects_checksum_mismatch()
