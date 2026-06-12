@@ -1979,6 +1979,50 @@ namespace forge
       return true;
     }
 
+    struct VersionHeaderCandidate
+    {
+      std::string path;
+      std::string prefix;
+    };
+
+    std::vector<VersionHeaderCandidate> infer_version_headers(
+      const std::filesystem::path& project_directory,
+      const std::vector<std::string>& headers)
+    {
+      static const std::regex definition {
+        R"regex(^\s*#\s*define\s+([A-Z_][A-Z0-9_]*)_VERSION_(STR|MAJOR|MINOR|PATCH|BUILD)\b)regex"
+      };
+      std::vector<VersionHeaderCandidate> candidates;
+
+      for (const auto& header : headers)
+      {
+        std::ifstream file { project_directory / header };
+        std::map<std::string, std::set<std::string>> definitions;
+        std::string line;
+
+        while (std::getline(file, line))
+        {
+          std::smatch match;
+
+          if (std::regex_search(line, match, definition))
+          {
+            definitions[match[1].str()].insert(match[2].str());
+          }
+        }
+
+        for (const auto& [prefix, suffixes] : definitions)
+        {
+          if (suffixes.size() == 5)
+          {
+            candidates.push_back({ header, prefix });
+          }
+        }
+      }
+
+      std::ranges::sort(candidates, {}, &VersionHeaderCandidate::path);
+      return candidates;
+    }
+
     struct IncludedHeader
     {
       std::string path;
@@ -3605,6 +3649,7 @@ namespace forge
     const auto formatted_sources = format_sources(sources);
     const auto formatted_headers = format_sources(public_headers);
     const auto formatted_include_directories = format_sources(include_directories);
+    const auto version_headers = infer_version_headers(project_directory, headers);
     const auto inferred_library_type =
       options.library_type
         ? *options.library_type
@@ -3812,6 +3857,13 @@ namespace forge
       }
     }
 
+    if (version_headers.size() == 1)
+    {
+      recipe += "\n[version_header]\n"
+        "path = \"" + escape_toml_string(version_headers.front().path) + "\"\n"
+        "prefix = \"" + version_headers.front().prefix + "\"\n";
+    }
+
     if (visual_studio_project)
     {
       for (const auto& [name, profile] : visual_studio_project->profiles)
@@ -3923,6 +3975,22 @@ namespace forge
     {
       output << "Inferred " << include_directories.size() << " local include director";
       output << (include_directories.size() == 1 ? "y\n" : "ies\n");
+    }
+
+    if (version_headers.size() == 1)
+    {
+      output << "Inferred version header " << version_headers.front().path
+             << " with prefix " << version_headers.front().prefix << '\n';
+    }
+    else if (version_headers.size() > 1)
+    {
+      output << "Found " << version_headers.size()
+             << " possible version headers; configure [version_header] manually:\n";
+
+      for (const auto& candidate : version_headers)
+      {
+        output << "  " << candidate.path << " with prefix " << candidate.prefix << '\n';
+      }
     }
 
     if (!inferred_runtime_files.empty())

@@ -181,6 +181,11 @@ preserves the library as a named target and makes the inferred executable
 targets depend on it. Plain path and Git dependencies automatically select a
 named library target matching the package name.
 
+When exactly one existing header declares a shared uppercase prefix for
+`VERSION_STR`, `VERSION_MAJOR`, `VERSION_MINOR`, `VERSION_PATCH`, and
+`VERSION_BUILD`, adoption configures it as `[version_header]`. Multiple matches
+are reported for manual selection instead of guessing.
+
 When a project directory contains one `.vcxproj`, `forge adopt` imports its
 project name, source and header items, output type, C++ standard, project
 references, and concrete project-relative include paths. Preprocessor

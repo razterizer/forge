@@ -431,6 +431,78 @@ namespace
     expect(!contains(recipe, "generated.cpp"), "adopt ignores generated directories");
   }
 
+  void test_adopt_infers_unique_version_header()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+    write_file(
+      directory.path() / "include/Core/version.h",
+      "#pragma once\n"
+      "#define CORE_VERSION_STR \"1.4.0.7\"\n"
+      "#define CORE_VERSION_MAJOR 1\n"
+      "#define CORE_VERSION_MINOR 4\n"
+      "#define CORE_VERSION_PATCH 0\n"
+      "#define CORE_VERSION_BUILD 7\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt infers a unique generated version header"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(
+        recipe,
+        "[version_header]\npath = \"include/Core/version.h\"\nprefix = \"CORE\""
+      ),
+      "adopt configures the inferred version header"
+    );
+    expect(
+      contains(output.str(), "Inferred version header include/Core/version.h with prefix CORE"),
+      "adopt reports the inferred version header"
+    );
+    expect(error.str().empty(), "unique version-header inference does not write an error");
+  }
+
+  void test_adopt_reports_ambiguous_version_headers()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+
+    for (const auto prefix : { std::string_view { "FIRST" }, std::string_view { "SECOND" } })
+    {
+      write_file(
+        directory.path() / "include" / prefix / "version.h",
+        "#pragma once\n"
+        "#define " + std::string { prefix } + "_VERSION_STR \"1.0.0\"\n"
+        "#define " + std::string { prefix } + "_VERSION_MAJOR 1\n"
+        "#define " + std::string { prefix } + "_VERSION_MINOR 0\n"
+        "#define " + std::string { prefix } + "_VERSION_PATCH 0\n"
+        "#define " + std::string { prefix } + "_VERSION_BUILD 0\n"
+      );
+    }
+
+    std::ostringstream output;
+    std::ostringstream error;
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt preserves ambiguous version headers for manual selection"
+    );
+    expect(
+      !contains(read_file(directory.path() / "forge.recipe.toml"), "[version_header]"),
+      "ambiguous version headers are not configured automatically"
+    );
+    expect(
+      contains(output.str(), "Found 2 possible version headers")
+        && contains(output.str(), "include/FIRST/version.h with prefix FIRST")
+        && contains(output.str(), "include/SECOND/version.h with prefix SECOND"),
+      "adopt reports ambiguous version-header candidates"
+    );
+    expect(error.str().empty(), "ambiguous version-header inference does not fail adoption");
+  }
+
   void test_init_infers_local_include_directories()
   {
     TemporaryDirectory directory;
@@ -4552,6 +4624,8 @@ int main()
   test_init_alias_adopts_existing_project();
   test_init_discovers_existing_sources();
   test_init_ignores_generated_directories();
+  test_adopt_infers_unique_version_header();
+  test_adopt_reports_ambiguous_version_headers();
   test_init_infers_local_include_directories();
   test_adopt_imports_visual_studio_project();
   test_adopt_imports_cmake_project();
