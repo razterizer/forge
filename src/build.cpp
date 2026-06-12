@@ -284,6 +284,8 @@ namespace forge
       }
 
       const auto script = destination.parent_path() / "download.cmake";
+      auto status_path = destination;
+      status_path += ".status";
       std::ofstream file { script };
 
       if (!file)
@@ -295,25 +297,49 @@ namespace forge
       file
         << "file(DOWNLOAD \"${URL}\" \"${DESTINATION}.tmp\" STATUS status TLS_VERIFY ON)\n"
         << "list(GET status 0 code)\n"
+        << "file(WRITE \"${STATUS_FILE}\" \"${code}\")\n"
         << "if(NOT code EQUAL 0)\n"
         << "  file(REMOVE \"${DESTINATION}.tmp\")\n"
-        << "  message(FATAL_ERROR \"download failed: ${status}\")\n"
+        << "  return()\n"
         << "endif()\n"
         << "file(REMOVE \"${DESTINATION}\")\n"
         << "file(RENAME \"${DESTINATION}.tmp\" \"${DESTINATION}\")\n";
       file.close();
 
-      return process_runner(
+      std::error_code filesystem_error;
+      std::filesystem::remove(status_path, filesystem_error);
+      const auto result = process_runner(
         {
           "cmake",
           "-DURL=" + std::string { url },
           "-DDESTINATION=" + destination.generic_string(),
+          "-DSTATUS_FILE=" + status_path.generic_string(),
           "-P",
           script.string()
         },
         parent_directory,
         error
-      ) == 0;
+      );
+
+      if (result != 0)
+      {
+        return false;
+      }
+
+      std::ifstream status_file { status_path };
+      int status = 0;
+
+      if (status_file)
+      {
+        if (!(status_file >> status))
+        {
+          return false;
+        }
+
+        std::filesystem::remove(status_path, filesystem_error);
+      }
+
+      return status == 0;
     }
 
     bool download_dependency_box(const std::filesystem::path& parent_directory,

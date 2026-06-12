@@ -8,6 +8,8 @@
   instead of duplicating the same resolution for every platform.
 - Made `forge new` and `forge adopt` ensure existing `.gitignore` files exclude
   generated `.forge` state without replacing user rules.
+- Silenced expected failed GitHub Release asset probes when dependency
+  resolution succeeds with a later package or tag candidate.
 - Made multi-target hosted releases publish each library target as its natural
   cbox and each non-test executable target as a platform archive instead of
   publishing the aggregate format-3 box by default.
