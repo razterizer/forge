@@ -39,6 +39,9 @@ rules:
   release-note headings use `<version>.<number>` or
   `<version>+build.<number>`. It also qualifies default Git release tags and
   requires `[build].number`.
+- `[version_header]` declares a project-relative generated C/C++ header path
+  and uppercase macro prefix. `forge bump` regenerates its version string,
+  major, minor, patch, and build macros.
 - Projects may declare local static-library, dynamic-library, imported-library,
   and header-only dependencies using name and either project-path or cbox-path
   inline tables.

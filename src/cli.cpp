@@ -174,7 +174,8 @@ namespace forge::cli
           << "Usage:\n"
           << "  forge bump <major|minor|patch>\n\n"
           << "Updates forge.recipe.toml, increments the build number, and adds a new\n"
-          << "topmost section to RELEASE_NOTES.md.\n";
+          << "topmost section to RELEASE_NOTES.md. A configured version header is\n"
+          << "regenerated from the new version and build number.\n";
         return true;
       }
 

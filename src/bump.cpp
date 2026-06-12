@@ -263,6 +263,15 @@ namespace forge
                     const std::string& content,
                     std::ostream& error)
     {
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(path.parent_path(), filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not create directory for '" << path.string() << "'\n";
+        return false;
+      }
+
       std::ofstream file { path };
       file << content;
 
@@ -273,6 +282,43 @@ namespace forge
       }
 
       return true;
+    }
+
+    bool is_safe_project_path(const std::filesystem::path& path)
+    {
+      if (path.empty() || path.is_absolute())
+      {
+        return false;
+      }
+
+      for (const auto& component : path)
+      {
+        if (component == "..")
+        {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    std::string version_header(std::string_view prefix,
+                               std::string_view version,
+                               const Version& parsed,
+                               const std::optional<int>& build_number)
+    {
+      const auto qualified_version =
+        build_number
+          ? std::string { version } + "." + std::to_string(*build_number)
+          : std::string { version };
+      const auto macro = std::string { prefix } + "_VERSION_";
+      return
+        "#pragma once\n"
+        "#define " + macro + "STR \"" + qualified_version + "\"\n"
+        "#define " + macro + "MAJOR " + std::to_string(parsed.major) + "\n"
+        "#define " + macro + "MINOR " + std::to_string(parsed.minor) + "\n"
+        "#define " + macro + "PATCH " + std::to_string(parsed.patch) + "\n"
+        "#define " + macro + "BUILD " + std::to_string(build_number.value_or(0)) + "\n";
     }
 
     bool replace_files(const std::filesystem::path& recipe_path,
@@ -374,6 +420,12 @@ namespace forge
       return 2;
     }
 
+    if (!recipe.version_header_path.empty() && !is_safe_project_path(recipe.version_header_path))
+    {
+      error << "forge: version header path must stay inside the project\n";
+      return 2;
+    }
+
     const auto version = bumped_version(current, component, error);
 
     if (version.empty())
@@ -426,6 +478,22 @@ namespace forge
       return 2;
     }
 
+    if (!recipe.version_header_path.empty())
+    {
+      Version parsed;
+      parse_version(version, parsed);
+      const auto header_path = project_directory / recipe.version_header_path;
+
+      if (!write_file(
+        header_path,
+        version_header(recipe.version_header_prefix, version, parsed, build_number),
+        error
+      ))
+      {
+        return 2;
+      }
+    }
+
     output << "Bumped " << recipe.version << " to " << version;
 
     if (build_number)
@@ -434,6 +502,12 @@ namespace forge
     }
 
     output << '\n' << "Prepared RELEASE_NOTES.md section " << release_heading << '\n';
+
+    if (!recipe.version_header_path.empty())
+    {
+      output << "Generated " << recipe.version_header_path.generic_string() << '\n';
+    }
+
     return 0;
   }
 

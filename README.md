@@ -876,6 +876,20 @@ components as appropriate, and adds a new topmost release-notes section. When
 the recipe has `[build].number`, Forge increments it too. The command only
 prepares project files; it does not build, tag, or publish the release.
 
+Forge can also own a checked-in C/C++ version header:
+
+```toml
+[version_header]
+path = "include/Termin8or/version/version.h"
+prefix = "TERMIN8OR"
+```
+
+On every `forge bump`, Forge regenerates `PREFIX_VERSION_STR`,
+`PREFIX_VERSION_MAJOR`, `PREFIX_VERSION_MINOR`, `PREFIX_VERSION_PATCH`, and
+`PREFIX_VERSION_BUILD`. When `[build].number` exists, the string uses the
+existing dotted convention such as `"3.0.2.8"`; otherwise it uses the semantic
+version and defines the build value as `0`.
+
 Additional release files and directories can be declared in the recipe:
 
 ```toml

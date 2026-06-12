@@ -854,6 +854,31 @@ namespace forge
           recipe.release_notes_build_number_format = std::move(format);
         }
       }
+      else if (section == "version_header" && key == "path")
+      {
+        std::string path;
+        valid = parse_string(value, path);
+
+        if (valid)
+        {
+          recipe.version_header_path = std::move(path);
+        }
+      }
+      else if (section == "version_header" && key == "prefix")
+      {
+        valid = parse_string(value, recipe.version_header_prefix)
+          && !recipe.version_header_prefix.empty()
+          && std::ranges::all_of(
+            recipe.version_header_prefix,
+            [](unsigned char character)
+            {
+              return std::isupper(character)
+                || std::isdigit(character)
+                || character == '_';
+            }
+          )
+          && !std::isdigit(static_cast<unsigned char>(recipe.version_header_prefix.front()));
+      }
 
       if (!valid)
       {
@@ -871,6 +896,12 @@ namespace forge
     if (recipe.release_notes_build_number_format && !recipe.build_number)
     {
       error << "forge: release.build_number_format requires build.number\n";
+      return false;
+    }
+
+    if (recipe.version_header_path.empty() != recipe.version_header_prefix.empty())
+    {
+      error << "forge: version_header requires path and prefix\n";
       return false;
     }
 

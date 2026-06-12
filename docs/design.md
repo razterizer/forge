@@ -173,7 +173,6 @@ dependency graph and selected artifacts on every supported host.
 - Generate release manifests containing artifacts, checksums, components,
   dependencies, and toolchain identities.
 - Add dry-run support for release preparation, tagging, and publication.
-- Add generated version headers.
 - Make generated CI files thin, updateable adapters around locally runnable
   Forge commands.
 

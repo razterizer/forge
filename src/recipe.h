@@ -91,6 +91,8 @@ namespace forge
     std::vector<RuntimeFile> runtime_files;
     std::vector<std::filesystem::path> release_files;
     std::optional<std::string> release_notes_build_number_format;
+    std::filesystem::path version_header_path;
+    std::string version_header_prefix;
     std::vector<RecipeTarget> targets;
     std::vector<RecipeTarget> internal_targets;
     std::vector<std::string> selected_internal_dependencies;

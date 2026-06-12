@@ -4290,7 +4290,10 @@ namespace
       "[build]\n"
       "number = 21\n\n"
       "[sources]\n"
-      "paths = [\"main.cpp\"]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[version_header]\n"
+      "path = \"include/hello/version.h\"\n"
+      "prefix = \"HELLO\"\n"
     );
     write_file(
       directory.path() / "RELEASE_NOTES.md",
@@ -4311,11 +4314,24 @@ namespace
     );
     const auto recipe = read_file(directory.path() / "forge.recipe.toml");
     const auto notes = read_file(directory.path() / "RELEASE_NOTES.md");
+    const auto version_header = read_file(directory.path() / "include/hello/version.h");
     expect(contains(recipe, "version = \"2.0.0\""), "major bump resets minor and patch versions");
     expect(contains(recipe, "number = 22"), "bump increments an existing build number");
     expect(contains(notes, "## 2.0.0\n\n- Describe changes."), "bump prepares release notes");
     expect(notes.find("## 2.0.0") < notes.find("## 1.3.5"), "new release notes appear first");
     expect(contains(output.str(), "Bumped 1.3.5 to 2.0.0"), "bump reports the version change");
+    expect(
+      contains(version_header, "#define HELLO_VERSION_STR \"2.0.0.22\"")
+        && contains(version_header, "#define HELLO_VERSION_MAJOR 2")
+        && contains(version_header, "#define HELLO_VERSION_MINOR 0")
+        && contains(version_header, "#define HELLO_VERSION_PATCH 0")
+        && contains(version_header, "#define HELLO_VERSION_BUILD 22"),
+      "bump generates the configured version header"
+    );
+    expect(
+      contains(output.str(), "Generated include/hello/version.h"),
+      "bump reports the generated version header"
+    );
     expect(error.str().empty(), "successful bump does not write an error");
   }
 
