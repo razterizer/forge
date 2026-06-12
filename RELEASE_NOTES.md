@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.8.0
+
+- Describe changes.
+
 ## 0.7.0
 
 - Added profile-aware GitHub dependency updates and a dedicated dependency guide
