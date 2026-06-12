@@ -1574,6 +1574,7 @@ namespace
     std::ostringstream error;
     write_file(directory.path() / "main.cpp", "int main() {}\n");
     write_file(directory.path() / "RELEASE_NOTES.md", "# Existing notes\n");
+    write_file(directory.path() / ".gitignore", "/existing-build/\n");
     write_file(
       directory.path() / ".github/workflows/release-linux.yml",
       "name: custom release\n"
@@ -1593,6 +1594,11 @@ namespace
     expect(
       std::filesystem::exists(directory.path() / ".github/workflows/release-windows.yml"),
       "adopt creates missing GitHub workflows"
+    );
+    expect(
+      read_file(directory.path() / ".gitignore")
+        == "/existing-build/\n**/.forge/\n",
+      "adopt adds Forge state to an existing gitignore without replacing it"
     );
   }
 

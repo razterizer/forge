@@ -913,8 +913,9 @@ artifacts to the matching GitHub Release. Executable projects produce a
 target-qualified ZIP archive. Static-library, dynamic-library, and header-only
 projects produce a target-qualified `.cbox` and its `.sha256` checksum under
 `boxes/`. Existing workflow files and release notes are never overwritten by
-`forge adopt`. Generated `.gitignore` files exclude Forge build state. Tag
-creation remains an explicit opt-in action.
+`forge adopt`. Both commands ensure `.gitignore` excludes Forge build state
+without replacing existing ignore rules. Tag creation remains an explicit
+opt-in action.
 
 Generated Windows release workflows explicitly initialize an x64 MSVC
 developer environment and select `cl`, so released binaries use Microsoft's

@@ -13,6 +13,8 @@ namespace forge
   namespace
   {
 
+    std::string_view trim(std::string_view value);
+
     bool write_new_file(const std::filesystem::path& path,
                         std::string_view contents,
                         std::ostream& error)
@@ -35,6 +37,63 @@ namespace forge
       if (!file)
       {
         error << "forge: could not write '" << path.string() << "'\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    bool ensure_forge_gitignore(const std::filesystem::path& path,
+                                std::ostream& error)
+    {
+      if (!std::filesystem::exists(path))
+      {
+        return write_new_file(path, "**/.forge/\n/build/\n/out/\n", error);
+      }
+
+      std::ifstream existing { path };
+
+      if (!existing)
+      {
+        error << "forge: could not read '" << path.string() << "'\n";
+        return false;
+      }
+
+      std::string contents {
+        std::istreambuf_iterator<char> { existing },
+        std::istreambuf_iterator<char> {}
+      };
+      std::istringstream lines { contents };
+      std::string line;
+
+      while (std::getline(lines, line))
+      {
+        const auto rule = trim(line);
+
+        if (rule == ".forge/" || rule == "/.forge/" || rule == "**/.forge/")
+        {
+          return true;
+        }
+      }
+
+      std::ofstream file { path, std::ios::app };
+
+      if (!file)
+      {
+        error << "forge: could not update '" << path.string() << "'\n";
+        return false;
+      }
+
+      if (!contents.empty() && contents.back() != '\n')
+      {
+        file << '\n';
+      }
+
+      file << "**/.forge/\n";
+
+      if (!file)
+      {
+        error << "forge: could not update '" << path.string() << "'\n";
         return false;
       }
 
@@ -908,14 +967,9 @@ namespace forge
       "\n"
       "- Initial release.\n";
 
-    constexpr std::string_view gitignore =
-      "**/.forge/\n"
-      "/build/\n"
-      "/out/\n";
-
     return
       write_new_file(project_directory / "RELEASE_NOTES.md", release_notes, error)
-      && write_new_file(project_directory / ".gitignore", gitignore, error);
+      && ensure_forge_gitignore(project_directory / ".gitignore", error);
   }
 
 } // namespace forge
