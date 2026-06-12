@@ -127,13 +127,14 @@ workspace, box, runtime-assembly, and hosted-release milestones. The remaining
 roadmap focuses on making those features compose cleanly and stabilizing them
 for 1.0.
 
-### v0.7: Complete multi-component package publication
+### v0.7: Complete multi-target package publication
 
-- Verify aggregate boxes and component consumption on Linux, macOS, and
-  Windows.
+- Verify aggregate boxes, natural library cboxes, executable archives, and
+  component consumption on Linux, macOS, and Windows.
 
-Release criterion: Core and Termin8or can publish one box per platform, and a
-consumer can select their library components from local or GitHub-hosted boxes.
+Release criterion: Core and Termin8or publish directly consumable library
+cboxes and downloadable non-test executable archives on every platform, while
+aggregate boxes remain available for explicit component-container workflows.
 
 ### v0.8: Complete workspace and adoption lifecycle
 

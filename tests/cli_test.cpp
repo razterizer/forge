@@ -2180,7 +2180,7 @@ namespace
       std::string_view { "prepare-release" },
       std::string_view { "math" }
     };
-    constexpr std::array prepare_aggregate_release_arguments {
+    constexpr std::array prepare_all_release_arguments {
       std::string_view { "workflow" },
       std::string_view { "prepare-release" }
     };
@@ -2196,8 +2196,8 @@ namespace
     std::ostringstream release_error;
     std::ostringstream prepare_output;
     std::ostringstream prepare_error;
-    std::ostringstream prepare_aggregate_output;
-    std::ostringstream prepare_aggregate_error;
+    std::ostringstream prepare_all_output;
+    std::ostringstream prepare_all_error;
 
     expect(
       forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
@@ -2361,24 +2361,38 @@ namespace
       std::filesystem::exists(directory.path() / "boxes" / math_box.filename()),
       "named library hosted assets publish its box"
     );
+    std::filesystem::remove_all(directory.path() / "boxes");
     expect(
       forge::cli::run(
-        prepare_aggregate_release_arguments,
+        prepare_all_release_arguments,
         directory.path(),
-        prepare_aggregate_output,
-        prepare_aggregate_error
+        prepare_all_output,
+        prepare_all_error
       ) == 0,
-      "CLI prepares hosted assets for a multi-component platform box"
+      "CLI prepares hosted assets for every named target"
     );
     expect(
-      std::filesystem::exists(directory.path() / "boxes" / container_box.filename()),
-      "multi-component hosted assets publish the aggregate box"
+      std::filesystem::exists(directory.path() / "boxes" / suite_box.filename())
+      && std::filesystem::exists(directory.path() / "boxes" / math_box.filename()),
+      "multi-target hosted assets publish each library component box"
     );
     expect(
       std::filesystem::exists(
-        directory.path() / "boxes" / (container_box.filename().string() + ".sha256")
+        directory.path() / ".forge/release"
+          / ("examples-0.1.0-" + current_target() + ".zip")
       ),
-      "multi-component hosted assets publish the aggregate checksum"
+      "multi-target hosted assets prepare each non-test executable archive"
+    );
+    expect(
+      !std::filesystem::exists(
+        directory.path() / ".forge/release"
+          / ("unit_tests-0.1.0-" + current_target() + ".zip")
+      ),
+      "multi-target hosted assets do not publish marked test executables"
+    );
+    expect(
+      !std::filesystem::exists(directory.path() / "boxes" / container_box.filename()),
+      "multi-target hosted assets do not publish the aggregate box by default"
     );
     expect(build_error.str().empty(), "named target CLI build does not write an error");
     expect(run_error.str().empty(), "named target CLI run does not write an error");
@@ -2388,8 +2402,8 @@ namespace
     expect(release_error.str().empty(), "successful named target release does not write an error");
     expect(prepare_error.str().empty(), "successful named target hosted assets do not write an error");
     expect(
-      prepare_aggregate_error.str().empty(),
-      "successful multi-component hosted assets do not write an error"
+      prepare_all_error.str().empty(),
+      "successful multi-target hosted assets do not write an error"
     );
   }
 

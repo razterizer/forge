@@ -2,6 +2,10 @@
 
 ## 0.7.0
 
+- Made multi-target hosted releases publish each library target as its natural
+  cbox and each non-test executable target as a platform archive instead of
+  publishing the aggregate format-3 box by default.
+- Made executable release archive names include declared build metadata.
 - Made aggregate-box metadata validation reuse one flat checksum cache, avoiding
   recursive cache paths that exceeded Windows path limits.
 - Made header-only boxes display their target as `any`.

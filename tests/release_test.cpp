@@ -348,6 +348,10 @@ namespace
       && !contains(notes_text.str(), "Unqualified release."),
       "release extracts only the matching build-qualified notes"
     );
+    expect(
+      std::filesystem::is_directory(directory.path() / ".forge/release/hello-0.1.0+build.7"),
+      "build-qualified executable release uses a distinct package name"
+    );
     expect(error.str().empty(), "build-qualified release notes do not write an error");
   }
 

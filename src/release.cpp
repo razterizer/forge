@@ -191,6 +191,18 @@ namespace forge
       return heading;
     }
 
+    std::string package_version(const Recipe& recipe)
+    {
+      auto version = recipe.version;
+
+      if (recipe.build_number)
+      {
+        version += "+build." + std::to_string(*recipe.build_number);
+      }
+
+      return version;
+    }
+
     bool extract_release_notes(const std::filesystem::path& source,
                                std::string_view version,
                                std::optional<std::string>& notes,
@@ -552,7 +564,7 @@ namespace forge
       return 2;
     }
 
-    const auto package_name = recipe.name + "-" + recipe.version;
+    const auto package_name = recipe.name + "-" + package_version(recipe);
     const auto release_directory = project_directory / ".forge" / "release";
     const auto staging_directory = release_directory / package_name;
     const auto archive_path = release_directory / (package_name + ".zip");
@@ -720,9 +732,31 @@ namespace forge
       return 2;
     }
 
-    const auto aggregate_box = !target && recipe.targets.size() > 1;
+    if (!target && recipe.targets.size() > 1)
+    {
+      for (const auto& release_target : recipe.targets)
+      {
+        if (release_target.test)
+        {
+          continue;
+        }
 
-    if (!aggregate_box && !select_recipe_target(recipe, target, error))
+        if (prepare_release(
+          project_directory,
+          release_target.name,
+          process_runner,
+          output,
+          error
+        ) != 0)
+        {
+          return 2;
+        }
+      }
+
+      return 0;
+    }
+
+    if (!select_recipe_target(recipe, target, error))
     {
       return 2;
     }
@@ -737,57 +771,17 @@ namespace forge
       return 2;
     }
 
-    if (aggregate_box)
-    {
-      if (create_box(project_directory, target, process_runner, output, error) != 0)
-      {
-        return 2;
-      }
-
-      const auto boxes_directory = project_directory / ".forge" / "boxes";
-      auto package_version = recipe.version;
-
-      if (recipe.build_number)
-      {
-        package_version += "+build." + std::to_string(*recipe.build_number);
-      }
-
-      auto header_only = true;
-
-      for (const auto& component : recipe.targets)
-      {
-        if (component.type != "header_only")
-        {
-          header_only = false;
-          break;
-        }
-      }
-
-      const auto box = boxes_directory
-        / (recipe.name + "-" + package_version
-           + (header_only ? "-ho" : "-" + hosted_target()) + ".cbox");
-
-      if (!std::filesystem::is_regular_file(box))
-      {
-        error << "forge: could not locate the created aggregate box\n";
-        return 2;
-      }
-
-      if (publish_box(box, project_directory, process_runner, output, error) != 0)
-      {
-        return 2;
-      }
-    }
-    else if (recipe.type == "executable")
+    if (recipe.type == "executable")
     {
       if (release_project(project_directory, target, process_runner, output, error) != 0)
       {
         return 2;
       }
 
-      const auto archive = release_directory / (recipe.name + "-" + recipe.version + ".zip");
+      const auto archive = release_directory / (recipe.name + "-" + package_version(recipe) + ".zip");
       const auto hosted_archive =
-        release_directory / (recipe.name + "-" + recipe.version + "-" + hosted_target() + ".zip");
+        release_directory / (recipe.name + "-" + package_version(recipe)
+                             + "-" + hosted_target() + ".zip");
       std::filesystem::remove(hosted_archive, filesystem_error);
       filesystem_error.clear();
       std::filesystem::rename(archive, hosted_archive, filesystem_error);
@@ -809,41 +803,18 @@ namespace forge
       }
 
       const auto boxes_directory = project_directory / ".forge" / "boxes";
-      const auto prefix = recipe.name + "-" + recipe.version;
-      std::filesystem::path box;
-      std::filesystem::file_time_type modified;
+      auto package_version = recipe.version;
 
-      for (const auto& entry : std::filesystem::directory_iterator { boxes_directory, filesystem_error })
+      if (recipe.build_number)
       {
-        if (filesystem_error)
-        {
-          break;
-        }
-
-        const auto filename = entry.path().filename().string();
-
-        if (!entry.is_regular_file()
-            || entry.path().extension() != ".cbox"
-            || !filename.starts_with(prefix))
-        {
-          continue;
-        }
-
-        const auto entry_modified = entry.last_write_time(filesystem_error);
-
-        if (filesystem_error)
-        {
-          break;
-        }
-
-        if (box.empty() || entry_modified > modified)
-        {
-          box = entry.path();
-          modified = entry_modified;
-        }
+        package_version += "+build." + std::to_string(*recipe.build_number);
       }
 
-      if (filesystem_error || box.empty())
+      const auto box = boxes_directory
+        / (recipe.name + "-" + package_version
+           + (recipe.type == "header_only" ? "-ho" : "-" + hosted_target()) + ".cbox");
+
+      if (!std::filesystem::is_regular_file(box))
       {
         error << "forge: could not locate the created box\n";
         return 2;

@@ -930,8 +930,11 @@ need to run those commands individually before a release.
 
 `forge prepare-release` remains available as a deprecated compatibility alias.
 
-Multi-target projects publish their complete format-3 project box by default.
-Select one target to publish only that component box or executable release.
+Multi-target projects publish each library target as its natural cbox and each
+non-test executable target as a platform archive. Marked test executables are
+not published. Select one target to prepare only that target's hosted asset.
+Explicit `forge box create` still creates the complete format-3 project box
+when an aggregate container is wanted.
 
 Existing custom GitHub workflows can receive a self-contained Forge-managed
 cbox publication job without being replaced:

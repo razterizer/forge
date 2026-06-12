@@ -195,12 +195,9 @@ int main()
   const auto producer = workspace.path() / "producer";
   write_producer(producer);
 
-  constexpr std::array prepare_release {
-    std::string_view { "workflow" },
-    std::string_view { "prepare-release" }
-  };
+  constexpr std::array create_box { std::string_view { "box" }, std::string_view { "create" } };
 
-  if (!run(producer, prepare_release, "publish aggregate format-3 box"))
+  if (!run(producer, create_box, "create aggregate format-3 box"))
   {
     return 1;
   }
@@ -212,13 +209,11 @@ int main()
   }
 
   const auto box_name = "platform-suite-0.7.0-" + current_target() + ".cbox";
-  const auto aggregate_box = producer / "boxes" / box_name;
+  const auto aggregate_box = producer / ".forge/boxes" / box_name;
 
-  if (!std::filesystem::is_regular_file(aggregate_box)
-      || !std::filesystem::is_regular_file(producer / "boxes" / (box_name + ".sha256")))
+  if (!std::filesystem::is_regular_file(aggregate_box))
   {
-    std::cerr << "FAIL: aggregate box and checksum were not published at "
-              << aggregate_box << '\n';
+    std::cerr << "FAIL: aggregate box was not created at " << aggregate_box << '\n';
     return 1;
   }
 
