@@ -531,6 +531,7 @@ namespace forge
       std::filesystem::path path;
       std::string format = "Visual Studio";
       std::string name;
+      std::string version;
       std::string type;
       int cpp_standard = 20;
       std::vector<std::string> sources;
@@ -747,6 +748,26 @@ namespace forge
         || value == "BEFORE" || value == "SYSTEM";
     }
 
+    bool looks_like_semantic_version(std::string_view value)
+    {
+      static const std::regex pattern {
+        R"regex((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?)regex"
+      };
+      return std::regex_match(value.begin(), value.end(), pattern);
+    }
+
+    std::optional<std::string> cmake_build_interface_value(std::string_view value)
+    {
+      constexpr std::string_view prefix { "$<BUILD_INTERFACE:" };
+
+      if (!value.starts_with(prefix) || !value.ends_with('>'))
+      {
+        return std::nullopt;
+      }
+
+      return std::string { value.substr(prefix.size(), value.size() - prefix.size() - 1) };
+    }
+
     std::optional<VisualStudioProject> read_cmake_project(
       const std::filesystem::path& path,
       std::ostream& error)
@@ -775,6 +796,16 @@ namespace forge
         if (command.name == "project" && !command.arguments.empty())
         {
           project.name = command.arguments.front();
+
+          for (std::size_t index = 1; index + 1 < command.arguments.size(); ++index)
+          {
+            if (command.arguments[index] == "VERSION"
+                && looks_like_semantic_version(command.arguments[index + 1]))
+            {
+              project.version = command.arguments[index + 1];
+              break;
+            }
+          }
         }
         else if ((command.name == "add_executable" || command.name == "add_library")
                  && !command.arguments.empty())
@@ -856,18 +887,21 @@ namespace forge
         {
           for (std::size_t index = 1; index < command.arguments.size(); ++index)
           {
-            const auto& argument = command.arguments[index];
+            const auto& original_argument = command.arguments[index];
 
-            if (is_cmake_scope(argument))
+            if (is_cmake_scope(original_argument)
+                || original_argument.starts_with("$<INSTALL_INTERFACE:"))
             {
               continue;
             }
 
+            const auto build_interface = cmake_build_interface_value(original_argument);
+            const auto& argument = build_interface ? *build_interface : original_argument;
             const auto expanded = replace_cmake_paths(argument, directory);
 
             if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
             {
-              project.unresolved_properties.push_back(argument);
+              project.unresolved_properties.push_back(original_argument);
             }
             else if (const auto relative = project_relative_path(directory, expanded))
             {
@@ -1147,9 +1181,7 @@ namespace forge
       }
       else if (targets.size() > 1)
       {
-        project.unresolved_properties.push_back(
-          std::to_string(targets.size()) + " Xcode targets require inferred Forge targets"
-        );
+        project.type.clear();
       }
 
       const std::regex configuration_pattern {
@@ -1732,6 +1764,11 @@ namespace forge
         project.name = additional.name;
       }
 
+      if (project.version.empty())
+      {
+        project.version = additional.version;
+      }
+
       if (project.type.empty())
       {
         project.type = additional.type;
@@ -1942,10 +1979,16 @@ namespace forge
       return true;
     }
 
-    std::vector<std::string> included_headers(const std::filesystem::path& path)
+    struct IncludedHeader
+    {
+      std::string path;
+      bool quoted = false;
+    };
+
+    std::vector<IncludedHeader> included_headers(const std::filesystem::path& path)
     {
       std::ifstream file { path };
-      std::vector<std::string> includes;
+      std::vector<IncludedHeader> includes;
       std::string line;
 
       while (std::getline(file, line))
@@ -1989,7 +2032,7 @@ namespace forge
         {
           auto include = std::string { content.substr(delimiter + 1, end - delimiter - 1) };
           std::replace(include.begin(), include.end(), '\\', '/');
-          includes.push_back(std::move(include));
+          includes.push_back({ std::move(include), content[delimiter] == '"' });
         }
       }
 
@@ -2003,7 +2046,7 @@ namespace forge
         "inttypes.h", "limits.h", "locale.h", "math.h", "process.h", "setjmp.h",
         "signal.h", "stdarg.h", "stdbool.h", "stddef.h", "stdint.h", "stdio.h",
         "stdlib.h", "string.h", "termios.h", "time.h", "uchar.h", "unistd.h", "wchar.h",
-        "wctype.h", "windows.h",
+        "wctype.h", "windows.h", "audioclient.h", "ksmedia.h", "mmdeviceapi.h",
         "algorithm", "any", "array", "atomic", "barrier", "bit", "bitset",
         "cassert", "ccomplex", "cctype", "cerrno", "cfenv", "cfloat", "charconv",
         "chrono", "cinttypes", "ciso646", "climits", "clocale", "cmath",
@@ -2030,7 +2073,11 @@ namespace forge
         && !include.starts_with("linux/")
         && !include.starts_with("machine/")
         && !include.starts_with("arpa/")
-        && !include.starts_with("netinet/");
+        && !include.starts_with("netinet/")
+        && !include.starts_with("alsa/")
+        && !include.starts_with("AudioToolbox/")
+        && !include.starts_with("CoreAudio/")
+        && !include.starts_with("CoreFoundation/");
     }
 
     std::optional<std::string> resolve_local_header(
@@ -2049,8 +2096,10 @@ namespace forge
 
       for (const auto& scanned_file : scanned_files)
       {
-        for (const auto& include : included_headers(project_directory / scanned_file))
+        for (const auto& included : included_headers(project_directory / scanned_file))
         {
+          const auto& include = included.path;
+
           if (!resolve_local_header(scanned_file, include, headers)
               && looks_like_dependency_include(include))
           {
@@ -2542,8 +2591,23 @@ namespace forge
 
       for (const auto& scanned_file : scanned_files)
       {
-        for (const auto& include : included_headers(project_directory / scanned_file))
+        for (const auto& included : included_headers(project_directory / scanned_file))
         {
+          const auto& include = included.path;
+
+          if (included.quoted)
+          {
+            const auto relative =
+              (std::filesystem::path { scanned_file }.parent_path() / include)
+                .lexically_normal()
+                .generic_string();
+
+            if (std::binary_search(headers.begin(), headers.end(), relative))
+            {
+              continue;
+            }
+          }
+
           std::set<std::string> matching_roots;
 
           for (const auto& header : headers)
@@ -2624,8 +2688,9 @@ namespace forge
         auto file = std::move(pending.back());
         pending.pop_back();
 
-        for (const auto& include : included_headers(project_directory / file))
+        for (const auto& included : included_headers(project_directory / file))
         {
+          const auto& include = included.path;
           const auto resolved = resolve_local_header(file, include, headers);
 
           if (resolved && reachable.insert(*resolved).second)
@@ -3532,35 +3597,45 @@ namespace forge
     const auto project_name = visual_studio_project
       ? visual_studio_project->name
       : project_directory.filename().string();
+    const auto project_version =
+      visual_studio_project && !visual_studio_project->version.empty()
+        ? visual_studio_project->version
+        : "0.1.0";
     const auto escaped_project_name = escape_toml_string(project_name);
     const auto formatted_sources = format_sources(sources);
     const auto formatted_headers = format_sources(public_headers);
     const auto formatted_include_directories = format_sources(include_directories);
+    const auto inferred_library_type =
+      options.library_type
+        ? *options.library_type
+        : visual_studio_project
+          && (visual_studio_project->type == "header_only"
+              || visual_studio_project->type == "static_library"
+              || visual_studio_project->type == "dynamic_library")
+        ? visual_studio_project->type
+        : std::string {};
+    const auto inferred_library_with_program =
+      entry_points.size() == 1 && !inferred_library_type.empty();
+    const auto inferred_target_count =
+      entry_points.size() > 1 || inferred_library_with_program
+        ? entry_points.size() + (inferred_library_type.empty() ? 0 : 1)
+        : 0;
     std::vector<std::pair<std::string, RuntimeFile>> inferred_runtime_files;
     std::string recipe =
       "#:schema " + std::string { recipe_schema_url } + "\n"
       "\n"
       "[project]\n"
       "name = \"" + escaped_project_name + "\"\n"
-      "version = \"0.1.0\"\n";
+      "version = \"" + escape_toml_string(project_version) + "\"\n";
 
-    if (entry_points.size() > 1)
+    if (entry_points.size() > 1 || inferred_library_with_program)
     {
       std::set<std::string> target_names;
       const auto inferred_target_sources =
         infer_target_sources(project_directory, sources, headers, entry_points);
-      const auto library_type =
-        options.library_type
-          ? *options.library_type
-          : visual_studio_project
-          && (visual_studio_project->type == "header_only"
-              || visual_studio_project->type == "static_library"
-              || visual_studio_project->type == "dynamic_library")
-          ? visual_studio_project->type
-          : std::string {};
       std::string library_target;
 
-      if (!library_type.empty())
+      if (!inferred_library_type.empty())
       {
         library_target = target_name(project_name, 0);
         target_names.insert(library_target);
@@ -3576,7 +3651,7 @@ namespace forge
 
         recipe
           += "\n[target." + library_target + "]\n"
-          "type = \"" + library_type + "\"\n"
+          "type = \"" + inferred_library_type + "\"\n"
           "cpp_std = " + std::to_string(
             visual_studio_project ? visual_studio_project->cpp_standard : 20
           ) + "\n"
@@ -3651,7 +3726,17 @@ namespace forge
           }
         }
 
-        if (std::filesystem::path { entry_points[index] }.begin()->string() == "Tests")
+        auto first_directory = std::filesystem::path { entry_points[index] }.begin()->string();
+        std::ranges::transform(
+          first_directory,
+          first_directory.begin(),
+          [](unsigned char character)
+          {
+            return static_cast<char>(std::tolower(character));
+          }
+        );
+
+        if (first_directory == "test" || first_directory == "tests")
         {
           recipe += "test = true\n";
         }
@@ -3827,6 +3912,11 @@ namespace forge
           output << "  " << value << '\n';
         }
       }
+    }
+
+    if (inferred_target_count != 0)
+    {
+      output << "Inferred " << inferred_target_count << " Forge targets\n";
     }
 
     if (!include_directories.empty())

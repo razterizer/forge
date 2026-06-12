@@ -608,7 +608,7 @@ namespace
     write_file(
       directory.path() / "CMakeLists.txt",
       "cmake_minimum_required(VERSION 3.25)\n"
-      "project(CMakeApp LANGUAGES CXX)\n"
+      "project(CMakeApp VERSION 2.3.4 LANGUAGES CXX)\n"
       "add_executable(CMakeApp src/main.cpp)\n"
       "target_compile_features(CMakeApp PRIVATE cxx_std_23)\n"
       "target_include_directories(CMakeApp PRIVATE ${PROJECT_SOURCE_DIR}/include)\n"
@@ -631,6 +631,7 @@ namespace
     );
     const auto recipe = read_file(directory.path() / "forge.recipe.toml");
     expect(contains(recipe, "name = \"CMakeApp\""), "adopt imports the CMake project name");
+    expect(contains(recipe, "version = \"2.3.4\""), "adopt imports the CMake project version");
     expect(contains(recipe, "cpp_std = 23"), "adopt imports the CMake C++ standard");
     expect(contains(recipe, "include_dirs = [\"include\"]"), "adopt imports CMake include directories");
     expect(
@@ -692,6 +693,11 @@ namespace
         && contains(recipe, "[target.unit_tests]")
         && contains(recipe, "test = true"),
       "adopt generates a library target used by examples and tests"
+    );
+    expect(
+      !contains(output.str(), "$<BUILD_INTERFACE:")
+        && contains(recipe, "include_dirs = [\"include\"]"),
+      "adopt resolves CMake build-interface include directories"
     );
     write_file(
       application / "main.cpp",
@@ -891,6 +897,71 @@ namespace
     expect(build_error.str().empty(), "imported Xcode build does not write an error");
   }
 
+  void test_adopt_infers_library_and_single_program_from_mirrored_projects()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "project(Applaudio VERSION 1.0.0)\n"
+      "add_library(Applaudio INTERFACE)\n"
+      "target_include_directories(Applaudio INTERFACE "
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> "
+      "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)\n"
+    );
+    write_file(
+      directory.path() / "Applaudio.xcodeproj/project.pbxproj",
+      "{ objects = {\n"
+      "LIB = { isa = PBXNativeTarget; name = Applaudio; "
+      "productType = \"com.apple.product-type.library.static\"; };\n"
+      "TEST = { isa = PBXNativeTarget; name = Test; "
+      "productType = \"com.apple.product-type.tool\"; };\n"
+      "}; }\n"
+    );
+    write_file(
+      directory.path() / "include/Applaudio/audio.h",
+      "#pragma once\n#include \"detail.h\"\ninline int answer() { return detail(); }\n"
+    );
+    write_file(
+      directory.path() / "include/Applaudio/detail.h",
+      "#pragma once\ninline int detail() { return 42; }\n"
+    );
+    write_file(
+      directory.path() / "Test/test.cpp",
+      "#include <Applaudio/audio.h>\nint main() { return answer() == 42 ? 0 : 1; }\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt infers a library and one program from mirrored projects"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "[target.Applaudio]")
+        && contains(recipe, "version = \"1.0.0\"")
+        && contains(recipe, "type = \"header_only\"")
+        && contains(recipe, "include_dirs = [\"include\"]")
+        && contains(recipe, "[target.test]")
+        && contains(recipe, "dependencies = [\"Applaudio\"]")
+        && contains(recipe, "test = true"),
+      "a single test program is separated from its adopted library target"
+    );
+    expect(
+      !contains(recipe, "include_dirs = [\"include\", \"include/Applaudio\"]"),
+      "same-directory quoted includes do not add redundant include roots"
+    );
+    expect(
+      contains(output.str(), "Inferred 2 Forge targets")
+        && !contains(output.str(), "Xcode targets require inferred Forge targets")
+        && !contains(output.str(), "$<BUILD_INTERFACE:")
+        && !contains(output.str(), "$<INSTALL_INTERFACE:"),
+      "resolved mirrored target metadata is not reported as skipped"
+    );
+    expect(error.str().empty(), "mirrored single-program adoption does not write an error");
+  }
+
   void test_adopt_imports_cmake_superproject_as_workspace()
   {
     TemporaryDirectory directory;
@@ -1045,6 +1116,11 @@ namespace
       "#include <sys/wait.h>\n"
       "#include <conio.h>\n"
       "#include <termios.h>\n"
+      "#include <AudioToolbox/AudioToolbox.h>\n"
+      "#include <alsa/asoundlib.h>\n"
+      "#include <audioclient.h>\n"
+      "#include <ksmedia.h>\n"
+      "#include <mmdeviceapi.h>\n"
       "#include <imgui.h>\n"
       "#include <Core/core.h>\n"
       "int main() { return 0; }\n"
@@ -1071,8 +1147,13 @@ namespace
       !contains(output.str(), "<iostream>")
         && !contains(output.str(), "<sys/wait.h>")
         && !contains(output.str(), "<conio.h>")
-        && !contains(output.str(), "<termios.h>"),
-      "adopt excludes known system headers from dependency candidates"
+        && !contains(output.str(), "<termios.h>")
+        && !contains(output.str(), "<AudioToolbox/AudioToolbox.h>")
+        && !contains(output.str(), "<alsa/asoundlib.h>")
+        && !contains(output.str(), "<audioclient.h>")
+        && !contains(output.str(), "<ksmedia.h>")
+        && !contains(output.str(), "<mmdeviceapi.h>"),
+      "adopt excludes known standard and platform SDK headers from dependency candidates"
     );
     expect(error.str().empty(), "unresolved dependency includes do not fail adoption");
   }
@@ -4463,6 +4544,7 @@ int main()
   test_adopt_merges_mirrored_cmake_and_visual_studio_projects();
   test_adopt_prefers_cmake_over_generated_solution();
   test_adopt_imports_xcode_project();
+  test_adopt_infers_library_and_single_program_from_mirrored_projects();
   test_adopt_imports_cmake_superproject_as_workspace();
   test_adopt_imports_visual_studio_solution();
   test_adopt_reports_unresolved_dependency_includes();
