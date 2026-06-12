@@ -28,6 +28,7 @@ namespace forge
     std::string commit;
     std::string type;
     std::string component;
+    std::string resolved_target;
   };
 
   struct ImportProfile

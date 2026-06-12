@@ -476,6 +476,8 @@ namespace forge
 
           dependency.url = release_url + asset;
           dependency.sha256 = std::move(checksum);
+          dependency.resolved_target =
+            asset == header_only_asset ? "any" : target_os() + "-" + target_arch();
           return true;
         }
       }
@@ -881,7 +883,6 @@ namespace forge
                                       std::ostream& error)
     {
       const auto target = current_target();
-      const auto key = lock_key(dependency.name, target);
       const auto update =
         dependency_session->options.update_dependencies
         && (!dependency_session->options.update_dependency
@@ -902,14 +903,33 @@ namespace forge
           return false;
         }
 
-        dependency_session->locked_dependencies[key] =
+        const auto resolved_target = dependency.resolved_target.empty()
+          ? target
+          : dependency.resolved_target;
+
+        for (auto entry = dependency_session->locked_dependencies.begin();
+             entry != dependency_session->locked_dependencies.end();)
+        {
+          if (entry->second.name == dependency.name
+              && (resolved_target == "any" || entry->second.target == "any"
+                  || entry->second.target == resolved_target))
+          {
+            entry = dependency_session->locked_dependencies.erase(entry);
+          }
+          else
+          {
+            ++entry;
+          }
+        }
+
+        dependency_session->locked_dependencies[lock_key(dependency.name, resolved_target)] =
           {
             dependency.name,
             dependency.github,
             dependency.package.empty() ? dependency.name : dependency.package,
             dependency.component,
             dependency.version,
-            target,
+            resolved_target,
             dependency.url,
             dependency.sha256
           };
@@ -917,7 +937,12 @@ namespace forge
         return true;
       }
 
-      const auto locked = dependency_session->locked_dependencies.find(key);
+      auto locked = dependency_session->locked_dependencies.find(lock_key(dependency.name, target));
+
+      if (locked == dependency_session->locked_dependencies.end())
+      {
+        locked = dependency_session->locked_dependencies.find(lock_key(dependency.name, "any"));
+      }
 
       if (locked == dependency_session->locked_dependencies.end())
       {
@@ -946,7 +971,7 @@ namespace forge
         output << " component " << dependency.component;
       }
 
-      output << " for " << target << '\n';
+      output << " for " << locked->second.target << '\n';
       return true;
     }
 
@@ -1820,6 +1845,7 @@ namespace forge
                 {},
                 {},
                 child.type,
+                {},
                 {}
               }
             );

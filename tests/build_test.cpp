@@ -1085,14 +1085,6 @@ namespace
     expect(invocations == 0, "unlocked GitHub dependency does not access the network");
     expect(contains(error.str(), "run forge update answer"), "unlocked dependency explains how to resolve it");
 
-#ifdef _WIN32
-    const std::string target = "windows-x86_64";
-#elif __APPLE__
-    const std::string target = "macos-arm64";
-#else
-    const std::string target = "linux-x86_64";
-#endif
-
     const std::string checksum =
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
     std::ofstream lock { directory.path() / "forge.lock.toml" };
@@ -1102,7 +1094,7 @@ namespace
       << "name = \"answer\"\n"
       << "github = \"example/answer\"\n"
       << "version = \"1.2.3\"\n"
-      << "target = \"" << target << "\"\n"
+      << "target = \"any\"\n"
       << "url = \"https://example.invalid/answer.cbox\"\n"
       << "sha256 = \"" << checksum << "\"\n";
     lock.close();
@@ -1117,7 +1109,10 @@ namespace
       "locked GitHub dependency reaches box validation"
     );
     expect(invocations == 0, "locked GitHub dependency skips checksum and box downloads");
-    expect(contains(output.str(), "Using locked dependency answer"), "build reports the locked dependency");
+    expect(
+      contains(output.str(), "Using locked dependency answer for any"),
+      "build reuses a portable locked dependency on the current target"
+    );
 
     write_project(directory.path());
     std::ofstream changed_recipe { directory.path() / "forge.recipe.toml", std::ios::app };

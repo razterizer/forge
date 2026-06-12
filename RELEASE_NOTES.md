@@ -4,6 +4,8 @@
 
 - Added profile-aware GitHub dependency updates and a dedicated dependency guide
   covering local and remote source and cbox workflows.
+- Made GitHub Release header-only cboxes use one portable `any` lock entry
+  instead of duplicating the same resolution for every platform.
 - Made multi-target hosted releases publish each library target as its natural
   cbox and each non-test executable target as a platform archive instead of
   publishing the aggregate format-3 box by default.

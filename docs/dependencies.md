@@ -123,8 +123,9 @@ forge test --profile=pinned
 ```
 
 Commit `forge.lock.toml` after updating remotely resolved GitHub Release
-packages. Lock entries for other targets are preserved, allowing Linux, macOS,
-and Windows resolutions to coexist.
+packages. Compiled package entries are recorded per target, allowing Linux,
+macOS, and Windows resolutions to coexist. Portable header-only packages are
+recorded once with `target = "any"` and reused on every host.
 
 ## Choosing a form
 

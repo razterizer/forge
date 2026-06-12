@@ -117,8 +117,9 @@ records the exact package, component, target, URL, and checksum in
 Normal builds require and consume matching locked entries without re-resolving
 GitHub. `forge update` and `forge update <dependency>` deliberately refresh
 current-target entries without building the current project, while preserving
-other targets. Lockfile format 2 records package and component identity;
-format-1 lockfiles remain readable and are upgraded on the next update.
+other targets. Header-only release boxes use one portable `any` lock entry.
+Lockfile format 2 records package and component identity; format-1 lockfiles
+remain readable and are upgraded on the next update.
 
 ## Remaining roadmap
 

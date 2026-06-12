@@ -593,7 +593,8 @@ target-specific lock entries and never re-resolve GitHub release checksums.
 They fail with an update command when the recipe and lockfile disagree.
 Updating resolves and verifies dependencies without building the current
 project. Updating one target preserves entries previously resolved for other
-targets.
+targets. Portable header-only cboxes use one `target = "any"` lock entry that
+is reused on every host.
 
 When selecting a box with build metadata, include it in the dependency version:
 
