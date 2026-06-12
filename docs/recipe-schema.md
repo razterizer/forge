@@ -6,6 +6,9 @@ Forge provides a JSON Schema for `forge.recipe.toml`:
 schemas/forge.recipe.schema.json
 ```
 
+See [dependencies.md](dependencies.md) for the dependency forms, profile
+selection, and lockfile model described by the schema.
+
 TOML-aware editors and language servers can use it for validation,
 documentation, and completion of keys and values such as:
 

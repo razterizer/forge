@@ -2419,6 +2419,10 @@ namespace
       std::string_view { "missing" }
     };
     constexpr std::array update_all_arguments { std::string_view { "update" } };
+    constexpr std::array update_profile_arguments {
+      std::string_view { "update" },
+      std::string_view { "--profile=pinned" }
+    };
     std::ostringstream new_output;
     std::ostringstream new_error;
     std::ostringstream update_all_output;
@@ -2427,6 +2431,10 @@ namespace
     std::ostringstream update_error;
     forge::cli::run(new_arguments, directory.path(), new_output, new_error);
     const auto project_directory = directory.path() / "hello";
+    {
+      std::ofstream recipe { project_directory / "forge.recipe.toml", std::ios::app };
+      recipe << "\n[profile.pinned.build]\nconfiguration = \"Debug\"\n";
+    }
 
     expect(
       forge::cli::run(
@@ -2442,6 +2450,22 @@ namespace
       "update does not build the current project"
     );
     expect(contains(update_all_output.str(), "Updated locked dependencies"), "update reports success");
+
+    std::ostringstream update_profile_output;
+    std::ostringstream update_profile_error;
+    expect(
+      forge::cli::run(
+        update_profile_arguments,
+        project_directory,
+        update_profile_output,
+        update_profile_error
+      ) == 0,
+      "update accepts a dependency profile"
+    );
+    expect(
+      update_profile_error.str().empty(),
+      "profile-aware update does not write an error"
+    );
 
     expect(
       forge::cli::run(

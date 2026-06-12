@@ -582,6 +582,12 @@ Refresh one dependency:
 forge update answer
 ```
 
+Select dependencies from a named profile before resolving:
+
+```sh
+forge update answer --profile=pinned
+```
+
 Normal `forge build`, `forge run`, and release commands require matching
 target-specific lock entries and never re-resolve GitHub release checksums.
 They fail with an update command when the recipe and lockfile disagree.
@@ -600,6 +606,10 @@ build-qualified dotted and SemVer release tags, then fall back to the legacy
 unqualified `release-1.0.0` tag.
 
 ### Common dependency workflows
+
+See [`docs/dependencies.md`](docs/dependencies.md) for the complete local versus
+remote, source versus packaged dependency model, including profiles and
+lockfiles.
 
 Use a sibling source checkout while actively developing both projects:
 
@@ -1055,5 +1065,7 @@ Forge provides a JSON Schema for recipe validation and editor completion at
 `forge new` and `forge adopt` automatically associate generated recipes with the
 hosted schema.
 
+See [docs/dependencies.md](docs/dependencies.md) for dependency forms, profiles,
+and lockfile behavior.
 See [docs/design.md](docs/design.md) for the current design baseline and
 roadmap.

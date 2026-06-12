@@ -905,7 +905,7 @@ namespace
     write_project(directory.path());
     std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
     recipe
-      << "\n[dependencies]\n"
+      << "\n[profile.pinned.dependencies]\n"
       << "answer = { github = \"example/answer\", version = \"1.2.3+build.6\" }\n";
     recipe.close();
     std::vector<std::vector<std::string>> commands;
@@ -966,9 +966,10 @@ namespace
 
     forge::BuildOptions options;
     options.update_dependencies = true;
+    options.profile = "pinned";
     expect(
       forge::build_project(directory.path(), options, runner, output, error) == 2,
-      "GitHub dependency update reaches box validation"
+      "profile-selected GitHub dependency update reaches box validation"
     );
     expect(commands.size() >= 2, "GitHub dependency downloads checksum before box");
 

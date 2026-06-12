@@ -158,7 +158,9 @@ namespace forge::cli
         output
           << "Resolve and lock GitHub cbox dependencies for the current target.\n\n"
           << "Usage:\n"
-          << "  forge update [dependency]\n\n"
+          << "  forge update [dependency] [--profile=<name>]\n\n"
+          << "Options:\n"
+          << "  --profile=<name>   Select a dependency profile before resolving\n\n"
           << "Writes exact package identities, selected components, URLs, targets,\n"
           << "and checksums to forge.lock.toml without building the current project.\n"
           << "Existing entries for other targets are preserved.\n";
@@ -526,19 +528,28 @@ namespace forge::cli
 
     if (arguments.front() == "update")
     {
-      if (arguments.size() > 2)
-      {
-        error << "forge: usage: forge update [dependency]\n";
-        return 2;
-      }
-
       BuildOptions options;
       options.dependencies_only = true;
       options.update_dependencies = true;
 
-      if (arguments.size() == 2)
+      for (const auto argument : arguments.subspan(1))
       {
-        options.update_dependency = std::string { arguments[1] };
+        if (argument.starts_with("--profile="))
+        {
+          if (!read_profile_option(argument, options.profile, error))
+          {
+            return 2;
+          }
+        }
+        else if (!options.update_dependency)
+        {
+          options.update_dependency = std::string { argument };
+        }
+        else
+        {
+          error << "forge: usage: forge update [dependency] [--profile=<name>]\n";
+          return 2;
+        }
       }
 
       return build_project(working_directory, options, output, error);
