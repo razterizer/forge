@@ -2,6 +2,8 @@
 
 ## 0.7.0
 
+- Made aggregate-box metadata validation reuse one flat checksum cache, avoiding
+  recursive cache paths that exceeded Windows path limits.
 - Made header-only boxes display their target as `any`.
 - Made default Git release tags follow configured dotted or SemVer
   build-qualified release versions, with GitHub dependency resolution retaining

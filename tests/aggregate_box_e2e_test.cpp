@@ -85,6 +85,32 @@ namespace
     return false;
   }
 
+  bool has_nested_metadata_cache(const std::filesystem::path& project)
+  {
+    const auto root = project / ".forge/cache/box-metadata";
+    std::error_code error;
+
+    if (!std::filesystem::is_directory(root))
+    {
+      return false;
+    }
+
+    for (const auto& entry : std::filesystem::recursive_directory_iterator { root, error })
+    {
+      if (error)
+      {
+        return true;
+      }
+
+      if (entry.is_directory() && entry.path().filename() == ".forge")
+      {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   void write_producer(const std::filesystem::path& directory)
   {
     write_file(
@@ -176,6 +202,12 @@ int main()
 
   if (!run(producer, prepare_release, "publish aggregate format-3 box"))
   {
+    return 1;
+  }
+
+  if (has_nested_metadata_cache(producer))
+  {
+    std::cerr << "FAIL: aggregate validation recursively nested the metadata cache\n";
     return 1;
   }
 

@@ -598,6 +598,30 @@ namespace forge
       return true;
     }
 
+    std::filesystem::path box_metadata_cache_root(const std::filesystem::path& working_directory)
+    {
+      auto directory = std::filesystem::is_directory(working_directory)
+        ? working_directory
+        : working_directory.parent_path();
+
+      for (auto candidate = directory; !candidate.empty(); candidate = candidate.parent_path())
+      {
+        if (candidate.filename() == "box-metadata"
+            && candidate.parent_path().filename() == "cache"
+            && candidate.parent_path().parent_path().filename() == ".forge")
+        {
+          return candidate;
+        }
+
+        if (candidate == candidate.parent_path())
+        {
+          break;
+        }
+      }
+
+      return directory / ".forge" / "cache" / "box-metadata";
+    }
+
     bool read_manifest(const std::filesystem::path& path,
                        BoxManifest& manifest,
                        std::string& content,
@@ -2524,11 +2548,8 @@ namespace forge
       return false;
     }
 
-    const auto cache_root = std::filesystem::is_directory(working_directory)
-      ? working_directory
-      : working_directory.parent_path();
     const auto validation_directory =
-      cache_root / ".forge" / "cache" / "box-metadata" / box_checksum;
+      box_metadata_cache_root(working_directory) / box_checksum;
     BoxManifest manifest;
     std::string manifest_content;
 
@@ -2704,7 +2725,7 @@ namespace forge
     }
 
     const auto validation_directory =
-      working_directory / ".forge" / "cache" / "box-metadata" / checksum;
+      box_metadata_cache_root(working_directory) / checksum;
     component_box = validation_directory / component->path;
     return read_box_metadata(component_box, validation_directory, process_runner, metadata, error);
   }
