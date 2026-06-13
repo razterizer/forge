@@ -2190,6 +2190,24 @@ namespace
       "new workflows publish box assets"
     );
     expect(
+      count_occurrences(
+        read_file(directory.path() / "hello/.github/workflows/release-linux.yml"),
+        "filename=$(basename \"$box\")"
+      ) == 1,
+      "modern Linux workflow publishes a portable header-only box once"
+    );
+    expect(
+      contains(
+        read_file(directory.path() / "hello/.github/workflows/release-linux.yml"),
+        "filename=$(basename \"${box%.cbox}\")-linux-modern.cbox"
+      )
+        && contains(
+          read_file(directory.path() / "hello/.github/workflows/release-linux.yml"),
+          "filename=$(basename \"${box%.cbox}\")-linux-legacy.cbox"
+        ),
+      "new Linux workflow qualifies compiled boxes by compatibility baseline"
+    );
+    expect(
       contains(
         read_file(directory.path() / "hello/.github/workflows/release-linux.yml"),
         "runs-on: ubuntu-22.04"

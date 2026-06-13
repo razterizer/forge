@@ -15,6 +15,8 @@
 - Added the reserved `workflow-release` profile, selected automatically by
   hosted release preparation, so adopted projects can keep local development
   dependencies while declaring reproducible workflow dependencies.
+- Made generated Linux workflows publish portable header-only cboxes once
+  without misleading modern or legacy compatibility suffixes.
 
 ## 0.7.0
 

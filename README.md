@@ -990,7 +990,8 @@ The generated Linux workflow builds and publishes two compatibility variants:
 `linux-modern` on `ubuntu-latest` and `linux-legacy` on `ubuntu-22.04`. The
 legacy build uses the older distribution's compiler runtime and glibc baseline,
 making it suitable for older Linux and WSL installations. Both variants are
-published in the same GitHub Release.
+published in the same GitHub Release. Portable header-only cboxes retain their
+natural `-ho.cbox` filename and are published only once.
 
 Prepare the same hosted release assets locally:
 

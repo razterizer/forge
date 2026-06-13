@@ -70,7 +70,9 @@ The Linux workflow builds two variants before publishing:
 
 Building the legacy variant on the older runner gives it an older glibc and
 GNU C++ runtime compatibility baseline. Asset names include the variant so both
-builds can coexist in one GitHub Release.
+builds can coexist in one GitHub Release. Portable header-only cboxes retain
+their natural `-ho.cbox` filename and are uploaded once by the modern job; the
+legacy job skips them.
 
 GitHub releases are explicit and separate from local releases:
 
