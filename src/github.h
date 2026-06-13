@@ -30,6 +30,7 @@ namespace forge
                                      std::ostream& error);
 
   bool generate_github_release_support(const std::filesystem::path& project_directory,
+                                       std::string_view initial_version,
                                        std::ostream& error);
 
 } // namespace forge

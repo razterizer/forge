@@ -916,6 +916,7 @@ namespace forge
   }
 
   bool generate_github_release_support(const std::filesystem::path& project_directory,
+                                       std::string_view initial_version,
                                        std::ostream& error)
   {
     const auto workflows_directory = project_directory / ".github" / "workflows";
@@ -963,7 +964,7 @@ namespace forge
     const std::string release_notes =
       "# Release notes\n"
       "\n"
-      "## 0.1.0\n"
+      "## " + std::string { initial_version } + "\n"
       "\n"
       "- Initial release.\n";
 

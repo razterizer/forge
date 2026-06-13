@@ -525,6 +525,7 @@ namespace
     );
     const auto recipe = read_file(directory.path() / "forge.recipe.toml");
     const auto header = read_file(directory.path() / "include/demo/version.h");
+    const auto release_notes = read_file(directory.path() / "RELEASE_NOTES.md");
     expect(
       contains(recipe, "version = \"2.3.4\"")
         && contains(recipe, "[build]\nnumber = 5")
@@ -540,6 +541,10 @@ namespace
       contains(header, "#define DEMO_VERSION_STR \"2.3.4.5\"")
         && contains(header, "#define DEMO_VERSION_BUILD 5"),
       "adopt creates the requested initialized version header"
+    );
+    expect(
+      contains(release_notes, "## 2.3.4.5\n"),
+      "adopt initializes release notes with the qualified initial version"
     );
     expect(
       contains(output.str(), "Initialized version header include/demo/version.h with prefix DEMO"),
@@ -2232,6 +2237,7 @@ namespace
     );
     const auto recipe = read_file(directory.path() / "hello-world/forge.recipe.toml");
     const auto header = read_file(directory.path() / "hello-world/include/hello/version.h");
+    const auto release_notes = read_file(directory.path() / "hello-world/RELEASE_NOTES.md");
     expect(
       contains(recipe, "version = \"1.2.3\"")
         && contains(recipe, "[build]\nnumber = 4")
@@ -2241,6 +2247,10 @@ namespace
     expect(
       contains(header, "#define HELLO_WORLD_VERSION_STR \"1.2.3.4\""),
       "new creates the requested version header"
+    );
+    expect(
+      contains(release_notes, "## 1.2.3.4\n"),
+      "new initializes release notes with the qualified initial version"
     );
     expect(error.str().empty(), "initialized new project does not write an error");
   }

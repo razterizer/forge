@@ -90,14 +90,19 @@ namespace forge
     return prefix;
   }
 
+  inline std::string qualified_initial_version(const InitialVersion& version)
+  {
+    return version.build_number
+      ? version.version + "." + std::to_string(*version.build_number)
+      : version.version;
+  }
+
   inline std::string generated_version_header(std::string_view prefix,
                                               const InitialVersion& version)
   {
     const auto first = version.version.find('.');
     const auto second = version.version.find('.', first + 1);
-    const auto qualified = version.build_number
-      ? version.version + "." + std::to_string(*version.build_number)
-      : version.version;
+    const auto qualified = qualified_initial_version(version);
     const auto macro = std::string { prefix } + "_VERSION_";
     return
       "#pragma once\n"

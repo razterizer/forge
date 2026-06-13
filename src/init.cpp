@@ -4169,7 +4169,11 @@ namespace forge
       report_progress(output, 6, 6, "Creating release support");
     }
 
-    if (!generate_github_release_support(project_directory, error))
+    if (!generate_github_release_support(
+      project_directory,
+      qualified_initial_version(InitialVersion { project_version, initial_build_number }),
+      error
+    ))
     {
       return 2;
     }

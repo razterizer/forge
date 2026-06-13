@@ -191,7 +191,11 @@ namespace forge
               generated_version_header(version_macro_prefix(project_name), *initial_version),
               error
             ))
-        || !generate_github_release_support(project_directory, error))
+        || !generate_github_release_support(
+          project_directory,
+          qualified_initial_version(*initial_version),
+          error
+        ))
     {
       std::filesystem::remove_all(project_directory, filesystem_error);
       return 2;
