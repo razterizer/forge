@@ -131,7 +131,10 @@ namespace
       << "cpp_std = 20\n"
       << "sources = []\n"
       << "public_headers = [\"include/hello/hello.h\"]\n"
-      << "include_dirs = [\"include/hello\"]\n\n"
+      << "include_dirs = [\"include/hello\"]\n"
+      << "macos_frameworks = [\"AudioToolbox\"]\n"
+      << "linux_libraries = [\"asound\"]\n"
+      << "windows_libraries = [\"ole32\"]\n\n"
       << "[target.examples]\n"
       << "type = \"executable\"\n"
       << "cpp_std = 20\n"
@@ -415,6 +418,12 @@ namespace
     expect(
       contains(generated, "target_link_libraries(forge_project PRIVATE forge_internal_0)"),
       "selected target links its internal dependency"
+    );
+    expect(
+      contains(generated, "find_library(FORGE_forge_internal_0_FRAMEWORK_0 AudioToolbox REQUIRED)")
+        && contains(generated, "target_link_libraries(forge_internal_0 INTERFACE asound)")
+        && contains(generated, "target_link_libraries(forge_internal_0 INTERFACE ole32)"),
+      "internal libraries propagate platform system-link requirements"
     );
     expect(contains(output.str(), "Building examples"), "build reports the selected target");
     expect(error.str().empty(), "selected named target build does not write an error");

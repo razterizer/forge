@@ -1034,6 +1034,64 @@ namespace forge
       return true;
     }
 
+    void write_system_links(std::ostream& file,
+                            std::string_view target,
+                            std::string_view visibility,
+                            const std::vector<std::string>& macos_frameworks,
+                            const std::vector<std::string>& macos_libraries,
+                            const std::vector<std::string>& linux_libraries,
+                            const std::vector<std::string>& windows_libraries)
+    {
+      if (!macos_frameworks.empty() || !macos_libraries.empty())
+      {
+        file << "if(APPLE)\n";
+
+        for (std::size_t index = 0; index < macos_frameworks.size(); ++index)
+        {
+          const auto variable = "FORGE_" + std::string { target }
+            + "_FRAMEWORK_" + std::to_string(index);
+          file << "  find_library(" << variable << ' '
+               << escape_cmake(macos_frameworks[index]) << " REQUIRED)\n"
+               << "  target_link_libraries(" << target << ' ' << visibility
+               << " \"${" << variable << "}\")\n";
+        }
+
+        for (const auto& library : macos_libraries)
+        {
+          file << "  target_link_libraries(" << target << ' ' << visibility << ' '
+               << escape_cmake(library) << ")\n";
+        }
+
+        file << "endif()\n";
+      }
+
+      if (!linux_libraries.empty())
+      {
+        file << "if(UNIX AND NOT APPLE)\n";
+
+        for (const auto& library : linux_libraries)
+        {
+          file << "  target_link_libraries(" << target << ' ' << visibility << ' '
+               << escape_cmake(library) << ")\n";
+        }
+
+        file << "endif()\n";
+      }
+
+      if (!windows_libraries.empty())
+      {
+        file << "if(WIN32)\n";
+
+        for (const auto& library : windows_libraries)
+        {
+          file << "  target_link_libraries(" << target << ' ' << visibility << ' '
+               << escape_cmake(library) << ")\n";
+        }
+
+        file << "endif()\n";
+      }
+    }
+
     bool write_generated_cmake(const std::filesystem::path& path,
                                const Recipe& recipe,
                                const std::vector<ResolvedDependency>& dependencies,
@@ -1142,6 +1200,16 @@ namespace forge
                << ' ' << internal_target_names.at(dependency) << ")\n";
         }
 
+        write_system_links(
+          file,
+          target_name,
+          visibility,
+          target.macos_frameworks,
+          target.macos_libraries,
+          target.linux_libraries,
+          target.windows_libraries
+        );
+
 #ifdef _WIN32
         if (target.type == "dynamic_library")
         {
@@ -1216,6 +1284,16 @@ namespace forge
         file << "target_link_libraries(forge_project PRIVATE "
              << internal_target_names.at(dependency) << ")\n";
       }
+
+      write_system_links(
+        file,
+        "forge_project",
+        "PRIVATE",
+        recipe.macos_frameworks,
+        recipe.macos_libraries,
+        recipe.linux_libraries,
+        recipe.windows_libraries
+      );
 
       for (std::size_t index = 0; index < dependencies.size(); ++index)
       {

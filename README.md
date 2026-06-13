@@ -176,6 +176,19 @@ forge adopt --library-type=static_library
 forge adopt --library-type=dynamic_library
 ```
 
+Adoption imports an initial version from CMake `project(... VERSION ...)`
+metadata when available. Override it or create a managed version header
+explicitly when bootstrapping older repositories:
+
+```sh
+forge adopt --init-version=1.0.0.1 \
+  --version-header-path=include/example/version.h
+```
+
+A four-part initial version maps to semantic `project.version = "1.0.0"` plus
+`build.number = 1` and dotted release numbering. The same options are accepted
+by `forge new`.
+
 When a library project also contains examples or tests with `main()`, Forge
 preserves the library as a named target and makes the inferred executable
 targets depend on it. Plain path and Git dependencies automatically select a
@@ -185,6 +198,17 @@ When exactly one existing header declares a shared uppercase prefix for
 `VERSION_STR`, `VERSION_MAJOR`, `VERSION_MINOR`, `VERSION_PATCH`, and
 `VERSION_BUILD`, adoption configures it as `[version_header]`. Multiple matches
 are reported for manual selection instead of guessing.
+
+Forge also imports common conditional CMake link requirements into library
+targets:
+
+```toml
+macos_frameworks = ["AudioToolbox", "CoreAudio"]
+linux_libraries = ["asound"]
+windows_libraries = ["ole32"]
+```
+
+These requirements propagate through named-target dependencies during builds.
 
 When a project directory contains one `.vcxproj`, `forge adopt` imports its
 project name, source and header items, output type, C++ standard, project

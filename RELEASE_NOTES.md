@@ -6,8 +6,12 @@
   tracked version metadata is updated and reviewed before release tagging.
   `forge adopt` configures an existing header when its five version macros form
   one unambiguous convention.
+  `forge adopt` and `forge new` also accept explicit initial versions and
+  version-header paths, including migration from four-part dotted versions.
   `forge release-git` remains mutation-free; validating that configured headers
   are current before tagging remains planned.
+- Added platform-specific native library and macOS framework requirements, with
+  CMake adoption and propagation through named library target dependencies.
 
 ## 0.7.0
 

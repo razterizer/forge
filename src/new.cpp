@@ -2,7 +2,9 @@
 
 #include "github.h"
 #include "recipe.h"
+#include "versioning.h"
 
+#include <algorithm>
 #include <fstream>
 #include <string>
 #include <system_error>
@@ -44,6 +46,15 @@ namespace forge
                     std::string_view contents,
                     std::ostream& error)
     {
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(path.parent_path(), filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not create directory for '" << path.string() << "'\n";
+        return false;
+      }
+
       std::ofstream file { path };
 
       if (!file)
@@ -63,6 +74,16 @@ namespace forge
       return true;
     }
 
+    bool is_safe_project_path(const std::filesystem::path& path)
+    {
+      return !path.empty()
+        && !path.is_absolute()
+        && std::ranges::none_of(path, [](const auto& component)
+        {
+          return component == "..";
+        });
+    }
+
   } // namespace
 
   int new_project(const std::filesystem::path& parent_directory,
@@ -70,9 +91,34 @@ namespace forge
                   std::ostream& output,
                   std::ostream& error)
   {
+    return new_project(parent_directory, project_name, NewOptions {}, output, error);
+  }
+
+  int new_project(const std::filesystem::path& parent_directory,
+                  std::string_view project_name,
+                  const NewOptions& options,
+                  std::ostream& output,
+                  std::ostream& error)
+  {
     if (!is_valid_project_name(project_name))
     {
       error << "forge: project name must be a single directory name\n";
+      return 2;
+    }
+
+    const auto initial_version = options.initial_version
+      ? parse_initial_version(*options.initial_version)
+      : parse_initial_version("0.1.0");
+
+    if (!initial_version)
+    {
+      error << "forge: initial version must use <major>.<minor>.<patch>[.<build>]\n";
+      return 2;
+    }
+
+    if (options.version_header_path && !is_safe_project_path(*options.version_header_path))
+    {
+      error << "forge: version header path must stay inside the project\n";
       return 2;
     }
 
@@ -100,17 +146,30 @@ namespace forge
     const auto recipe_path = project_directory / "forge.recipe.toml";
     const auto main_path = project_directory / "main.cpp";
     const auto escaped_name = escape_toml_string(project_name);
-    const std::string recipe =
+    std::string recipe =
       "#:schema " + std::string { recipe_schema_url } + "\n"
       "\n"
       "[project]\n"
       "name = \"" + escaped_name + "\"\n"
-      "version = \"0.1.0\"\n"
+      "version = \"" + initial_version->version + "\"\n"
       "type = \"executable\"\n"
       "cpp_std = 20\n"
       "\n"
       "[sources]\n"
       "paths = [\"main.cpp\"]\n";
+
+    if (initial_version->build_number)
+    {
+      recipe += "\n[build]\nnumber = " + std::to_string(*initial_version->build_number)
+        + "\n\n[release]\nbuild_number_format = \"dotted\"\n";
+    }
+
+    if (options.version_header_path)
+    {
+      recipe += "\n[version_header]\npath = \""
+        + escape_toml_string(options.version_header_path->generic_string())
+        + "\"\nprefix = \"" + version_macro_prefix(project_name) + "\"\n";
+    }
 
     constexpr std::string_view main_source =
       "#include <iostream>\n"
@@ -120,8 +179,18 @@ namespace forge
       "  std::cout << \"Hello from Forge!\\n\";\n"
       "}\n";
 
+    const auto version_header_path = options.version_header_path
+      ? project_directory / *options.version_header_path
+      : std::filesystem::path {};
+
     if (!write_file(recipe_path, recipe, error)
         || !write_file(main_path, main_source, error)
+        || (options.version_header_path
+            && !write_file(
+              version_header_path,
+              generated_version_header(version_macro_prefix(project_name), *initial_version),
+              error
+            ))
         || !generate_github_release_support(project_directory, error))
     {
       std::filesystem::remove_all(project_directory, filesystem_error);
@@ -132,6 +201,12 @@ namespace forge
       << "Created project '" << project_name << "'\n"
       << "  " << recipe_path.string() << '\n'
       << "  " << main_path.string() << '\n';
+
+    if (options.version_header_path)
+    {
+      output << "  " << version_header_path.string() << '\n';
+    }
+
     return 0;
   }
 

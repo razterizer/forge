@@ -66,6 +66,18 @@
         "defines": {
           "$ref": "#/$defs/compileDefinitions",
           "description": "Private preprocessor definitions applied when compiling the project."
+        },
+        "macos_frameworks": {
+          "$ref": "#/$defs/linkNames"
+        },
+        "macos_libraries": {
+          "$ref": "#/$defs/linkNames"
+        },
+        "linux_libraries": {
+          "$ref": "#/$defs/linkNames"
+        },
+        "windows_libraries": {
+          "$ref": "#/$defs/linkNames"
         }
       }
     },
@@ -148,6 +160,18 @@
             },
             "uniqueItems": true,
             "description": "Named library targets from this recipe linked into this target."
+          },
+          "macos_frameworks": {
+            "$ref": "#/$defs/linkNames"
+          },
+          "macos_libraries": {
+            "$ref": "#/$defs/linkNames"
+          },
+          "linux_libraries": {
+            "$ref": "#/$defs/linkNames"
+          },
+          "windows_libraries": {
+            "$ref": "#/$defs/linkNames"
           },
           "test": {
             "type": "boolean",
@@ -712,6 +736,14 @@
       "items": {
         "type": "string",
         "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:=[^;\\r\\n]*)?$"
+      },
+      "uniqueItems": true
+    },
+    "linkNames": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_.+-]+$"
       },
       "uniqueItems": true
     },

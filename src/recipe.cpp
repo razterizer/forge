@@ -335,6 +335,32 @@ namespace forge
       return true;
     }
 
+    bool parse_link_names(std::string_view value, std::vector<std::string>& names)
+    {
+      if (!parse_names(value, names))
+      {
+        return false;
+      }
+
+      return std::ranges::all_of(
+        names,
+        [](const std::string& name)
+        {
+          return std::ranges::all_of(
+            name,
+            [](unsigned char character)
+            {
+              return std::isalnum(character)
+                || character == '_'
+                || character == '-'
+                || character == '.'
+                || character == '+';
+            }
+          );
+        }
+      );
+    }
+
     bool parse_definitions(std::string_view value, std::vector<std::string>& definitions)
     {
       std::vector<std::filesystem::path> paths;
@@ -622,6 +648,22 @@ namespace forge
       {
         valid = parse_definitions(value, recipe.compile_definitions);
       }
+      else if (section == "build" && key == "macos_frameworks")
+      {
+        valid = parse_link_names(value, recipe.macos_frameworks);
+      }
+      else if (section == "build" && key == "macos_libraries")
+      {
+        valid = parse_link_names(value, recipe.macos_libraries);
+      }
+      else if (section == "build" && key == "linux_libraries")
+      {
+        valid = parse_link_names(value, recipe.linux_libraries);
+      }
+      else if (section == "build" && key == "windows_libraries")
+      {
+        valid = parse_link_names(value, recipe.windows_libraries);
+      }
       else if (section == "sources" && key == "paths")
       {
         valid = parse_sources(value, recipe.sources);
@@ -690,6 +732,22 @@ namespace forge
         else if (key == "dependencies")
         {
           valid = parse_names(value, target->dependencies);
+        }
+        else if (key == "macos_frameworks")
+        {
+          valid = parse_link_names(value, target->macos_frameworks);
+        }
+        else if (key == "macos_libraries")
+        {
+          valid = parse_link_names(value, target->macos_libraries);
+        }
+        else if (key == "linux_libraries")
+        {
+          valid = parse_link_names(value, target->linux_libraries);
+        }
+        else if (key == "windows_libraries")
+        {
+          valid = parse_link_names(value, target->windows_libraries);
         }
         else if (key == "test")
         {
@@ -1051,6 +1109,10 @@ namespace forge
     recipe.public_headers = selected->public_headers;
     recipe.include_directories = selected->include_directories;
     recipe.compile_definitions = selected->compile_definitions;
+    recipe.macos_frameworks = selected->macos_frameworks;
+    recipe.macos_libraries = selected->macos_libraries;
+    recipe.linux_libraries = selected->linux_libraries;
+    recipe.windows_libraries = selected->windows_libraries;
     recipe.runtime_files = selected->runtime_files;
     return true;
   }

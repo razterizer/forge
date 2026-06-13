@@ -67,6 +67,9 @@ rules:
   standard, sources, public headers, and runtime files.
 - Named targets may declare internal library target dependencies. Forge builds
   and links their transitive closure and rejects missing or cyclic targets.
+- Legacy `[build]` sections and named targets may declare `macos_frameworks`,
+  `macos_libraries`, `linux_libraries`, and `windows_libraries`. Named library
+  target requirements propagate to dependent targets.
 - Named executable targets marked with `test = true` are run by `forge test`.
 - Named targets may be selected for boxing and release preparation. Internal
   library target dependencies are recursively packaged as embedded boxes.

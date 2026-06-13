@@ -73,11 +73,16 @@ namespace forge::cli
         output
           << "Discover an existing C++ project and create Forge metadata.\n\n"
           << "Usage:\n"
-          << "  forge adopt [--github] [--library-type=<type>]\n\n"
+          << "  forge adopt [--github] [--library-type=<type>] [--init-version=<ver>]\n"
+          << "              [--version-header-path=<path>]\n\n"
           << "Options:\n"
           << "  --github               Verify inferred GitHub source dependencies\n"
           << "  --library-type=<type>  Resolve an ambiguous library as header_only,\n"
           << "                         static_library, or dynamic_library\n\n"
+          << "  --init-version=<ver>   Override the initial version; a fourth dotted\n"
+          << "                         component initializes build.number\n"
+          << "  --version-header-path=<path>\n"
+          << "                         Use or create a Forge-managed version header\n\n"
           << "Adoption inspects existing sources, CMake, Visual Studio, and Xcode\n"
           << "metadata, then creates Forge recipes, workspaces, and missing release\n"
           << "support without overwriting existing Forge files. It does not rewrite\n"
@@ -113,7 +118,7 @@ namespace forge::cli
         output
           << "Create a new Forge C++ executable project.\n\n"
           << "Usage:\n"
-          << "  forge new <name>\n\n"
+          << "  forge new <name> [--init-version=<ver>] [--version-header-path=<path>]\n\n"
           << "Creates a new directory containing a starter source, recipe, release\n"
           << "notes, GitHub release workflows, and generated-file ignore rules.\n";
         return true;
@@ -346,13 +351,45 @@ namespace forge::cli
 
     if (arguments.front() == "new")
     {
-      if (arguments.size() != 2)
+      NewOptions options;
+      std::optional<std::string_view> name;
+
+      for (const auto argument : arguments.subspan(1))
       {
-        error << "forge: usage: forge new <name>\n";
+        if (argument.starts_with("--init-version=") && !options.initial_version)
+        {
+          options.initial_version =
+            std::string { argument.substr(std::string_view { "--init-version=" }.size()) };
+        }
+        else if (argument.starts_with("--version-header-path=") && !options.version_header_path)
+        {
+          options.version_header_path =
+            std::filesystem::path {
+              argument.substr(std::string_view { "--version-header-path=" }.size())
+            };
+        }
+        else if (!argument.starts_with("-") && !name)
+        {
+          name = argument;
+        }
+        else
+        {
+          error
+            << "forge: usage: forge new <name> [--init-version=<ver>] "
+            << "[--version-header-path=<path>]\n";
+          return 2;
+        }
+      }
+
+      if (!name)
+      {
+        error
+          << "forge: usage: forge new <name> [--init-version=<ver>] "
+          << "[--version-header-path=<path>]\n";
         return 2;
       }
 
-      return new_project(working_directory, arguments[1], output, error);
+      return new_project(working_directory, *name, options, output, error);
     }
 
     if (arguments.front() == "box")
@@ -823,9 +860,23 @@ namespace forge::cli
 
           options.library_type = std::string { type };
         }
+        else if (argument.starts_with("--init-version=") && !options.initial_version)
+        {
+          options.initial_version =
+            std::string { argument.substr(std::string_view { "--init-version=" }.size()) };
+        }
+        else if (argument.starts_with("--version-header-path=") && !options.version_header_path)
+        {
+          options.version_header_path =
+            std::filesystem::path {
+              argument.substr(std::string_view { "--version-header-path=" }.size())
+            };
+        }
         else
         {
-          error << "forge: usage: forge adopt [--github] [--library-type=<type>]\n";
+          error
+            << "forge: usage: forge adopt [--github] [--library-type=<type>] "
+            << "[--init-version=<ver>] [--version-header-path=<path>]\n";
           return 2;
         }
       }

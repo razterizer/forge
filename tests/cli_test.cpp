@@ -503,6 +503,51 @@ namespace
     expect(error.str().empty(), "ambiguous version-header inference does not fail adoption");
   }
 
+  void test_adopt_accepts_explicit_initial_version_and_version_header()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments {
+      std::string_view { "adopt" },
+      std::string_view { "--init-version=2.3.4.5" },
+      std::string_view { "--version-header-path=include/demo/version.h" }
+    };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "project(demo VERSION 1.0.0)\nadd_executable(demo main.cpp)\n"
+    );
+    write_file(directory.path() / "main.cpp", "int main() {}\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt accepts explicit initial version and version-header path"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    const auto header = read_file(directory.path() / "include/demo/version.h");
+    expect(
+      contains(recipe, "version = \"2.3.4\"")
+        && contains(recipe, "[build]\nnumber = 5")
+        && contains(recipe, "[release]\nbuild_number_format = \"dotted\"")
+        && contains(recipe, "\"include/demo/version.h\"")
+        && contains(
+          recipe,
+          "[version_header]\npath = \"include/demo/version.h\"\nprefix = \"DEMO\""
+        ),
+      "explicit four-part version overrides metadata and initializes Forge version fields"
+    );
+    expect(
+      contains(header, "#define DEMO_VERSION_STR \"2.3.4.5\"")
+        && contains(header, "#define DEMO_VERSION_BUILD 5"),
+      "adopt creates the requested initialized version header"
+    );
+    expect(
+      contains(output.str(), "Initialized version header include/demo/version.h with prefix DEMO"),
+      "adopt reports the initialized version header"
+    );
+    expect(error.str().empty(), "explicit adoption initialization does not write an error");
+  }
+
   void test_init_infers_local_include_directories()
   {
     TemporaryDirectory directory;
@@ -980,6 +1025,15 @@ namespace
       "target_include_directories(Applaudio INTERFACE "
       "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> "
       "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)\n"
+      "if(APPLE)\n"
+      "find_library(AUDIO_FRAMEWORK AudioToolbox REQUIRED)\n"
+      "target_link_libraries(Applaudio INTERFACE ${AUDIO_FRAMEWORK})\n"
+      "elseif(WIN32)\n"
+      "target_link_libraries(Applaudio INTERFACE ole32)\n"
+      "elseif(UNIX)\n"
+      "pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)\n"
+      "target_link_libraries(Applaudio INTERFACE PkgConfig::ALSA)\n"
+      "endif()\n"
     );
     write_file(
       directory.path() / "Applaudio.xcodeproj/project.pbxproj",
@@ -1015,10 +1069,13 @@ namespace
         && contains(recipe, "version = \"1.0.0\"")
         && contains(recipe, "type = \"header_only\"")
         && contains(recipe, "include_dirs = [\"include\"]")
+        && contains(recipe, "macos_frameworks = [\"AudioToolbox\"]")
+        && contains(recipe, "linux_libraries = [\"alsa\"]")
+        && contains(recipe, "windows_libraries = [\"ole32\"]")
         && contains(recipe, "[target.test]")
         && contains(recipe, "dependencies = [\"Applaudio\"]")
         && contains(recipe, "test = true"),
-      "a single test program is separated from its adopted library target"
+      "a single test program and platform links are adopted with its library target"
     );
     expect(
       !contains(recipe, "include_dirs = [\"include\", \"include/Applaudio\"]"),
@@ -2155,6 +2212,37 @@ namespace
       "new refuses an existing path"
     );
     expect(contains(error.str(), "already exists"), "new explains existing path refusal");
+  }
+
+  void test_new_accepts_initial_version_and_version_header()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments {
+      std::string_view { "new" },
+      std::string_view { "hello-world" },
+      std::string_view { "--init-version=1.2.3.4" },
+      std::string_view { "--version-header-path=include/hello/version.h" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "new accepts initial version and version-header path"
+    );
+    const auto recipe = read_file(directory.path() / "hello-world/forge.recipe.toml");
+    const auto header = read_file(directory.path() / "hello-world/include/hello/version.h");
+    expect(
+      contains(recipe, "version = \"1.2.3\"")
+        && contains(recipe, "[build]\nnumber = 4")
+        && contains(recipe, "prefix = \"HELLO_WORLD\""),
+      "new maps a four-part version and normalized project prefix"
+    );
+    expect(
+      contains(header, "#define HELLO_WORLD_VERSION_STR \"1.2.3.4\""),
+      "new creates the requested version header"
+    );
+    expect(error.str().empty(), "initialized new project does not write an error");
   }
 
   void test_new_requires_simple_name()
@@ -4626,6 +4714,7 @@ int main()
   test_init_ignores_generated_directories();
   test_adopt_infers_unique_version_header();
   test_adopt_reports_ambiguous_version_headers();
+  test_adopt_accepts_explicit_initial_version_and_version_header();
   test_init_infers_local_include_directories();
   test_adopt_imports_visual_studio_project();
   test_adopt_imports_cmake_project();
@@ -4654,6 +4743,7 @@ int main()
   test_workflow_feature_lifecycle();
   test_new();
   test_new_refuses_existing_path();
+  test_new_accepts_initial_version_and_version_header();
   test_new_requires_simple_name();
   test_new_requires_name();
   test_build_new_project();

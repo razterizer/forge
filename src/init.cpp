@@ -2,6 +2,7 @@
 
 #include "github.h"
 #include "recipe.h"
+#include "versioning.h"
 #include "workspace.h"
 
 #include <algorithm>
@@ -538,6 +539,10 @@ namespace forge
       std::vector<std::string> headers;
       std::vector<std::string> include_directories;
       std::vector<std::string> definitions;
+      std::vector<std::string> macos_frameworks;
+      std::vector<std::string> macos_libraries;
+      std::vector<std::string> linux_libraries;
+      std::vector<std::string> windows_libraries;
       std::vector<std::filesystem::path> references;
       std::map<std::string, BuildProfile> profiles;
       std::vector<std::string> unresolved_properties;
@@ -790,10 +795,81 @@ namespace forge
       project.name = path.parent_path().filename().string();
       const auto directory = path.parent_path();
       std::set<std::string> targets;
+      std::map<std::string, std::string> frameworks;
+      std::map<std::string, std::string> pkg_config_targets;
+      std::string platform;
 
       for (const auto& command : cmake_commands(contents))
       {
-        if (command.name == "project" && !command.arguments.empty())
+        if (command.name == "if" && !command.arguments.empty())
+        {
+          platform =
+            command.arguments.front() == "APPLE" ? "macos"
+            : command.arguments.front() == "WIN32" ? "windows"
+            : command.arguments.front() == "UNIX" ? "linux"
+            : "";
+        }
+        else if (command.name == "elseif" && !command.arguments.empty())
+        {
+          platform =
+            command.arguments.front() == "APPLE" ? "macos"
+            : command.arguments.front() == "WIN32" ? "windows"
+            : command.arguments.front() == "UNIX" ? "linux"
+            : "";
+        }
+        else if (command.name == "endif")
+        {
+          platform.clear();
+        }
+        else if (command.name == "find_library" && command.arguments.size() > 1)
+        {
+          frameworks[command.arguments[0]] = command.arguments[1];
+        }
+        else if (command.name == "pkg_check_modules" && command.arguments.size() > 1)
+        {
+          pkg_config_targets["PkgConfig::" + command.arguments[0]] = command.arguments.back();
+        }
+        else if (command.name == "target_link_libraries" && command.arguments.size() > 1)
+        {
+          for (std::size_t index = 1; index < command.arguments.size(); ++index)
+          {
+            const auto& argument = command.arguments[index];
+
+            if (is_cmake_scope(argument))
+            {
+              continue;
+            }
+
+            if (argument.starts_with("${") && argument.ends_with('}'))
+            {
+              const auto variable = argument.substr(2, argument.size() - 3);
+
+              if (platform == "macos" && frameworks.contains(variable))
+              {
+                project.macos_frameworks.push_back(frameworks.at(variable));
+              }
+            }
+            else if (pkg_config_targets.contains(argument) && platform == "linux")
+            {
+              project.linux_libraries.push_back(pkg_config_targets.at(argument));
+            }
+            else if (argument.find('$') == std::string::npos
+                     && argument.find("::") == std::string::npos)
+            {
+              auto* libraries =
+                platform == "macos" ? &project.macos_libraries
+                : platform == "linux" ? &project.linux_libraries
+                : platform == "windows" ? &project.windows_libraries
+                : nullptr;
+
+              if (libraries)
+              {
+                libraries->push_back(argument);
+              }
+            }
+          }
+        }
+        else if (command.name == "project" && !command.arguments.empty())
         {
           project.name = command.arguments.front();
 
@@ -940,6 +1016,10 @@ namespace forge
         &project.headers,
         &project.include_directories,
         &project.definitions,
+        &project.macos_frameworks,
+        &project.macos_libraries,
+        &project.linux_libraries,
+        &project.windows_libraries,
         &project.unresolved_properties
       })
       {
@@ -1786,6 +1866,26 @@ namespace forge
         additional.definitions.begin(),
         additional.definitions.end()
       );
+      project.macos_frameworks.insert(
+        project.macos_frameworks.end(),
+        additional.macos_frameworks.begin(),
+        additional.macos_frameworks.end()
+      );
+      project.macos_libraries.insert(
+        project.macos_libraries.end(),
+        additional.macos_libraries.begin(),
+        additional.macos_libraries.end()
+      );
+      project.linux_libraries.insert(
+        project.linux_libraries.end(),
+        additional.linux_libraries.begin(),
+        additional.linux_libraries.end()
+      );
+      project.windows_libraries.insert(
+        project.windows_libraries.end(),
+        additional.windows_libraries.begin(),
+        additional.windows_libraries.end()
+      );
       project.unresolved_properties.insert(
         project.unresolved_properties.end(),
         additional.unresolved_properties.begin(),
@@ -1805,6 +1905,10 @@ namespace forge
       for (auto* values : {
         &project.include_directories,
         &project.definitions,
+        &project.macos_frameworks,
+        &project.macos_libraries,
+        &project.linux_libraries,
+        &project.windows_libraries,
         &project.unresolved_properties
       })
       {
@@ -2021,6 +2125,16 @@ namespace forge
 
       std::ranges::sort(candidates, {}, &VersionHeaderCandidate::path);
       return candidates;
+    }
+
+    bool is_safe_project_path(const std::filesystem::path& path)
+    {
+      return !path.empty()
+        && !path.is_absolute()
+        && std::ranges::none_of(path, [](const auto& component)
+        {
+          return component == "..";
+        });
     }
 
     struct IncludedHeader
@@ -2999,6 +3113,26 @@ namespace forge
       return formatted;
     }
 
+    std::string format_system_links(const VisualStudioProject& project)
+    {
+      std::string result;
+
+      for (const auto& [key, values] : {
+        std::pair { std::string_view { "macos_frameworks" }, &project.macos_frameworks },
+        std::pair { std::string_view { "macos_libraries" }, &project.macos_libraries },
+        std::pair { std::string_view { "linux_libraries" }, &project.linux_libraries },
+        std::pair { std::string_view { "windows_libraries" }, &project.windows_libraries }
+      })
+      {
+        if (!values->empty())
+        {
+          result += std::string { key } + " = " + format_sources(*values) + "\n";
+        }
+      }
+
+      return result;
+    }
+
     std::string format_runtime_files(const std::vector<RuntimeFile>& runtime_files)
     {
       std::string formatted = "[";
@@ -3405,6 +3539,22 @@ namespace forge
                                 std::ostream& output,
                                 std::ostream& error)
   {
+    const auto explicit_version = options.initial_version
+      ? parse_initial_version(*options.initial_version)
+      : std::optional<InitialVersion> {};
+
+    if (options.initial_version && !explicit_version)
+    {
+      error << "forge: initial version must use <major>.<minor>.<patch>[.<build>]\n";
+      return 2;
+    }
+
+    if (options.version_header_path && !is_safe_project_path(*options.version_header_path))
+    {
+      error << "forge: version header path must stay inside the project\n";
+      return 2;
+    }
+
     const auto solutions = files_with_extension(project_directory, ".sln");
     const auto visual_studio_projects = files_with_extension(project_directory, ".vcxproj");
     const auto xcode_projects = directories_with_extension(project_directory, ".xcodeproj");
@@ -3419,6 +3569,12 @@ namespace forge
         && !cmake_defines_target(cmake_path)
         && !options.library_type)
     {
+      if (options.initial_version || options.version_header_path)
+      {
+        error << "forge: explicit version initialization applies to a single project, not a workspace\n";
+        return 2;
+      }
+
       return adopt_cmake_workspace(
         project_directory,
         cmake_path,
@@ -3435,6 +3591,12 @@ namespace forge
         && xcode_projects.empty()
         && !has_cmake_project)
     {
+      if (options.initial_version || options.version_header_path)
+      {
+        error << "forge: explicit version initialization applies to a single project, not a workspace\n";
+        return 2;
+      }
+
       return adopt_solution(
         project_directory,
         solutions.front(),
@@ -3642,14 +3804,54 @@ namespace forge
       ? visual_studio_project->name
       : project_directory.filename().string();
     const auto project_version =
-      visual_studio_project && !visual_studio_project->version.empty()
+      explicit_version
+        ? explicit_version->version
+        : visual_studio_project && !visual_studio_project->version.empty()
         ? visual_studio_project->version
         : "0.1.0";
+    const auto initial_build_number =
+      explicit_version ? explicit_version->build_number : std::optional<int> {};
     const auto escaped_project_name = escape_toml_string(project_name);
     const auto formatted_sources = format_sources(sources);
-    const auto formatted_headers = format_sources(public_headers);
     const auto formatted_include_directories = format_sources(include_directories);
-    const auto version_headers = infer_version_headers(project_directory, headers);
+    auto version_headers = infer_version_headers(project_directory, headers);
+    bool initialize_version_header = explicit_version && version_headers.size() == 1;
+
+    if (options.version_header_path)
+    {
+      const auto requested = options.version_header_path->lexically_normal().generic_string();
+      const auto existing =
+        std::ranges::find(version_headers, requested, &VersionHeaderCandidate::path);
+
+      if (std::filesystem::is_regular_file(project_directory / *options.version_header_path))
+      {
+        if (existing == version_headers.end())
+        {
+          error << "forge: existing version header does not declare the supported five-macro format\n";
+          return 2;
+        }
+
+        version_headers = { *existing };
+      }
+      else
+      {
+        version_headers = { { requested, version_macro_prefix(project_name) } };
+        initialize_version_header = true;
+
+        const auto path = std::filesystem::path { requested };
+
+        if (!path.empty() && path.begin()->string() == "include")
+        {
+          headers.push_back(requested);
+          public_headers.push_back(requested);
+          std::ranges::sort(headers);
+          std::ranges::sort(public_headers);
+        }
+      }
+
+      initialize_version_header = initialize_version_header || explicit_version.has_value();
+    }
+    const auto formatted_headers = format_sources(public_headers);
     const auto inferred_library_type =
       options.library_type
         ? *options.library_type
@@ -3716,6 +3918,11 @@ namespace forge
         {
           recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
         }
+
+        if (visual_studio_project)
+        {
+          recipe += format_system_links(*visual_studio_project);
+        }
       }
 
       for (std::size_t index = 0; index < entry_points.size(); ++index)
@@ -3769,6 +3976,11 @@ namespace forge
           {
             recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
           }
+
+          if (visual_studio_project)
+          {
+            recipe += format_system_links(*visual_studio_project);
+          }
         }
 
         auto first_directory = std::filesystem::path { entry_points[index] }.begin()->string();
@@ -3785,6 +3997,11 @@ namespace forge
         {
           recipe += "test = true\n";
         }
+      }
+
+      if (initial_build_number)
+      {
+        recipe += "\n[build]\nnumber = " + std::to_string(*initial_build_number) + "\n";
       }
     }
     else
@@ -3818,10 +4035,27 @@ namespace forge
         recipe += "include_dirs = " + formatted_include_directories + "\n";
       }
 
-      if (visual_studio_project && !visual_studio_project->definitions.empty())
+      if (initial_build_number
+          || (visual_studio_project
+              && (!visual_studio_project->definitions.empty()
+                  || !format_system_links(*visual_studio_project).empty())))
       {
-        recipe += "\n[build]\n"
-          "defines = " + format_sources(visual_studio_project->definitions) + "\n";
+        recipe += "\n[build]\n";
+
+        if (initial_build_number)
+        {
+          recipe += "number = " + std::to_string(*initial_build_number) + "\n";
+        }
+
+        if (visual_studio_project && !visual_studio_project->definitions.empty())
+        {
+          recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
+        }
+
+        if (visual_studio_project)
+        {
+          recipe += format_system_links(*visual_studio_project);
+        }
       }
 
       if (type == "executable")
@@ -3838,6 +4072,11 @@ namespace forge
           }
         }
       }
+    }
+
+    if (initial_build_number)
+    {
+      recipe += "\n[release]\nbuild_number_format = \"dotted\"\n";
     }
 
     if (!sibling_dependencies.empty() || !github_dependencies.empty())
@@ -3905,6 +4144,26 @@ namespace forge
       return 2;
     }
 
+    if (initialize_version_header)
+    {
+      const auto path = project_directory / version_headers.front().path;
+      std::error_code directory_error;
+      std::filesystem::create_directories(path.parent_path(), directory_error);
+
+      if (directory_error
+          || !write_file(
+            path,
+            generated_version_header(
+              version_headers.front().prefix,
+              InitialVersion { project_version, initial_build_number }
+            ),
+            error
+          ))
+      {
+        return 2;
+      }
+    }
+
     if (show_progress)
     {
       report_progress(output, 6, 6, "Creating release support");
@@ -3953,6 +4212,18 @@ namespace forge
         output << (visual_studio_project->profiles.size() == 1 ? "\n" : "s\n");
       }
 
+      const auto system_links =
+        visual_studio_project->macos_frameworks.size()
+        + visual_studio_project->macos_libraries.size()
+        + visual_studio_project->linux_libraries.size()
+        + visual_studio_project->windows_libraries.size();
+
+      if (system_links != 0)
+      {
+        output << "Imported " << system_links << " platform link requirement";
+        output << (system_links == 1 ? "\n" : "s\n");
+      }
+
       if (!visual_studio_project->unresolved_properties.empty())
       {
         output << "Skipped " << visual_studio_project->unresolved_properties.size()
@@ -3979,7 +4250,8 @@ namespace forge
 
     if (version_headers.size() == 1)
     {
-      output << "Inferred version header " << version_headers.front().path
+      output << (initialize_version_header ? "Initialized version header " : "Inferred version header ")
+             << version_headers.front().path
              << " with prefix " << version_headers.front().prefix << '\n';
     }
     else if (version_headers.size() > 1)

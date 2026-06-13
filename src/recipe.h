@@ -62,6 +62,10 @@ namespace forge
     std::vector<std::string> compile_definitions;
     std::vector<RuntimeFile> runtime_files;
     std::vector<std::string> dependencies;
+    std::vector<std::string> macos_frameworks;
+    std::vector<std::string> macos_libraries;
+    std::vector<std::string> linux_libraries;
+    std::vector<std::string> windows_libraries;
     bool test = false;
   };
 
@@ -84,6 +88,10 @@ namespace forge
     std::vector<std::filesystem::path> public_headers;
     std::vector<std::filesystem::path> include_directories;
     std::vector<std::string> compile_definitions;
+    std::vector<std::string> macos_frameworks;
+    std::vector<std::string> macos_libraries;
+    std::vector<std::string> linux_libraries;
+    std::vector<std::string> windows_libraries;
     std::vector<ImportProfile> imports;
     std::vector<Dependency> dependencies;
     std::map<std::string, std::vector<Dependency>> dependency_profiles;
