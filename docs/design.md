@@ -175,6 +175,12 @@ dependency graph and selected artifacts on every supported host.
 - Add dry-run support for release preparation, tagging, and publication.
 - Make generated CI files thin, updateable adapters around locally runnable
   Forge commands.
+- Publish signed Debian packages through a Forge-owned APT repository so Linux
+  users and CI runners can install current Forge releases without building
+  Forge from source.
+- Provide a version-aware `razterizer/setup-forge` action and use it from
+  generated GitHub workflows instead of repeating Forge checkout, latest-release
+  resolution, and bootstrap-build steps.
 
 Release criterion: projects no longer need custom build, test, packaging,
 tagging, or publication scripts for supported workflows.
@@ -198,5 +204,7 @@ Asciiroid_Belt project family.
 - Registry protocol and shared binary caches.
 - Package signing and provenance.
 - Vendor SDK redistribution-policy metadata.
+- Submit stable Forge packages to official Debian and Ubuntu repositories once
+  the public contracts and supported-platform policy are frozen.
 - Generic pre-build and post-build hooks only where declarative Forge features
   cannot represent the use case safely.

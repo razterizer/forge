@@ -159,8 +159,11 @@ remote release tag. Use it only when repairing a broken published release.
 1. Release variants and platform-specific release contents.
 2. Generated release manifests.
 3. Dry-run support for release preparation, tagging, and publication.
-4. Generated version headers.
+4. Publish signed Debian packages through a Forge-owned APT repository.
+5. Provide a version-aware `razterizer/setup-forge` action.
 
 Local commands and CI should execute the same Forge-defined workflow. CI files
 should become thin adapters that install Forge and invoke the appropriate
-profile.
+profile. Forge-controlled distribution lets generated workflows receive a
+current compatible Forge version even when official Ubuntu repositories retain
+older packages for a distribution release.
