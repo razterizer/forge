@@ -171,6 +171,8 @@ namespace forge
         + "\"\nprefix = \"" + version_macro_prefix(project_name) + "\"\n";
     }
 
+    recipe += "\n[profile.workflow-release.build]\nconfiguration = \"Release\"\n";
+
     constexpr std::string_view main_source =
       "#include <iostream>\n"
       "\n"

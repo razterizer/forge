@@ -930,6 +930,27 @@ Forge copies declared entries recursively while preserving their
 project-relative paths. Paths must remain inside the project, and symbolic
 links are rejected.
 
+`forge adopt` creates a reserved workflow build profile:
+
+```toml
+[profile.workflow-release.build]
+configuration = "Release"
+```
+
+`forge workflow prepare-release` selects `workflow-release` automatically when
+present. Projects that normally use sibling source checkouts should add
+reproducible hosted dependencies:
+
+```toml
+[profile.workflow-release.dependencies]
+Core = { github = "razterizer/Core", version = "1.5.0+build.8" }
+```
+
+Workflow release preparation rejects local project and box paths in this
+profile so CI does not depend on an untracked sibling checkout. A workflow
+dependency profile replaces the complete default dependency set, so declare
+every release dependency there.
+
 Executable projects can declare files needed at runtime:
 
 ```toml

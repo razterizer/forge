@@ -39,6 +39,11 @@ rules:
   release-note headings use `<version>.<number>` or
   `<version>+build.<number>`. It also qualifies default Git release tags and
   requires `[build].number`.
+- `[profile.workflow-release.build]` and
+  `[profile.workflow-release.dependencies]` are the reserved hosted-workflow
+  profile. `forge workflow prepare-release` selects it automatically when
+  present and rejects local-path dependencies in that profile. Its dependency
+  table replaces the complete default dependency set.
 - `[version_header]` declares a project-relative generated C/C++ header path
   and uppercase macro prefix. `forge bump` regenerates its version string,
   major, minor, patch, and build macros.

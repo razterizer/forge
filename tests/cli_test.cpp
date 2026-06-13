@@ -1333,8 +1333,14 @@ namespace
       "adopt writes the inferred sibling dependency"
     );
     expect(
+      contains(recipe, "# [profile.workflow-release.dependencies]")
+        && contains(recipe, "[profile.workflow-release.build]\nconfiguration = \"Release\""),
+      "adopt prepares the workflow release profile without guessing a sibling pin"
+    );
+    expect(
       contains(output.str(), "Inferred 1 sibling project dependency:")
-        && contains(output.str(), "answer = ../answer"),
+        && contains(output.str(), "answer = ../answer")
+        && contains(output.str(), "Workflow release profile requires reproducible replacements"),
       "adopt reports the inferred sibling dependency"
     );
     expect(
@@ -1491,7 +1497,8 @@ namespace
         recipe,
         "answer = { git = \"https://github.com/example/answer.git\", commit = \""
           + std::string { commit } + "\" }"
-      ),
+      )
+        && contains(recipe, "[profile.workflow-release.dependencies]"),
       "adopt --github writes an exact Git commit pin"
     );
     expect(
@@ -2131,6 +2138,13 @@ namespace
     expect(
       contains(read_file(directory.path() / "hello/forge.recipe.toml"), "paths = [\"main.cpp\"]"),
       "new recipe contains the starter source"
+    );
+    expect(
+      contains(
+        read_file(directory.path() / "hello/forge.recipe.toml"),
+        "[profile.workflow-release.build]\nconfiguration = \"Release\""
+      ),
+      "new recipe declares the reserved workflow release profile"
     );
     expect(
       read_file(directory.path() / "hello/forge.recipe.toml").starts_with("#:schema https://"),
@@ -2832,6 +2846,67 @@ namespace
     );
     expect(contains(release_output.str(), "Prepared release assets"), "hosted assets report success");
     expect(release_error.str().empty(), "hosted executable release does not write an error");
+  }
+
+  void test_prepare_release_uses_configured_profile()
+  {
+    TemporaryDirectory directory;
+    const auto project = directory.path() / "project";
+    write_file(
+      project / "forge.recipe.toml",
+      "[project]\nname = \"project\"\nversion = \"1.0.0\"\n"
+      "type = \"header_only\"\ncpp_std = 20\n\n"
+      "[sources]\npaths = []\npublic_headers = [\"include/project.h\"]\n\n"
+      "[profile.workflow-release.build]\nconfiguration = \"Release\"\n"
+    );
+    write_file(project / "include/project.h", "#pragma once\n");
+    write_file(project / "RELEASE_NOTES.md", "# Release notes\n\n## 1.0.0\n\n- Release.\n");
+    constexpr std::array arguments {
+      std::string_view { "workflow" },
+      std::string_view { "prepare-release" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, project, output, error) == 0,
+      "release preparation selects its configured dependency profile"
+    );
+    expect(
+      std::filesystem::exists(project / "boxes/project-1.0.0-ho.cbox"),
+      "configured release profile produces the hosted box"
+    );
+    expect(error.str().empty(), "configured workflow release profile does not write an error");
+  }
+
+  void test_prepare_release_rejects_local_workflow_dependency()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\nname = \"project\"\nversion = \"1.0.0\"\n"
+      "type = \"header_only\"\ncpp_std = 20\n\n"
+      "[sources]\npaths = []\npublic_headers = [\"include/project.h\"]\n\n"
+      "[dependencies]\nCore = { path = \"../Core\" }\n\n"
+      "[profile.workflow-release.build]\nconfiguration = \"Release\"\n"
+    );
+    write_file(directory.path() / "include/project.h", "#pragma once\n");
+    constexpr std::array arguments {
+      std::string_view { "workflow" },
+      std::string_view { "prepare-release" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "workflow release rejects local dependencies"
+    );
+    expect(
+      contains(error.str(), "workflow-release dependency 'Core' uses a local project path")
+        && contains(error.str(), "[profile.workflow-release.dependencies]"),
+      "workflow release explains how to replace a local dependency"
+    );
   }
 
   void test_prepare_release_alias_warns()
@@ -4763,6 +4838,8 @@ int main()
   test_run_new_project();
   test_release_new_project();
   test_prepare_executable_release();
+  test_prepare_release_uses_configured_profile();
+  test_prepare_release_rejects_local_workflow_dependency();
   test_prepare_release_alias_warns();
   test_release_rejects_empty_tag_format();
   test_release_github_rejects_empty_tag_format();

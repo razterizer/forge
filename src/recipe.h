@@ -13,6 +13,7 @@ namespace forge
 
   inline constexpr std::string_view recipe_schema_url =
     "https://raw.githubusercontent.com/razterizer/forge/main/schemas/forge.recipe.schema.json";
+  inline constexpr std::string_view workflow_release_profile = "workflow-release";
 
   struct Dependency
   {

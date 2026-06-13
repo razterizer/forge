@@ -22,6 +22,53 @@ namespace forge
   namespace
   {
 
+    std::optional<std::string> selected_workflow_release_profile(const Recipe& recipe)
+    {
+      const auto name = std::string { workflow_release_profile };
+      return recipe.dependency_profiles.contains(name) || recipe.build_profiles.contains(name)
+        ? std::optional<std::string> { name }
+        : std::nullopt;
+    }
+
+    bool validate_workflow_release_dependencies(Recipe recipe, std::ostream& error)
+    {
+      const auto profile = selected_workflow_release_profile(recipe);
+
+      if (!profile)
+      {
+        return true;
+      }
+
+      if (!select_dependency_profile(recipe, profile, true, error))
+      {
+        return false;
+      }
+
+      for (const auto& dependency : recipe.dependencies)
+      {
+        const auto local_git =
+          !dependency.git.empty()
+          && !dependency.git.starts_with("https://")
+          && !dependency.git.starts_with("http://")
+          && !dependency.git.starts_with("ssh://")
+          && !dependency.git.starts_with("git@");
+
+        if (!dependency.path.empty() || !dependency.box.empty() || local_git)
+        {
+          error
+            << "forge: workflow-release dependency '" << dependency.name
+            << "' uses a local "
+            << (!dependency.path.empty() ? "project path"
+                : !dependency.box.empty() ? "box path"
+                : "Git location")
+            << "; add a reproducible entry under [profile.workflow-release.dependencies]\n";
+          return false;
+        }
+      }
+
+      return true;
+    }
+
     bool is_safe_path_component(std::string_view value)
     {
       return
@@ -513,6 +560,16 @@ namespace forge
                       std::ostream& output,
                       std::ostream& error)
   {
+    return release_project(project_directory, target, std::nullopt, process_runner, output, error);
+  }
+
+  int release_project(const std::filesystem::path& project_directory,
+                      const std::optional<std::string>& target,
+                      const std::optional<std::string>& profile,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
@@ -533,6 +590,12 @@ namespace forge
 
     BuildOptions options;
     options.target = target;
+    options.profile = profile;
+
+    if (profile == workflow_release_profile)
+    {
+      options.configuration = "Release";
+    }
 
     if (build_project(project_directory, options, process_runner, output, error) != 0)
     {
@@ -732,6 +795,13 @@ namespace forge
       return 2;
     }
 
+    if (!validate_workflow_release_dependencies(recipe, error))
+    {
+      return 2;
+    }
+
+    const auto workflow_profile = selected_workflow_release_profile(recipe);
+
     if (!target && recipe.targets.size() > 1)
     {
       for (const auto& release_target : recipe.targets)
@@ -773,7 +843,14 @@ namespace forge
 
     if (recipe.type == "executable")
     {
-      if (release_project(project_directory, target, process_runner, output, error) != 0)
+      if (release_project(
+        project_directory,
+        target,
+        workflow_profile,
+        process_runner,
+        output,
+        error
+      ) != 0)
       {
         return 2;
       }
@@ -797,7 +874,14 @@ namespace forge
              || recipe.type == "imported_library"
              || recipe.type == "header_only")
     {
-      if (create_box(project_directory, target, process_runner, output, error) != 0)
+      if (create_box(
+        project_directory,
+        target,
+        workflow_profile,
+        process_runner,
+        output,
+        error
+      ) != 0)
       {
         return 2;
       }

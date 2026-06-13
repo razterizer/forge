@@ -4096,6 +4096,32 @@ namespace forge
       }
     }
 
+    if (sibling_dependencies.empty() && !github_dependencies.empty())
+    {
+      recipe += "\n[profile.workflow-release.dependencies]\n";
+
+      for (const auto& dependency : github_dependencies)
+      {
+        recipe += dependency.name + " = { git = \"" + escape_toml_string(dependency.git)
+          + "\", commit = \"" + dependency.commit + "\" }\n";
+      }
+    }
+    else if (!sibling_dependencies.empty())
+    {
+      recipe
+        += "\n# TODO: Replace local dependencies with reproducible workflow dependencies.\n"
+        "# [profile.workflow-release.dependencies]\n";
+
+      for (const auto& dependency : sibling_dependencies)
+      {
+        recipe += "# " + dependency.name
+          + " = { github = \"owner/" + dependency.name
+          + "\", version = \"<published-version>\" }\n";
+      }
+    }
+
+    recipe += "\n[profile.workflow-release.build]\nconfiguration = \"Release\"\n";
+
     if (version_headers.size() == 1)
     {
       recipe += "\n[version_header]\n"
@@ -4307,6 +4333,11 @@ namespace forge
       {
         output << "  " << dependency.name << " = " << dependency.path << '\n';
       }
+
+      output
+        << "Workflow release profile requires reproducible replacements for "
+        << sibling_dependencies.size() << " local dependenc"
+        << (sibling_dependencies.size() == 1 ? "y\n" : "ies\n");
     }
 
     if (!options.github && !suggestions.empty())

@@ -36,6 +36,13 @@ namespace forge
                       std::ostream& output,
                       std::ostream& error);
 
+  int release_project(const std::filesystem::path& project_directory,
+                      const std::optional<std::string>& target,
+                      const std::optional<std::string>& profile,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error);
+
   int prepare_release(const std::filesystem::path& project_directory,
                       std::ostream& output,
                       std::ostream& error);

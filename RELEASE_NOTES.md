@@ -12,6 +12,9 @@
   are current before tagging remains planned.
 - Added platform-specific native library and macOS framework requirements, with
   CMake adoption and propagation through named library target dependencies.
+- Added the reserved `workflow-release` profile, selected automatically by
+  hosted release preparation, so adopted projects can keep local development
+  dependencies while declaring reproducible workflow dependencies.
 
 ## 0.7.0
 
