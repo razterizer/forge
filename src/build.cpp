@@ -1384,13 +1384,16 @@ namespace forge
         }
 
 #ifdef _WIN32
-        for (const auto& runtime : dependency.runtimes)
+        if (recipe.type != "header_only")
         {
-          file
-            << "add_custom_command(TARGET forge_project POST_BUILD "
-            << "COMMAND ${CMAKE_COMMAND} -E copy_if_different \""
-            << escape_cmake(runtime.string())
-            << "\" \"$<TARGET_FILE_DIR:forge_project>\")\n";
+          for (const auto& runtime : dependency.runtimes)
+          {
+            file
+              << "add_custom_command(TARGET forge_project POST_BUILD "
+              << "COMMAND ${CMAKE_COMMAND} -E copy_if_different \""
+              << escape_cmake(runtime.string())
+              << "\" \"$<TARGET_FILE_DIR:forge_project>\")\n";
+          }
         }
 #endif
       }
