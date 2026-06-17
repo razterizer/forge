@@ -78,7 +78,9 @@ namespace forge::cli
           << "Options:\n"
           << "  --github               Verify inferred GitHub source dependencies\n"
           << "  --library-type=<type>  Resolve an ambiguous library as header_only,\n"
-          << "                         static_library, or dynamic_library\n\n"
+          << "                         static_library, or dynamic_library\n"
+          << "                         Use imported_library in the recipe for\n"
+          << "                         prebuilt binaries with import profiles\n\n"
           << "  --init-version=<ver>   Override the initial version; a fourth dotted\n"
           << "                         component initializes build.number\n"
           << "  --version-header-path=<path>\n"
@@ -854,7 +856,9 @@ namespace forge::cli
                   && type != "static_library"
                   && type != "dynamic_library"))
           {
-            error << "forge: library type must be header_only, static_library, or dynamic_library\n";
+            error
+              << "forge: library type must be header_only, static_library, or dynamic_library; "
+              << "configure imported_library manually with import profiles\n";
             return 2;
           }
 

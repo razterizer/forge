@@ -198,6 +198,11 @@ namespace
       && contains(adopt_output.str(), "existing build infrastructure"),
       "adopt help explains its non-migration boundary"
     );
+    expect(
+      contains(adopt_output.str(), "imported_library")
+      && contains(adopt_output.str(), "prebuilt binaries"),
+      "adopt help explains imported libraries are recipe-level prebuilt binaries"
+    );
   }
 
   void test_cli_builds_workspace()
@@ -874,6 +879,28 @@ namespace
       "library type hint preserves a library target beside inferred programs"
     );
     expect(error.str().empty(), "valid library type hint does not write an error");
+  }
+
+  void test_adopt_explains_imported_library_hint_boundary()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments {
+      std::string_view { "adopt" },
+      std::string_view { "--library-type=imported_library" }
+    };
+    write_file(directory.path() / "include/vendor/vendor.h", "#pragma once\n");
+    write_file(directory.path() / "lib/vendor.lib", "not a real library\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "adopt rejects imported_library as a library type hint"
+    );
+    expect(
+      contains(error.str(), "configure imported_library manually with import profiles"),
+      "imported_library hint rejection explains the manual import-profile path"
+    );
   }
 
   void test_adopt_merges_mirrored_cmake_and_visual_studio_projects()
@@ -4823,6 +4850,7 @@ int main()
   test_adopt_imports_cmake_project();
   test_adopt_preserves_cmake_interface_library_with_programs();
   test_adopt_accepts_library_type_hint();
+  test_adopt_explains_imported_library_hint_boundary();
   test_adopt_merges_mirrored_cmake_and_visual_studio_projects();
   test_adopt_prefers_cmake_over_generated_solution();
   test_adopt_imports_xcode_project();
