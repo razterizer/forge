@@ -100,8 +100,12 @@ dynamic_libraries = ["vendor/bin/sdk.dll"]
 import_libraries = ["vendor/lib/sdk.lib"]
 ```
 
-The compiler fields are mandatory for imported binaries. Forge compares them
-with the actual toolchain selected by CMake before linking a consumer.
+The compiler fields are mandatory for imported binaries. Forge compares the
+compiler family, C++ standard, build configuration, and runtime with the actual
+toolchain selected by CMake before linking a consumer. The exact compiler
+version remains recorded metadata for inspection, but compatible hosted runners
+may move between patch or minor compiler releases without invalidating an
+otherwise matching imported-library box.
 
 For projects built by Forge, `[project].cpp_std` tells Forge which C++ standard
 to use for the build. Forge then records that value as `[toolchain].cpp_std` in

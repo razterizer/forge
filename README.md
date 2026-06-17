@@ -460,10 +460,12 @@ invoking a compiler.
 
 Compiled boxes record the actual compiler, exact compiler version, C++ standard,
 build configuration, and standard-library/runtime ABI selected by CMake. Forge
-rejects compiled dependencies whose recorded toolchain differs from the
-consuming build. Imported-library profiles declare this identity explicitly
-because Forge cannot infer how vendor binaries were produced. Header-only boxes
-do not require a toolchain identity.
+rejects compiled dependencies whose compiler family, C++ standard, build
+configuration, or runtime ABI differs from the consuming build. The exact
+compiler version remains recorded for inspection, but it is not treated as a
+hard compatibility boundary. Imported-library profiles declare this identity
+explicitly because Forge cannot infer how vendor binaries were produced.
+Header-only boxes do not require a toolchain identity.
 
 The two `cpp_std` fields have different roles: `[project].cpp_std` is an input
 that tells Forge which C++ standard to use when building the current project.

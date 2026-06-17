@@ -3864,13 +3864,33 @@ namespace
     expect(run_error.str().empty(), "imported-library dependency run does not write an error");
     expect(release_error.str().empty(), "imported-library dependency release does not write an error");
 
-    const auto compiler = imported_recipe.find("compiler = ");
-    imported_recipe.replace(
+    auto version_changed_recipe = imported_recipe;
+    const auto compiler_version = version_changed_recipe.find("compiler_version = ");
+    version_changed_recipe.replace(
+      compiler_version,
+      version_changed_recipe.find('\n', compiler_version) - compiler_version,
+      "compiler_version = \"999.0\""
+    );
+    write_file(imported / "forge.recipe.toml", version_changed_recipe);
+    std::ostringstream version_changed_output;
+    std::ostringstream version_changed_error;
+    expect(
+      forge::cli::run(run_arguments, application, version_changed_output, version_changed_error) == 0,
+      "build accepts an imported-library dependency with a different compiler version"
+    );
+    expect(
+      version_changed_error.str().empty(),
+      "compiler-version-compatible imported library build does not write an error"
+    );
+
+    auto incompatible_recipe = imported_recipe;
+    const auto compiler = incompatible_recipe.find("compiler = ");
+    incompatible_recipe.replace(
       compiler,
-      imported_recipe.find('\n', compiler) - compiler,
+      incompatible_recipe.find('\n', compiler) - compiler,
       "compiler = \"IncompatibleCompiler\""
     );
-    write_file(imported / "forge.recipe.toml", imported_recipe);
+    write_file(imported / "forge.recipe.toml", incompatible_recipe);
     std::ostringstream incompatible_output;
     std::ostringstream incompatible_error;
     expect(

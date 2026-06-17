@@ -59,6 +59,15 @@ namespace forge
       std::string sha256;
     };
 
+    bool is_binary_compatible_toolchain(const ToolchainIdentity& dependency,
+                                        const ToolchainIdentity& project)
+    {
+      return dependency.compiler == project.compiler
+        && dependency.cpp_standard == project.cpp_standard
+        && dependency.configuration == project.configuration
+        && dependency.runtime == project.runtime;
+    }
+
     struct DependencySession
     {
       std::map<std::filesystem::path, DependencyNode> nodes;
@@ -2506,11 +2515,7 @@ namespace forge
 
         const auto& candidate = *dependency.toolchain;
 
-        if (candidate.compiler != project.compiler
-            || candidate.compiler_version != project.compiler_version
-            || candidate.cpp_standard != project.cpp_standard
-            || candidate.configuration != project.configuration
-            || candidate.runtime != project.runtime)
+        if (!is_binary_compatible_toolchain(candidate, project))
         {
           error << "forge: dependency '" << dependency.name
                 << "' toolchain is incompatible with the configured build\n";
