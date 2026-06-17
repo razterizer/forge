@@ -1907,7 +1907,7 @@ namespace
     const auto updated = read_file(workflow);
     expect(
       contains(updated, "  forge-release-boxes:\n")
-      && contains(updated, "# forge-managed: release-boxes@2")
+      && contains(updated, "# forge-managed: release-boxes@3")
       && contains(updated, "Resolve latest Forge release")
       && contains(updated, "ref: ${{ steps.forge-release.outputs.result }}")
       && contains(updated, "if: startsWith(github.ref, 'refs/tags/')")
@@ -1936,6 +1936,41 @@ namespace
       "repeated workflow feature application reports existing managed job"
     );
     expect(repeat_error.str().empty(), "repeated workflow feature application writes no error");
+
+    const auto windows_workflow = directory.path() / ".github/workflows/windows-release.yml";
+    write_file(
+      windows_workflow,
+      "name: windows release\n"
+      "on: push\n"
+      "jobs:\n"
+      "  release:\n"
+      "    runs-on: windows-latest\n"
+      "    steps:\n"
+      "      - run: ./.forge-bootstrap/build/forge.exe workflow prepare-release\n"
+    );
+    constexpr std::array windows_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "add-feature" },
+      std::string_view { "release-boxes" },
+      std::string_view { "--file=.github/workflows/windows-release.yml" },
+      std::string_view { "--apply" }
+    };
+    std::ostringstream windows_output;
+    std::ostringstream windows_error;
+    expect(
+      forge::cli::run(windows_arguments, directory.path(), windows_output, windows_error) == 0,
+      "workflow feature application succeeds for Windows workflows"
+    );
+    const auto windows_updated = read_file(windows_workflow);
+    expect(
+      contains(windows_updated, "runs-on: windows-latest")
+      && contains(windows_updated, "uses: ilammy/msvc-dev-cmd@v1")
+      && contains(windows_updated, "-DCMAKE_CXX_COMPILER=cl")
+      && contains(windows_updated, "shell: pwsh")
+      && contains(windows_updated, "forge.exe workflow prepare-release"),
+      "workflow feature application preserves Windows runner and Forge executable"
+    );
+    expect(windows_error.str().empty(), "Windows workflow feature application writes no error");
   }
 
   void test_workflow_feature_refuses_unmanaged_collision()
@@ -2099,8 +2134,8 @@ namespace
     expect(contains(current_output.str(), "release-boxes  current"), "workflow status reports current feature");
 
     auto outdated = current;
-    const auto marker = outdated.find("# forge-managed: release-boxes@2");
-    outdated.replace(marker, std::string_view { "# forge-managed: release-boxes@2" }.size(),
+    const auto marker = outdated.find("# forge-managed: release-boxes@3");
+    outdated.replace(marker, std::string_view { "# forge-managed: release-boxes@3" }.size(),
                      "# forge-managed: release-boxes@1");
     write_file(workflow, outdated);
     std::ostringstream outdated_output;

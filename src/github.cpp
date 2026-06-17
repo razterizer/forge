@@ -162,14 +162,41 @@ namespace forge
       return candidate_component != candidate.end();
     }
 
-    std::string release_boxes_job()
+    std::string release_boxes_job(std::string_view workflow)
     {
+      const auto windows =
+        workflow.find("windows-latest") != std::string_view::npos
+        || workflow.find("forge.exe") != std::string_view::npos
+        || workflow.find("msvc-dev-cmd") != std::string_view::npos;
+      const auto macos =
+        !windows
+        && workflow.find("macos-latest") != std::string_view::npos;
+      const auto runner = windows
+        ? "windows-latest"
+        : macos
+          ? "macos-latest"
+          : "ubuntu-latest";
+      const auto forge_executable = windows
+        ? "./.forge-bootstrap/build/forge.exe"
+        : "./.forge-bootstrap/build/forge";
+      const auto shell = windows
+        ? "      - name: Prepare Forge release boxes\n"
+          "        shell: pwsh\n"
+        : "      - name: Prepare Forge release boxes\n";
+      const auto setup = windows
+        ? "      - name: Set up MSVC\n"
+          "        uses: ilammy/msvc-dev-cmd@v1\n"
+          "        with:\n"
+          "          arch: x64\n"
+        : "";
+      const auto compiler = windows ? " -DCMAKE_CXX_COMPILER=cl" : "";
+
       return
         "  forge-release-boxes:\n"
-        "    # forge-managed: release-boxes@2\n"
+        "    # forge-managed: release-boxes@3\n"
         "    name: Publish Forge cboxes\n"
         "    if: startsWith(github.ref, 'refs/tags/')\n"
-        "    runs-on: ubuntu-latest\n"
+        "    runs-on: " + std::string { runner } + "\n"
         "    permissions:\n"
         "      contents: write\n"
         "    steps:\n"
@@ -189,13 +216,15 @@ namespace forge
         "          repository: razterizer/forge\n"
         "          ref: ${{ steps.forge-release.outputs.result }}\n"
         "          path: .forge-bootstrap\n"
+        + std::string { setup } +
         "      - name: Build Forge\n"
         "        run: >-\n"
         "          cmake -S .forge-bootstrap -B .forge-bootstrap/build -G Ninja\n"
-        "          -DCMAKE_BUILD_TYPE=Release -DFORGE_BUILD_TESTS=OFF\n"
+        "          -DCMAKE_BUILD_TYPE=Release -DFORGE_BUILD_TESTS=OFF"
+        + std::string { compiler } + "\n"
         "          && cmake --build .forge-bootstrap/build\n"
-        "      - name: Prepare Forge release boxes\n"
-        "        run: ./.forge-bootstrap/build/forge workflow prepare-release\n"
+        + std::string { shell } +
+        "        run: " + std::string { forge_executable } + " workflow prepare-release\n"
         "      - name: Publish Forge release boxes\n"
         "        uses: ncipollo/release-action@v1\n"
         "        with:\n"
@@ -210,7 +239,7 @@ namespace forge
       std::string_view description;
       std::string_view job_id;
       std::string_view marker;
-      std::string (*job)();
+      std::string (*job)(std::string_view);
     };
 
     const std::array workflow_features {
@@ -218,7 +247,7 @@ namespace forge
         "release-boxes",
         "Publish Forge cboxes and checksums from Git tag workflows",
         "forge-release-boxes",
-        "# forge-managed: release-boxes@2",
+        "# forge-managed: release-boxes@3",
         release_boxes_job
       }
     };
@@ -724,7 +753,7 @@ namespace forge
         feature.job_id,
         feature.name,
         feature.marker,
-        feature.job(),
+        feature.job(*workflow),
         inspection,
         error
       ))
@@ -785,7 +814,7 @@ namespace forge
       return 2;
     }
 
-    const auto job = definition->job();
+    const auto job = definition->job(*workflow);
     WorkflowInspection inspection;
 
     if (!inspect_workflow(
