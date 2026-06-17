@@ -228,7 +228,7 @@ namespace forge::cli
         output
           << "Run CI workflow steps locally and manage Forge-owned workflow features.\n\n"
           << "Usage:\n"
-          << "  forge workflow prepare-release [target]\n"
+          << "  forge workflow prepare-release [target] [--skip-unsupported]\n"
           << "  forge workflow list-features\n"
           << "  forge workflow status --file=<workflow>\n"
           << "  forge workflow add-feature release-boxes --file=<workflow> [--apply]\n"
@@ -255,7 +255,7 @@ namespace forge::cli
         output
           << "'forge prepare-release' is a deprecated compatibility alias.\n\n"
           << "Use:\n"
-          << "  forge workflow prepare-release [target]\n";
+          << "  forge workflow prepare-release [target] [--skip-unsupported]\n";
         return true;
       }
 
@@ -792,20 +792,38 @@ namespace forge::cli
         );
       }
 
-      if (arguments.size() < 2
-          || arguments[1] != "prepare-release"
-          || arguments.size() > 3
-          || (arguments.size() == 3 && arguments[2].starts_with("-")))
+      if (arguments.size() < 2 || arguments[1] != "prepare-release")
       {
-        error << "forge: usage: forge workflow prepare-release [target]\n";
+        error << "forge: usage: forge workflow prepare-release [target] [--skip-unsupported]\n";
         return 2;
       }
 
-      const auto target = arguments.size() == 3
-        ? std::optional<std::string> { arguments[2] }
-        : std::nullopt;
+      PrepareReleaseOptions options;
 
-      return prepare_release(working_directory, target, output, error);
+      for (const auto argument : arguments.subspan(2))
+      {
+        if (argument == "--skip-unsupported")
+        {
+          if (options.skip_unsupported)
+          {
+            error << "forge: skip-unsupported may only be specified once\n";
+            return 2;
+          }
+
+          options.skip_unsupported = true;
+        }
+        else if (!argument.starts_with("-") && !options.target)
+        {
+          options.target = std::string { argument };
+        }
+        else
+        {
+          error << "forge: usage: forge workflow prepare-release [target] [--skip-unsupported]\n";
+          return 2;
+        }
+      }
+
+      return prepare_release(working_directory, options, run_process, output, error);
     }
 
     if (arguments.front() == "release" || arguments.front() == "prepare-release")

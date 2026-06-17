@@ -16,6 +16,12 @@ namespace forge
     bool force_tag = false;
   };
 
+  struct PrepareReleaseOptions
+  {
+    std::optional<std::string> target;
+    bool skip_unsupported = false;
+  };
+
   int release_project(const std::filesystem::path& project_directory,
                       std::ostream& output,
                       std::ostream& error);
@@ -59,6 +65,12 @@ namespace forge
 
   int prepare_release(const std::filesystem::path& project_directory,
                       const std::optional<std::string>& target,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error);
+
+  int prepare_release(const std::filesystem::path& project_directory,
+                      const PrepareReleaseOptions& options,
                       const ProcessRunner& process_runner,
                       std::ostream& output,
                       std::ostream& error);

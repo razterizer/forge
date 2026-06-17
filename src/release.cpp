@@ -5,6 +5,7 @@
 #include "recipe.h"
 #include "runtime_assets.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <ctime>
@@ -28,6 +29,50 @@ namespace forge
       return recipe.dependency_profiles.contains(name) || recipe.build_profiles.contains(name)
         ? std::optional<std::string> { name }
         : std::nullopt;
+    }
+
+    std::string target_os()
+    {
+#ifdef __APPLE__
+      return "macos";
+#elif defined(__linux__)
+      return "linux";
+#elif defined(_WIN32)
+      return "windows";
+#else
+      return "unknown";
+#endif
+    }
+
+    std::string target_arch()
+    {
+#if defined(__aarch64__) || defined(_M_ARM64)
+      return "arm64";
+#elif defined(__x86_64__) || defined(_M_X64)
+      return "x86_64";
+#elif defined(__i386__) || defined(_M_IX86)
+      return "x86";
+#else
+      return "unknown";
+#endif
+    }
+
+    std::string current_target()
+    {
+      return target_os() + "-" + target_arch();
+    }
+
+    bool has_current_import_profile(const Recipe& recipe)
+    {
+      const auto target = current_target();
+      return std::find_if(
+        recipe.imports.begin(),
+        recipe.imports.end(),
+        [&target](const ImportProfile& profile)
+        {
+          return profile.target == target;
+        }
+      ) != recipe.imports.end();
     }
 
     bool validate_workflow_release_dependencies(Recipe recipe, std::ostream& error)
@@ -763,7 +808,7 @@ namespace forge
                       std::ostream& output,
                       std::ostream& error)
   {
-    return prepare_release(project_directory, std::nullopt, run_process, output, error);
+    return prepare_release(project_directory, PrepareReleaseOptions {}, run_process, output, error);
   }
 
   int prepare_release(const std::filesystem::path& project_directory,
@@ -771,7 +816,9 @@ namespace forge
                       std::ostream& output,
                       std::ostream& error)
   {
-    return prepare_release(project_directory, target, run_process, output, error);
+    PrepareReleaseOptions options;
+    options.target = target;
+    return prepare_release(project_directory, options, run_process, output, error);
   }
 
   int prepare_release(const std::filesystem::path& project_directory,
@@ -779,11 +826,22 @@ namespace forge
                       std::ostream& output,
                       std::ostream& error)
   {
-    return prepare_release(project_directory, std::nullopt, process_runner, output, error);
+    return prepare_release(project_directory, PrepareReleaseOptions {}, process_runner, output, error);
   }
 
   int prepare_release(const std::filesystem::path& project_directory,
                       const std::optional<std::string>& target,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    PrepareReleaseOptions options;
+    options.target = target;
+    return prepare_release(project_directory, options, process_runner, output, error);
+  }
+
+  int prepare_release(const std::filesystem::path& project_directory,
+                      const PrepareReleaseOptions& options,
                       const ProcessRunner& process_runner,
                       std::ostream& output,
                       std::ostream& error)
@@ -802,7 +860,7 @@ namespace forge
 
     const auto workflow_profile = selected_workflow_release_profile(recipe);
 
-    if (!target && recipe.targets.size() > 1)
+    if (!options.target && recipe.targets.size() > 1)
     {
       for (const auto& release_target : recipe.targets)
       {
@@ -811,13 +869,10 @@ namespace forge
           continue;
         }
 
-        if (prepare_release(
-          project_directory,
-          release_target.name,
-          process_runner,
-          output,
-          error
-        ) != 0)
+        auto target_options = options;
+        target_options.target = release_target.name;
+
+        if (prepare_release(project_directory, target_options, process_runner, output, error) != 0)
         {
           return 2;
         }
@@ -826,9 +881,18 @@ namespace forge
       return 0;
     }
 
-    if (!select_recipe_target(recipe, target, error))
+    if (!select_recipe_target(recipe, options.target, error))
     {
       return 2;
+    }
+
+    if (options.skip_unsupported
+        && recipe.type == "imported_library"
+        && !has_current_import_profile(recipe))
+    {
+      output << "Skipped release preparation: imported_library has no import profile for "
+             << current_target() << '\n';
+      return 0;
     }
 
     const auto release_directory = project_directory / ".forge" / "release";
@@ -845,7 +909,7 @@ namespace forge
     {
       if (release_project(
         project_directory,
-        target,
+        options.target,
         workflow_profile,
         process_runner,
         output,
@@ -876,7 +940,7 @@ namespace forge
     {
       if (create_box(
         project_directory,
-        target,
+        options.target,
         workflow_profile,
         process_runner,
         output,

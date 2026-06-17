@@ -2989,6 +2989,72 @@ namespace
     );
   }
 
+  void test_prepare_release_skips_unsupported_imported_library_target()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"vendor\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"imported_library\"\n\n"
+      "[import.windows-x86_64]\n"
+      "compiler = \"MSVC\"\n"
+      "compiler_version = \"19.44.35227.0\"\n"
+      "cpp_std = 20\n"
+      "configuration = \"Release\"\n"
+      "runtime = \"msvc-dynamic\"\n"
+      "public_headers = [\"include/vendor\"]\n"
+      "import_libraries = [\"lib/vendor.lib\"]\n"
+      "dynamic_libraries = [\"lib/vendor.dll\"]\n"
+    );
+    write_file(directory.path() / "include/vendor/vendor.h", "#pragma once\n");
+    write_file(directory.path() / "lib/vendor.lib", "import library\n");
+    write_file(directory.path() / "lib/vendor.dll", "dynamic library\n");
+    constexpr std::array strict_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "prepare-release" }
+    };
+    constexpr std::array skip_arguments {
+      std::string_view { "workflow" },
+      std::string_view { "prepare-release" },
+      std::string_view { "--skip-unsupported" }
+    };
+    std::ostringstream strict_output;
+    std::ostringstream strict_error;
+    std::ostringstream skip_output;
+    std::ostringstream skip_error;
+
+    const auto strict_result =
+      forge::cli::run(strict_arguments, directory.path(), strict_output, strict_error);
+    const auto skip_result =
+      forge::cli::run(skip_arguments, directory.path(), skip_output, skip_error);
+
+#ifdef _WIN32
+    expect(strict_result == 0, "strict workflow release supports the Windows imported library");
+    expect(skip_result == 0, "skip workflow release also supports the Windows imported library");
+#else
+    expect(
+      strict_result == 2,
+      "strict workflow release rejects an unsupported imported-library target"
+    );
+    expect(
+      contains(strict_error.str(), "imported_library has no import profile"),
+      "strict workflow release explains the missing import profile"
+    );
+    expect(
+      skip_result == 0,
+      "skip workflow release accepts an unsupported imported-library target"
+    );
+    expect(
+      contains(skip_output.str(), "Skipped release preparation")
+      && contains(skip_output.str(), "imported_library has no import profile"),
+      "skip workflow release reports the skipped imported-library target"
+    );
+#endif
+    expect(skip_error.str().empty(), "skipped workflow release does not write an error");
+  }
+
   void test_prepare_release_alias_warns()
   {
     TemporaryDirectory directory;
@@ -4921,6 +4987,7 @@ int main()
   test_prepare_executable_release();
   test_prepare_release_uses_configured_profile();
   test_prepare_release_rejects_local_workflow_dependency();
+  test_prepare_release_skips_unsupported_imported_library_target();
   test_prepare_release_alias_warns();
   test_release_rejects_empty_tag_format();
   test_release_github_rejects_empty_tag_format();

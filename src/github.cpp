@@ -224,7 +224,7 @@ namespace forge
         + std::string { compiler } + "\n"
         "          && cmake --build .forge-bootstrap/build\n"
         + std::string { shell } +
-        "        run: " + std::string { forge_executable } + " workflow prepare-release\n"
+        "        run: " + std::string { forge_executable } + " workflow prepare-release --skip-unsupported\n"
         "      - name: Publish Forge release boxes\n"
         "        uses: ncipollo/release-action@v1\n"
         "        with:\n"
@@ -584,7 +584,7 @@ namespace forge
 
       workflow +=
         "        run: |\n"
-        "          " + std::string { forge_executable } + " workflow prepare-release\n"
+        "          " + std::string { forge_executable } + " workflow prepare-release --skip-unsupported\n"
         "\n"
         "      - name: Publish GitHub release\n"
         "        uses: ncipollo/release-action@v1\n"
@@ -633,7 +633,7 @@ namespace forge
         "\n"
         "      - name: Prepare hosted release assets\n"
         "        run: |\n"
-        "          ./.forge-bootstrap/build/forge workflow prepare-release\n"
+        "          ./.forge-bootstrap/build/forge workflow prepare-release --skip-unsupported\n"
         "          mkdir hosted-assets\n"
         "          for archive in .forge/release/*.zip; do\n"
         "            [ -e \"$archive\" ] || continue\n"
