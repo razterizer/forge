@@ -2621,8 +2621,8 @@ namespace forge
       if (child.name != dependency.name
           || child.version != dependency.version
           || child.type != dependency.type
-          || child.os != manifest.os
-          || child.arch != manifest.arch)
+          || (child.type != "header_only"
+              && (child.os != manifest.os || child.arch != manifest.arch)))
       {
         error << "forge: embedded dependency '" << dependency.name
               << "' does not match its declaration\n";
@@ -2652,7 +2652,9 @@ namespace forge
         error
       )
           || child.name != component.name
-          || child.type != component.type)
+          || child.type != component.type
+          || (child.type != "header_only"
+              && (child.os != manifest.os || child.arch != manifest.arch)))
       {
         error << "forge: embedded component '" << component.name
               << "' does not match its declaration\n";

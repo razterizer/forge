@@ -973,7 +973,14 @@ namespace forge
       if (locked == dependency_session->locked_dependencies.end())
       {
         error << "forge: dependency '" << dependency.name << "' is not locked for "
-              << target << "; run forge update " << dependency.name << '\n';
+              << target << "; run forge update " << dependency.name;
+
+        if (dependency_session->options.profile)
+        {
+          error << " --profile=" << *dependency_session->options.profile;
+        }
+
+        error << '\n';
         return false;
       }
 
@@ -984,7 +991,14 @@ namespace forge
       {
         error << "forge: dependency '" << dependency.name
               << "' conflicts with forge.lock.toml; run forge update "
-              << dependency.name << '\n';
+              << dependency.name;
+
+        if (dependency_session->options.profile)
+        {
+          error << " --profile=" << *dependency_session->options.profile;
+        }
+
+        error << '\n';
         return false;
       }
 
@@ -2093,6 +2107,14 @@ namespace forge
                             std::ostream& output,
                             std::ostream& error)
     {
+      if (dependency_session->options.dependencies_only
+          && dependency_session->options.update_dependency
+          && *dependency_session->options.update_dependency != dependency.name
+          && !dependency.github.empty())
+      {
+        return true;
+      }
+
       DependencyNode* node = nullptr;
 
       if (!read_dependency_node(parent_directory, dependency, process_runner, node, output, error))
