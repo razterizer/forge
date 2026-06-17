@@ -2774,10 +2774,16 @@ namespace
       std::string_view { "update" },
       std::string_view { "--profile=pinned" }
     };
+    constexpr std::array update_target_arguments {
+      std::string_view { "update" },
+      std::string_view { "--target=windows-x86_64" }
+    };
     std::ostringstream new_output;
     std::ostringstream new_error;
     std::ostringstream update_all_output;
     std::ostringstream update_all_error;
+    std::ostringstream update_target_output;
+    std::ostringstream update_target_error;
     std::ostringstream update_output;
     std::ostringstream update_error;
     forge::cli::run(new_arguments, directory.path(), new_output, new_error);
@@ -2801,6 +2807,20 @@ namespace
       "update does not build the current project"
     );
     expect(contains(update_all_output.str(), "Updated locked dependencies"), "update reports success");
+    expect(
+      forge::cli::run(
+        update_target_arguments,
+        project_directory,
+        update_target_output,
+        update_target_error
+      ) == 0,
+      "update accepts an explicit dependency target"
+    );
+    expect(
+      contains(update_target_output.str(), "Updated locked dependencies for windows-x86_64"),
+      "target-aware update reports the selected dependency target"
+    );
+    expect(update_target_error.str().empty(), "target-aware update does not write an error");
 
     std::ostringstream update_profile_output;
     std::ostringstream update_profile_error;

@@ -15,6 +15,7 @@
 #include <array>
 #include <filesystem>
 #include <ostream>
+#include <string_view>
 #include <vector>
 
 namespace forge::cli
@@ -165,9 +166,10 @@ namespace forge::cli
         output
           << "Resolve and lock GitHub cbox dependencies for the current target.\n\n"
           << "Usage:\n"
-          << "  forge update [dependency] [--profile=<name>]\n\n"
+          << "  forge update [dependency] [--profile=<name>] [--target=<os-arch>]\n\n"
           << "Options:\n"
-          << "  --profile=<name>   Select a dependency profile before resolving\n\n"
+          << "  --profile=<name>   Select a dependency profile before resolving\n"
+          << "  --target=<os-arch> Resolve dependencies for another platform target\n\n"
           << "Writes exact package identities, selected components, URLs, targets,\n"
           << "and checksums to forge.lock.toml without building the current project.\n"
           << "Existing entries for other targets are preserved.\n";
@@ -581,13 +583,25 @@ namespace forge::cli
             return 2;
           }
         }
+        else if (argument.starts_with("--target="))
+        {
+          const auto value = argument.substr(std::string_view { "--target=" }.size());
+
+          if (value.empty())
+          {
+            error << "forge: --target requires a value\n";
+            return 2;
+          }
+
+          options.update_target = std::string { value };
+        }
         else if (!options.update_dependency)
         {
           options.update_dependency = std::string { argument };
         }
         else
         {
-          error << "forge: usage: forge update [dependency] [--profile=<name>]\n";
+          error << "forge: usage: forge update [dependency] [--profile=<name>] [--target=<os-arch>]\n";
           return 2;
         }
       }

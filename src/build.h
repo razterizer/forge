@@ -14,6 +14,7 @@ namespace forge
   struct BuildOptions
   {
     std::optional<std::string> update_dependency;
+    std::optional<std::string> update_target;
     std::optional<std::string> target;
     std::optional<std::string> profile;
     std::vector<std::string> compile_definitions;

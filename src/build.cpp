@@ -203,6 +203,46 @@ namespace forge
 #endif
     }
 
+    std::string current_target()
+    {
+      return target_os() + "-" + target_arch();
+    }
+
+    bool is_supported_dependency_target(std::string_view target)
+    {
+      return target == "linux-x86_64"
+        || target == "linux-arm64"
+        || target == "macos-x86_64"
+        || target == "macos-arm64"
+        || target == "windows-x86"
+        || target == "windows-x86_64"
+        || target == "windows-arm64";
+    }
+
+    std::string dependency_target()
+    {
+      if (dependency_session != nullptr && dependency_session->options.update_target)
+      {
+        return *dependency_session->options.update_target;
+      }
+
+      return current_target();
+    }
+
+    std::string dependency_target_os()
+    {
+      const auto target = dependency_target();
+      const auto separator = target.find('-');
+      return separator == std::string::npos ? target : target.substr(0, separator);
+    }
+
+    std::string dependency_target_arch()
+    {
+      const auto target = dependency_target();
+      const auto separator = target.find('-');
+      return separator == std::string::npos ? target : target.substr(separator + 1);
+    }
+
     bool is_sha256(std::string_view value)
     {
       return value.size() == 64
@@ -413,10 +453,13 @@ namespace forge
       }
 
       const auto package = dependency.package.empty() ? dependency.name : dependency.package;
+      const auto selected_target = dependency_target();
+      const auto selected_os = dependency_target_os();
+      const auto selected_arch = dependency_target_arch();
       const auto compiled_asset = package
         + "-" + dependency.version
-        + "-" + target_os()
-        + "-" + target_arch()
+        + "-" + selected_os
+        + "-" + selected_arch
         + ".cbox";
       const auto header_only_asset = package + "-" + dependency.version + "-ho.cbox";
       std::vector<std::string> tag_versions;
@@ -443,7 +486,7 @@ namespace forge
         parent_directory / ".forge" / "cache" / "github"
           / std::filesystem::path { dependency.github }
           / dependency.version
-          / (target_os() + "-" + target_arch());
+          / selected_target;
       std::error_code filesystem_error;
       std::filesystem::create_directories(cache_directory, filesystem_error);
 
@@ -503,7 +546,7 @@ namespace forge
           dependency.url = release_url + asset;
           dependency.sha256 = std::move(checksum);
           dependency.resolved_target =
-            asset == header_only_asset ? "any" : target_os() + "-" + target_arch();
+            asset == header_only_asset ? "any" : selected_target;
           return true;
         }
       }
@@ -541,11 +584,6 @@ namespace forge
     std::string lock_key(std::string_view name, std::string_view target)
     {
       return std::string { name } + '\n' + std::string { target };
-    }
-
-    std::string current_target()
-    {
-      return target_os() + "-" + target_arch();
     }
 
     std::string package_version(const BoxMetadata& metadata)
@@ -908,7 +946,7 @@ namespace forge
                                       std::ostream& output,
                                       std::ostream& error)
     {
-      const auto target = current_target();
+      const auto target = dependency_target();
       const auto update =
         dependency_session->options.update_dependencies
         && (!dependency_session->options.update_dependency
@@ -1645,7 +1683,8 @@ namespace forge
             && metadata.build_number == node.recipe.build_number
             && metadata.type == node.recipe.type
             && (metadata.type == "header_only"
-                || (metadata.os == target_os() && metadata.arch == target_arch()))
+                || (metadata.os == dependency_target_os()
+                    && metadata.arch == dependency_target_arch()))
             && dependency_graph_matches(node.recipe, metadata, error))
         {
           node.box = entry.path();
@@ -1935,11 +1974,13 @@ namespace forge
           }
 
           if (metadata.type != "header_only"
-              && (metadata.os != target_os() || metadata.arch != target_arch()))
+              && (metadata.os != dependency_target_os()
+                  || metadata.arch != dependency_target_arch()))
           {
             error << "forge: dependency '" << dependency.name
                   << "' box targets " << metadata.os << '-' << metadata.arch
-                  << ", but this build targets " << target_os() << '-' << target_arch() << '\n';
+                  << ", but this build targets "
+                  << dependency_target_os() << '-' << dependency_target_arch() << '\n';
             return false;
           }
 
@@ -2671,6 +2712,12 @@ namespace forge
       dependency_session->root_project = canonical_project;
       dependency_session->options = options;
 
+      if (options.update_target && !is_supported_dependency_target(*options.update_target))
+      {
+        error << "forge: unsupported update target '" << *options.update_target << "'\n";
+        return 2;
+      }
+
       if (!load_lockfile(canonical_project, error))
       {
         return 2;
@@ -2959,7 +3006,7 @@ namespace forge
         return 2;
       }
 
-      output << "Updated locked dependencies for " << current_target() << '\n';
+      output << "Updated locked dependencies for " << dependency_target() << '\n';
       return 0;
     }
 
