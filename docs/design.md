@@ -128,76 +128,117 @@ workspace, box, runtime-assembly, and hosted-release milestones. The remaining
 roadmap focuses on making those features compose cleanly and stabilizing them
 for 1.0.
 
-### v0.7: Complete multi-target package publication
+### v0.8: Workspace and adoption lifecycle
 
-- Verify aggregate boxes, natural library cboxes, executable archives, and
-  component consumption on Linux, macOS, and Windows.
-
-Release criterion: Core and Termin8or publish directly consumable library
-cboxes and downloadable non-test executable archives on every platform, while
-aggregate boxes remain available for explicit component-container workflows.
-
-### v0.8: Complete workspace and adoption lifecycle
-
-- Add workspace-aware `forge clean`, release preparation, and publication.
-- Make repeated `forge adopt` runs preserve intentional recipe and workflow
-  edits while reporting newly discovered metadata.
-- Infer the project version from the latest valid `RELEASE_NOTES.md` heading
-  when stronger project metadata does not declare one.
-- Improve ambiguous source ownership and dependency resolution prompts.
+- Add workspace-aware `forge clean`.
+- Add workspace release preparation and publication.
+- Make repeated `forge adopt` runs safe, preserving intentional recipe and
+  workflow edits while reporting newly discovered or changed metadata.
+- Infer adopted project versions from the latest valid `RELEASE_NOTES.md`
+  heading when stronger project metadata does not declare one.
+- Polish `forge adopt --init-version=...` and `forge new --init-version=...`
+  so `RELEASE_NOTES.md`, recipe version, build number, and generated version
+  headers agree from the first generated commit.
+- Clarify version-header ownership:
+  - Detect and configure existing `version.h` files during `forge adopt`.
+  - Support an explicit `--version-header-path=<path>` override.
+  - Update generated headers using the project prefix, such as
+    `CORE_VERSION_STR`.
+  - Document whether version headers update when bumping versions or when
+    preparing release-git state.
+- Improve ambiguous source ownership and dependency resolution.
 - Finish CMake, Visual Studio solution, and Xcode workspace interoperability
   for mixed and mirrored project layouts.
-- Add concise progress and actionable summaries to long build, update, and
-  workspace operations.
+- Add better progress output and completion summaries for long build, update,
+  adoption, and workspace operations.
+- Make dependency and build profiles independently composable.
 
 Release criterion: Core, Termin8or, and Asciiroid_Belt can be adopted, built,
 tested, run, cleaned, and prepared for release together without maintaining a
 parallel hand-written build graph.
 
-### v0.9: Complete reproducible dependency management
+### v0.9: Reproducible dependencies
 
 - Support dependencies of `imported_library` packages.
-- Extend lockfiles to all remotely resolved artifacts and selected components.
+- Lock every remotely resolved artifact, including target-qualified boxes,
+  selected components, hosted workflow assets, and imported-library inputs.
 - Define version-constraint syntax and deterministic update behavior.
 - Make compiler and ABI compatibility policies explicit and configurable
   without silently accepting unsafe combinations.
-- Improve dependency diagnostics for conflicts, unavailable components, and
-  incompatible boxes.
+- Improve dependency diagnostics for conflicts, unavailable components,
+  incompatible boxes, and missing import profiles for the current target.
+- Improve imported-library ergonomics:
+  - Add clearer docs and help for `imported_library`.
+  - Add clearer recipe examples for import profiles.
+  - Harden OpenAL-style Windows-only dependency boxes as a reference case.
+  - Support header-only adapters that depend on platform-specific imported
+    libraries.
+  - Let release workflows gracefully skip unsupported host targets.
+- Keep workflow-specific release dependency conventions reproducible:
+  - Use `[profile.workflow-release.dependencies]` for release-only
+    dependency replacements.
+  - Make adoption leave clear TODOs for local dependencies that need
+    reproducible workflow replacements.
+  - Document cross-target updates such as
+    `forge update dep --profile=workflow-release --target=windows-x86_64`.
+- Keep `release-boxes` and other hosted release asset jobs updateable, ensure
+  workflow jobs choose the correct OS and toolchain behavior, and preserve
+  `--skip-unsupported` behavior for platform-specific imported libraries.
 
 Release criterion: a committed recipe and lockfile reproduce the same complete
 dependency graph and selected artifacts on every supported host.
 
-### v0.10: Complete declarative workflows
+### v0.10: Declarative workflows
 
 - Add declarative release variants and platform-specific contents.
 - Generate release manifests containing artifacts, checksums, components,
   dependencies, and toolchain identities.
 - Add dry-run support for release preparation, tagging, and publication.
-- Make generated CI files thin, updateable adapters around locally runnable
-  Forge commands.
-- Publish signed Debian packages through a Forge-owned APT repository so Linux
-  users and CI runners can install current Forge releases without building
-  Forge from source.
+- Generate version headers as a first-class workflow feature.
+- Finish thin, updateable CI adapters around locally runnable Forge commands.
+- Deprecate repo-local `tag_release.sh` scripts by letting Forge own version
+  bumping, version-header updates, release notes, tags, and release
+  preparation.
+- Add package manager distribution planning:
+  - Document the path toward `apt install forge`.
+  - Start with a GitHub-hosted `.deb` or APT repository.
+  - Consider upstream Ubuntu and Debian packaging after the stable contracts
+    are frozen.
 - Provide a version-aware `razterizer/setup-forge` action and use it from
-  generated GitHub workflows instead of repeating Forge checkout, latest-release
-  resolution, and bootstrap-build steps.
+  generated GitHub workflows instead of repeating Forge checkout,
+  latest-release resolution, and bootstrap-build steps.
 
 Release criterion: projects no longer need custom build, test, packaging,
 tagging, or publication scripts for supported workflows.
 
-### v1.0: Stabilize and harden
+### v1.0: Stabilization
 
-- Freeze and document the recipe, workspace, lockfile, and cbox compatibility
-  contracts, with explicit migration behavior.
-- Make box and release archives deterministic and add ZIP64 support.
+- Freeze recipe, workspace, lockfile, and cbox contracts.
+- Provide explicit format migrations.
+- Make archives deterministic and add ZIP64 support.
 - Audit path handling, extraction, checksums, and remote-resolution security.
 - Establish supported compiler, runtime, OS, and architecture matrices.
-- Expand end-to-end tests and dogfood Forge releases using Forge itself.
-- Complete reference documentation and troubleshooting guidance.
+- Expand end-to-end testing.
+- Dogfood Forge fully building and releasing itself.
+- Complete reference and troubleshooting documentation.
+- Complete migration docs for replacing `build.sh`, `setup_and_build.*`, and
+  `tag_release.sh`, transitioning submodules and local dependencies to cbox
+  dependencies, and keeping legacy build scripts working during the
+  transition.
 
 Release criterion: Forge can serve as the primary cross-platform workflow and
 dependency system for its own repository and the Core, Termin8or, and
 Asciiroid_Belt project family.
+
+### Immediate next candidates
+
+1. Harden `imported_library` workflows with OpenAL as the reference case.
+2. Finish and document `workflow-release` dependency locking across targets.
+3. Improve adopt/new version-header setup and release notes consistency.
+4. Add roadmap and docs for package distribution, starting with `.deb` and
+   APT-style installation.
+5. Expand end-to-end tests around header-only adapter packages depending on
+   imported dynamic libraries.
 
 ## Post-1.0 directions
 

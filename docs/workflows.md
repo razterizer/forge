@@ -158,14 +158,24 @@ remote release tag. Use it only when repairing a broken published release.
 
 ## Remaining workflow roadmap
 
-1. Release variants and platform-specific release contents.
-2. Generated release manifests.
-3. Dry-run support for release preparation, tagging, and publication.
-4. Publish signed Debian packages through a Forge-owned APT repository.
-5. Provide a version-aware `razterizer/setup-forge` action.
+1. Keep `[profile.workflow-release.dependencies]` as the reproducible place for
+   release-only dependency replacements.
+2. Make adoption leave clear TODOs for local dependencies that need workflow
+   replacements before hosted release jobs can reproduce them.
+3. Harden cross-target locking, including commands such as
+   `forge update dep --profile=workflow-release --target=windows-x86_64`.
+4. Keep `release-boxes` and other hosted release asset jobs updateable while
+   preserving `--skip-unsupported` behavior for platform-specific imported
+   libraries.
+5. Add release variants, platform-specific release contents, generated release
+   manifests, and dry runs for release preparation, tagging, and publication.
+6. Add package distribution planning, starting with GitHub-hosted `.deb` or
+   APT-style installation, then a version-aware `razterizer/setup-forge`
+   action.
 
 Local commands and CI should execute the same Forge-defined workflow. CI files
 should become thin adapters that install Forge and invoke the appropriate
 profile. Forge-controlled distribution lets generated workflows receive a
 current compatible Forge version even when official Ubuntu repositories retain
-older packages for a distribution release.
+older packages for a distribution release. See the remaining roadmap in
+[`design.md`](design.md) for the full milestone breakdown.
