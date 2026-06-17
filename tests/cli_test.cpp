@@ -3782,9 +3782,9 @@ namespace
       imported / "vendor/lib" / third_import_library.filename()
     );
 #endif
-    write_file(imported / "vendor/include/first/first.h", "int first();\n");
-    write_file(imported / "vendor/include/second/second.h", "int second();\n");
-    write_file(imported / "vendor/include/third/third.h", "int third();\n");
+    write_file(imported / "vendor/nested/include/first/first.h", "int first();\n");
+    write_file(imported / "vendor/nested/include/second/second.h", "int second();\n");
+    write_file(imported / "vendor/nested/include/third/third.h", "int third();\n");
     auto imported_recipe =
       "[project]\n"
       "name = \"vendor-sdk\"\n"
@@ -3792,7 +3792,7 @@ namespace
       "type = \"imported_library\"\n\n"
       "[import." + current_target() + "]\n"
       + read_file(first / ".forge/build/forge-toolchain.toml")
-      + "public_headers = [\"vendor/include\"]\n"
+      + "public_headers = [\"vendor/nested\"]\n"
       "static_libraries = [\"vendor/lib/" + first_library.filename().string()
       + "\", \"vendor/lib/" + second_library.filename().string() + "\"]\n"
       "dynamic_libraries = [\"vendor/runtime/" + third_runtime.filename().string() + "\"]\n";
@@ -3832,8 +3832,15 @@ namespace
       "run links every library from an imported-library dependency"
     );
     expect(
-      std::filesystem::exists(application / ".forge/deps/vendor-sdk/include/first/first.h"),
-      "build installs imported-library headers"
+      std::filesystem::exists(application / ".forge/deps/vendor-sdk/include/include/first/first.h"),
+      "build installs nested imported-library headers"
+    );
+    expect(
+      contains(
+        read_file(application / ".forge/generated/CMakeLists.txt"),
+        ".forge/deps/vendor-sdk/include/include"
+      ),
+      "build exports nested imported-library include roots"
     );
     expect(
       std::filesystem::exists(

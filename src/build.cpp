@@ -34,6 +34,7 @@ namespace forge
       std::string name;
       std::filesystem::path root;
       std::optional<ToolchainIdentity> toolchain;
+      std::vector<std::filesystem::path> include_directories;
       std::vector<ResolvedLibrary> libraries;
       std::vector<std::filesystem::path> runtimes;
     };
@@ -66,6 +67,53 @@ namespace forge
         && dependency.cpp_standard == project.cpp_standard
         && dependency.configuration == project.configuration
         && dependency.runtime == project.runtime;
+    }
+
+    void add_unique_path(std::vector<std::filesystem::path>& paths,
+                         const std::filesystem::path& path)
+    {
+      if (std::find(paths.begin(), paths.end(), path) == paths.end())
+      {
+        paths.push_back(path);
+      }
+    }
+
+    void add_dependency_include_directories(ResolvedDependency& dependency,
+                                            const std::optional<BoxMetadata>& metadata)
+    {
+      add_unique_path(dependency.include_directories, dependency.root / "include");
+
+      if (!metadata)
+      {
+        return;
+      }
+
+      for (const auto& artifact : metadata->artifacts)
+      {
+        if (artifact.kind != "public_header")
+        {
+          continue;
+        }
+
+        std::filesystem::path prefix;
+        bool first = true;
+
+        for (const auto& component : artifact.path)
+        {
+          prefix /= component;
+
+          if (first)
+          {
+            first = false;
+            continue;
+          }
+
+          if (component == std::filesystem::path { "include" })
+          {
+            add_unique_path(dependency.include_directories, dependency.root / prefix);
+          }
+        }
+      }
     }
 
     struct DependencySession
@@ -1359,9 +1407,13 @@ namespace forge
       for (std::size_t index = 0; index < dependencies.size(); ++index)
       {
         const auto& dependency = dependencies[index];
-        file
-          << "target_include_directories(forge_project PRIVATE \""
-          << escape_cmake((dependency.root / "include").string()) << "\")\n";
+
+        for (const auto& include_directory : dependency.include_directories)
+        {
+          file
+            << "target_include_directories(forge_project PRIVATE \""
+            << escape_cmake(include_directory.string()) << "\")\n";
+        }
 
         for (std::size_t library_index = 0;
              library_index < dependency.libraries.size();
@@ -2281,8 +2333,11 @@ namespace forge
           destination,
           node.box_metadata ? node.box_metadata->toolchain : std::nullopt,
           {},
+          {},
           {}
         };
+
+      add_dependency_include_directories(resolved, node.box_metadata);
 
       if (node.recipe.type == "static_library")
       {
