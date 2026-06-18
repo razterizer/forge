@@ -30,6 +30,13 @@ rules:
 - Source and named-target `include_dirs` declare private project-relative
   include search directories. `forge adopt` infers these when local headers
   unambiguously satisfy source `#include` directives.
+- `macos_system_include_dirs`, `linux_system_include_dirs`, and
+  `windows_system_include_dirs` declare platform-specific external include
+  search directories. Forge emits them as CMake `SYSTEM` include directories
+  and does not require them to be project-relative.
+- `macos_system_library_dirs`, `linux_system_library_dirs`, and
+  `windows_system_library_dirs` declare platform-specific external library
+  search directories for SDKs installed outside the project tree.
 - `[build].defines` and named-target `defines` declare persistent preprocessor
   definitions. Definitions use `NAME` or `NAME=value` syntax. Repeatable
   `forge build --define=<symbol>` options temporarily add private definitions
@@ -50,13 +57,17 @@ rules:
 - Projects may declare local static-library, dynamic-library, imported-library,
   and header-only dependencies using name and either project-path or cbox-path
   inline tables.
+- Dependency inline tables may include `targets = ["<os>-<arch>", ...]` to
+  enable a dependency only for selected platform targets, for example a
+  Windows-only imported SDK cbox while Linux and macOS use system packages.
 - Pinned Git source dependencies require `git` and an exact full 40- or
   64-hex-character `commit`. Forge caches the detached checkout and treats it
   like a local source project.
 - Named `[profile.<name>.dependencies]` sections provide complete dependency-set
   overrides. `[profile.<name>.build]` sections add build configuration,
-  `cpp_std`, `include_dirs`, and `defines` overrides. Both are selected by
-  `forge build`, `forge run`, or `forge test` with `--profile=<name>`.
+  `cpp_std`, `include_dirs`, platform system include dirs, and `defines`
+  overrides. Both are selected by `forge build`, `forge run`, or `forge test`
+  with `--profile=<name>`.
 - Downloadable cbox dependencies require both `url` and lowercase `sha256`.
 - GitHub Release cbox dependencies require `github = "owner/repository"` and a
   packaged `version`. `forge update` writes their exact target-specific

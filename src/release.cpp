@@ -75,6 +75,17 @@ namespace forge
       ) != recipe.imports.end();
     }
 
+    bool dependency_matches_current_target(const Dependency& dependency)
+    {
+      const auto target = current_target();
+      return dependency.targets.empty()
+        || std::find(
+          dependency.targets.begin(),
+          dependency.targets.end(),
+          target
+        ) != dependency.targets.end();
+    }
+
     bool validate_workflow_release_dependencies(Recipe recipe, std::ostream& error)
     {
       const auto profile = selected_workflow_release_profile(recipe);
@@ -91,6 +102,11 @@ namespace forge
 
       for (const auto& dependency : recipe.dependencies)
       {
+        if (!dependency_matches_current_target(dependency))
+        {
+          continue;
+        }
+
         const auto local_git =
           !dependency.git.empty()
           && !dependency.git.starts_with("https://")
@@ -293,6 +309,46 @@ namespace forge
       }
 
       return version;
+    }
+
+    bool has_platform_specific_requirements(const Recipe& recipe)
+    {
+      return std::any_of(
+          recipe.dependencies.begin(),
+          recipe.dependencies.end(),
+          [](const Dependency& dependency)
+          {
+            return !dependency.targets.empty();
+          }
+        )
+        || !recipe.macos_system_include_directories.empty()
+        || !recipe.linux_system_include_directories.empty()
+        || !recipe.windows_system_include_directories.empty()
+        || !recipe.macos_system_library_directories.empty()
+        || !recipe.linux_system_library_directories.empty()
+        || !recipe.windows_system_library_directories.empty()
+        || !recipe.macos_frameworks.empty()
+        || !recipe.macos_libraries.empty()
+        || !recipe.linux_libraries.empty()
+        || !recipe.windows_libraries.empty();
+    }
+
+    std::string hosted_target();
+
+    std::string hosted_box_filename(const Recipe& recipe)
+    {
+      auto filename = recipe.name + "-" + package_version(recipe);
+
+      if (recipe.type == "header_only" && !has_platform_specific_requirements(recipe))
+      {
+        filename += "-ho";
+      }
+      else
+      {
+        filename += "-" + hosted_target();
+      }
+
+      return filename + ".cbox";
     }
 
     bool extract_release_notes(const std::filesystem::path& source,
@@ -951,16 +1007,7 @@ namespace forge
       }
 
       const auto boxes_directory = project_directory / ".forge" / "boxes";
-      auto package_version = recipe.version;
-
-      if (recipe.build_number)
-      {
-        package_version += "+build." + std::to_string(*recipe.build_number);
-      }
-
-      const auto box = boxes_directory
-        / (recipe.name + "-" + package_version
-           + (recipe.type == "header_only" ? "-ho" : "-" + hosted_target()) + ".cbox");
+      const auto box = boxes_directory / hosted_box_filename(recipe);
 
       if (!std::filesystem::is_regular_file(box))
       {

@@ -408,6 +408,33 @@ namespace forge
         const auto kind = trim(value.substr(0, equals));
         value = trim(value.substr(equals + 1));
 
+        if (kind == "targets" && dependency.targets.empty())
+        {
+          const auto end = value.find(']');
+
+          if (end == std::string_view::npos
+              || !parse_names(value.substr(0, end + 1), dependency.targets))
+          {
+            return false;
+          }
+
+          ++fields;
+          value = trim(value.substr(end + 1));
+
+          if (value.empty())
+          {
+            break;
+          }
+
+          if (value.front() != ',')
+          {
+            return false;
+          }
+
+          value = trim(value.substr(1));
+          continue;
+        }
+
         if (value.empty() || value.front() != '"')
         {
           return false;
@@ -648,6 +675,30 @@ namespace forge
       {
         valid = parse_definitions(value, recipe.compile_definitions);
       }
+      else if (section == "build" && key == "macos_system_include_dirs")
+      {
+        valid = parse_sources(value, recipe.macos_system_include_directories);
+      }
+      else if (section == "build" && key == "linux_system_include_dirs")
+      {
+        valid = parse_sources(value, recipe.linux_system_include_directories);
+      }
+      else if (section == "build" && key == "windows_system_include_dirs")
+      {
+        valid = parse_sources(value, recipe.windows_system_include_directories);
+      }
+      else if (section == "build" && key == "macos_system_library_dirs")
+      {
+        valid = parse_sources(value, recipe.macos_system_library_directories);
+      }
+      else if (section == "build" && key == "linux_system_library_dirs")
+      {
+        valid = parse_sources(value, recipe.linux_system_library_directories);
+      }
+      else if (section == "build" && key == "windows_system_library_dirs")
+      {
+        valid = parse_sources(value, recipe.windows_system_library_directories);
+      }
       else if (section == "build" && key == "macos_frameworks")
       {
         valid = parse_link_names(value, recipe.macos_frameworks);
@@ -720,6 +771,30 @@ namespace forge
         else if (key == "include_dirs")
         {
           valid = parse_sources(value, target->include_directories);
+        }
+        else if (key == "macos_system_include_dirs")
+        {
+          valid = parse_sources(value, target->macos_system_include_directories);
+        }
+        else if (key == "linux_system_include_dirs")
+        {
+          valid = parse_sources(value, target->linux_system_include_directories);
+        }
+        else if (key == "windows_system_include_dirs")
+        {
+          valid = parse_sources(value, target->windows_system_include_directories);
+        }
+        else if (key == "macos_system_library_dirs")
+        {
+          valid = parse_sources(value, target->macos_system_library_directories);
+        }
+        else if (key == "linux_system_library_dirs")
+        {
+          valid = parse_sources(value, target->linux_system_library_directories);
+        }
+        else if (key == "windows_system_library_dirs")
+        {
+          valid = parse_sources(value, target->windows_system_library_directories);
         }
         else if (key == "defines")
         {
@@ -864,6 +939,30 @@ namespace forge
               else if (key == "include_dirs")
               {
                 valid = parse_sources(value, build.include_directories);
+              }
+              else if (key == "macos_system_include_dirs")
+              {
+                valid = parse_sources(value, build.macos_system_include_directories);
+              }
+              else if (key == "linux_system_include_dirs")
+              {
+                valid = parse_sources(value, build.linux_system_include_directories);
+              }
+              else if (key == "windows_system_include_dirs")
+              {
+                valid = parse_sources(value, build.windows_system_include_directories);
+              }
+              else if (key == "macos_system_library_dirs")
+              {
+                valid = parse_sources(value, build.macos_system_library_directories);
+              }
+              else if (key == "linux_system_library_dirs")
+              {
+                valid = parse_sources(value, build.linux_system_library_directories);
+              }
+              else if (key == "windows_system_library_dirs")
+              {
+                valid = parse_sources(value, build.windows_system_library_directories);
               }
               else if (key == "defines")
               {
@@ -1108,6 +1207,12 @@ namespace forge
     recipe.sources = selected->sources;
     recipe.public_headers = selected->public_headers;
     recipe.include_directories = selected->include_directories;
+    recipe.macos_system_include_directories = selected->macos_system_include_directories;
+    recipe.linux_system_include_directories = selected->linux_system_include_directories;
+    recipe.windows_system_include_directories = selected->windows_system_include_directories;
+    recipe.macos_system_library_directories = selected->macos_system_library_directories;
+    recipe.linux_system_library_directories = selected->linux_system_library_directories;
+    recipe.windows_system_library_directories = selected->windows_system_library_directories;
     recipe.compile_definitions = selected->compile_definitions;
     recipe.macos_frameworks = selected->macos_frameworks;
     recipe.macos_libraries = selected->macos_libraries;
@@ -1173,6 +1278,36 @@ namespace forge
       recipe.include_directories.end(),
       build.include_directories.begin(),
       build.include_directories.end()
+    );
+    recipe.macos_system_include_directories.insert(
+      recipe.macos_system_include_directories.end(),
+      build.macos_system_include_directories.begin(),
+      build.macos_system_include_directories.end()
+    );
+    recipe.linux_system_include_directories.insert(
+      recipe.linux_system_include_directories.end(),
+      build.linux_system_include_directories.begin(),
+      build.linux_system_include_directories.end()
+    );
+    recipe.windows_system_include_directories.insert(
+      recipe.windows_system_include_directories.end(),
+      build.windows_system_include_directories.begin(),
+      build.windows_system_include_directories.end()
+    );
+    recipe.macos_system_library_directories.insert(
+      recipe.macos_system_library_directories.end(),
+      build.macos_system_library_directories.begin(),
+      build.macos_system_library_directories.end()
+    );
+    recipe.linux_system_library_directories.insert(
+      recipe.linux_system_library_directories.end(),
+      build.linux_system_library_directories.begin(),
+      build.linux_system_library_directories.end()
+    );
+    recipe.windows_system_library_directories.insert(
+      recipe.windows_system_library_directories.end(),
+      build.windows_system_library_directories.begin(),
+      build.windows_system_library_directories.end()
     );
     recipe.compile_definitions.insert(
       recipe.compile_definitions.end(),

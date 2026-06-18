@@ -1,5 +1,16 @@
 # Release notes
 
+## 0.8.2
+
+- Added target-filtered dependencies so recipes can declare platform-specific
+  dependency edges, such as a Windows-only SDK cbox.
+- Added platform-specific system include and library directory requirements to
+  recipes and cbox manifests, and propagate those requirements through cbox
+  consumers.
+- Made header-only boxes with platform-specific dependencies or system
+  requirements publish target-qualified cbox assets instead of universal
+  `-ho.cbox` assets.
+
 ## 0.8.1
 
 - Relaxed imported-library compatibility checks so compatible hosted runners

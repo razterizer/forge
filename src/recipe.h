@@ -30,6 +30,7 @@ namespace forge
     std::string type;
     std::string component;
     std::string resolved_target;
+    std::vector<std::string> targets;
   };
 
   struct ImportProfile
@@ -60,6 +61,12 @@ namespace forge
     std::vector<std::filesystem::path> sources;
     std::vector<std::filesystem::path> public_headers;
     std::vector<std::filesystem::path> include_directories;
+    std::vector<std::filesystem::path> macos_system_include_directories;
+    std::vector<std::filesystem::path> linux_system_include_directories;
+    std::vector<std::filesystem::path> windows_system_include_directories;
+    std::vector<std::filesystem::path> macos_system_library_directories;
+    std::vector<std::filesystem::path> linux_system_library_directories;
+    std::vector<std::filesystem::path> windows_system_library_directories;
     std::vector<std::string> compile_definitions;
     std::vector<RuntimeFile> runtime_files;
     std::vector<std::string> dependencies;
@@ -75,6 +82,12 @@ namespace forge
     std::string configuration;
     int cpp_standard = 0;
     std::vector<std::filesystem::path> include_directories;
+    std::vector<std::filesystem::path> macos_system_include_directories;
+    std::vector<std::filesystem::path> linux_system_include_directories;
+    std::vector<std::filesystem::path> windows_system_include_directories;
+    std::vector<std::filesystem::path> macos_system_library_directories;
+    std::vector<std::filesystem::path> linux_system_library_directories;
+    std::vector<std::filesystem::path> windows_system_library_directories;
     std::vector<std::string> compile_definitions;
   };
 
@@ -88,6 +101,12 @@ namespace forge
     std::vector<std::filesystem::path> sources;
     std::vector<std::filesystem::path> public_headers;
     std::vector<std::filesystem::path> include_directories;
+    std::vector<std::filesystem::path> macos_system_include_directories;
+    std::vector<std::filesystem::path> linux_system_include_directories;
+    std::vector<std::filesystem::path> windows_system_include_directories;
+    std::vector<std::filesystem::path> macos_system_library_directories;
+    std::vector<std::filesystem::path> linux_system_library_directories;
+    std::vector<std::filesystem::path> windows_system_library_directories;
     std::vector<std::string> compile_definitions;
     std::vector<std::string> macos_frameworks;
     std::vector<std::string> macos_libraries;

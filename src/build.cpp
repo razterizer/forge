@@ -10,6 +10,7 @@
 #include <array>
 #include <charconv>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <optional>
 #include <set>
@@ -35,6 +36,16 @@ namespace forge
       std::filesystem::path root;
       std::optional<ToolchainIdentity> toolchain;
       std::vector<std::filesystem::path> include_directories;
+      std::vector<std::filesystem::path> macos_system_include_directories;
+      std::vector<std::filesystem::path> linux_system_include_directories;
+      std::vector<std::filesystem::path> windows_system_include_directories;
+      std::vector<std::filesystem::path> macos_system_library_directories;
+      std::vector<std::filesystem::path> linux_system_library_directories;
+      std::vector<std::filesystem::path> windows_system_library_directories;
+      std::vector<std::string> macos_frameworks;
+      std::vector<std::string> macos_libraries;
+      std::vector<std::string> linux_libraries;
+      std::vector<std::string> windows_libraries;
       std::vector<ResolvedLibrary> libraries;
       std::vector<std::filesystem::path> runtimes;
     };
@@ -284,6 +295,38 @@ namespace forge
       }
 
       return current_target();
+    }
+
+    bool dependency_matches_target(const Dependency& dependency)
+    {
+      return dependency.targets.empty()
+        || std::find(
+          dependency.targets.begin(),
+          dependency.targets.end(),
+          dependency_target()
+        ) != dependency.targets.end();
+    }
+
+    bool has_platform_specific_requirements(const Recipe& recipe)
+    {
+      return std::any_of(
+          recipe.dependencies.begin(),
+          recipe.dependencies.end(),
+          [](const Dependency& dependency)
+          {
+            return !dependency.targets.empty();
+          }
+        )
+        || !recipe.macos_system_include_directories.empty()
+        || !recipe.linux_system_include_directories.empty()
+        || !recipe.windows_system_include_directories.empty()
+        || !recipe.macos_system_library_directories.empty()
+        || !recipe.linux_system_library_directories.empty()
+        || !recipe.windows_system_library_directories.empty()
+        || !recipe.macos_frameworks.empty()
+        || !recipe.macos_libraries.empty()
+        || !recipe.linux_libraries.empty()
+        || !recipe.windows_libraries.empty();
     }
 
     std::string dependency_target_os()
@@ -1201,6 +1244,72 @@ namespace forge
       }
     }
 
+    void write_system_include_directories(
+      std::ostream& file,
+      std::string_view target,
+      std::string_view visibility,
+      const std::vector<std::filesystem::path>& macos_include_directories,
+      const std::vector<std::filesystem::path>& linux_include_directories,
+      const std::vector<std::filesystem::path>& windows_include_directories)
+    {
+      const auto write_group =
+        [&file, target, visibility](std::string_view condition,
+                                    const std::vector<std::filesystem::path>& directories)
+        {
+          if (directories.empty())
+          {
+            return;
+          }
+
+          file << "if(" << condition << ")\n";
+
+          for (const auto& directory : directories)
+          {
+            file << "  target_include_directories(" << target << " SYSTEM "
+                 << visibility << " \"" << escape_cmake(directory.generic_string()) << "\")\n";
+          }
+
+          file << "endif()\n";
+        };
+
+      write_group("APPLE", macos_include_directories);
+      write_group("UNIX AND NOT APPLE", linux_include_directories);
+      write_group("WIN32", windows_include_directories);
+    }
+
+    void write_system_library_directories(
+      std::ostream& file,
+      std::string_view target,
+      std::string_view visibility,
+      const std::vector<std::filesystem::path>& macos_library_directories,
+      const std::vector<std::filesystem::path>& linux_library_directories,
+      const std::vector<std::filesystem::path>& windows_library_directories)
+    {
+      const auto write_group =
+        [&file, target, visibility](std::string_view condition,
+                                    const std::vector<std::filesystem::path>& directories)
+        {
+          if (directories.empty())
+          {
+            return;
+          }
+
+          file << "if(" << condition << ")\n";
+
+          for (const auto& directory : directories)
+          {
+            file << "  target_link_directories(" << target << ' ' << visibility
+                 << " \"" << escape_cmake(directory.generic_string()) << "\")\n";
+          }
+
+          file << "endif()\n";
+        };
+
+      write_group("APPLE", macos_library_directories);
+      write_group("UNIX AND NOT APPLE", linux_library_directories);
+      write_group("WIN32", windows_library_directories);
+    }
+
     bool write_generated_cmake(const std::filesystem::path& path,
                                const Recipe& recipe,
                                const std::vector<ResolvedDependency>& dependencies,
@@ -1294,6 +1403,23 @@ namespace forge
             << escape_cmake(include_directory.generic_string()) << "\")\n";
         }
 
+        write_system_include_directories(
+          file,
+          target_name,
+          target.type == "header_only" ? "INTERFACE" : "PRIVATE",
+          target.macos_system_include_directories,
+          target.linux_system_include_directories,
+          target.windows_system_include_directories
+        );
+        write_system_library_directories(
+          file,
+          target_name,
+          target.type == "header_only" ? "INTERFACE" : "PRIVATE",
+          target.macos_system_library_directories,
+          target.linux_system_library_directories,
+          target.windows_system_library_directories
+        );
+
         for (const auto& definition : target.compile_definitions)
         {
           const auto definition_visibility =
@@ -1381,6 +1507,23 @@ namespace forge
           << escape_cmake(include_directory.generic_string()) << "\")\n";
       }
 
+      write_system_include_directories(
+        file,
+        "forge_project",
+        "PRIVATE",
+        recipe.macos_system_include_directories,
+        recipe.linux_system_include_directories,
+        recipe.windows_system_include_directories
+      );
+      write_system_library_directories(
+        file,
+        "forge_project",
+        "PRIVATE",
+        recipe.macos_system_library_directories,
+        recipe.linux_system_library_directories,
+        recipe.windows_system_library_directories
+      );
+
       for (const auto& definition : recipe.compile_definitions)
       {
         file
@@ -1414,6 +1557,33 @@ namespace forge
             << "target_include_directories(forge_project PRIVATE \""
             << escape_cmake(include_directory.string()) << "\")\n";
         }
+
+        write_system_include_directories(
+          file,
+          "forge_project",
+          "PRIVATE",
+          dependency.macos_system_include_directories,
+          dependency.linux_system_include_directories,
+          dependency.windows_system_include_directories
+        );
+        write_system_library_directories(
+          file,
+          "forge_project",
+          "PRIVATE",
+          dependency.macos_system_library_directories,
+          dependency.linux_system_library_directories,
+          dependency.windows_system_library_directories
+        );
+
+        write_system_links(
+          file,
+          "forge_project",
+          "PRIVATE",
+          dependency.macos_frameworks,
+          dependency.macos_libraries,
+          dependency.linux_libraries,
+          dependency.windows_libraries
+        );
 
         for (std::size_t library_index = 0;
              library_index < dependency.libraries.size();
@@ -1639,14 +1809,24 @@ namespace forge
                                   const BoxMetadata& metadata,
                                   std::ostream& error)
     {
-      if (recipe.dependencies.size() != metadata.dependencies.size())
+      std::vector<std::reference_wrapper<const Dependency>> active_dependencies;
+
+      for (const auto& dependency : recipe.dependencies)
+      {
+        if (dependency_matches_target(dependency))
+        {
+          active_dependencies.emplace_back(dependency);
+        }
+      }
+
+      if (active_dependencies.size() != metadata.dependencies.size())
       {
         return false;
       }
 
-      for (const auto& dependency : recipe.dependencies)
+      for (const auto& dependency : active_dependencies)
       {
-        const auto child_path = dependency_session->names.find(dependency.name);
+        const auto child_path = dependency_session->names.find(dependency.get().name);
 
         if (child_path == dependency_session->names.end())
         {
@@ -1672,7 +1852,7 @@ namespace forge
           metadata.dependencies.end(),
           [&dependency](const BoxDependencyMetadata& candidate)
           {
-            return candidate.name == dependency.name;
+            return candidate.name == dependency.get().name;
           }
         );
 
@@ -1746,7 +1926,7 @@ namespace forge
             && metadata.version == node.recipe.version
             && metadata.build_number == node.recipe.build_number
             && metadata.type == node.recipe.type
-            && (metadata.type == "header_only"
+            && ((metadata.type == "header_only" && !has_platform_specific_requirements(node.recipe))
                 || (metadata.os == dependency_target_os()
                     && metadata.arch == dependency_target_arch()))
             && dependency_graph_matches(node.recipe, metadata, error))
@@ -2069,6 +2249,7 @@ namespace forge
                 {},
                 child.type,
                 {},
+                {},
                 {}
               }
             );
@@ -2242,6 +2423,11 @@ namespace forge
 
       for (const auto& child : node->recipe.dependencies)
       {
+        if (!dependency_matches_target(child))
+        {
+          continue;
+        }
+
         if (!collect_dependency(
           node->directory,
           child,
@@ -2333,6 +2519,22 @@ namespace forge
           destination,
           node.box_metadata ? node.box_metadata->toolchain : std::nullopt,
           {},
+          node.box_metadata ? node.box_metadata->macos_system_include_directories
+                            : std::vector<std::filesystem::path> {},
+          node.box_metadata ? node.box_metadata->linux_system_include_directories
+                            : std::vector<std::filesystem::path> {},
+          node.box_metadata ? node.box_metadata->windows_system_include_directories
+                            : std::vector<std::filesystem::path> {},
+          node.box_metadata ? node.box_metadata->macos_system_library_directories
+                            : std::vector<std::filesystem::path> {},
+          node.box_metadata ? node.box_metadata->linux_system_library_directories
+                            : std::vector<std::filesystem::path> {},
+          node.box_metadata ? node.box_metadata->windows_system_library_directories
+                            : std::vector<std::filesystem::path> {},
+          node.box_metadata ? node.box_metadata->macos_frameworks : std::vector<std::string> {},
+          node.box_metadata ? node.box_metadata->macos_libraries : std::vector<std::string> {},
+          node.box_metadata ? node.box_metadata->linux_libraries : std::vector<std::string> {},
+          node.box_metadata ? node.box_metadata->windows_libraries : std::vector<std::string> {},
           {},
           {}
         };
@@ -2680,6 +2882,11 @@ namespace forge
 
       for (const auto& dependency : recipe.dependencies)
       {
+        if (!dependency_matches_target(dependency))
+        {
+          continue;
+        }
+
         if (!direct_names.insert(dependency.name).second)
         {
           error << "forge: duplicate dependency name '" << dependency.name << "'\n";

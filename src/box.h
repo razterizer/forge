@@ -52,6 +52,16 @@ namespace forge
     std::string os;
     std::string arch;
     std::optional<ToolchainIdentity> toolchain;
+    std::vector<std::filesystem::path> macos_system_include_directories;
+    std::vector<std::filesystem::path> linux_system_include_directories;
+    std::vector<std::filesystem::path> windows_system_include_directories;
+    std::vector<std::filesystem::path> macos_system_library_directories;
+    std::vector<std::filesystem::path> linux_system_library_directories;
+    std::vector<std::filesystem::path> windows_system_library_directories;
+    std::vector<std::string> macos_frameworks;
+    std::vector<std::string> macos_libraries;
+    std::vector<std::string> linux_libraries;
+    std::vector<std::string> windows_libraries;
     std::vector<BoxArtifactMetadata> artifacts;
     std::vector<BoxDependencyMetadata> dependencies;
     std::vector<BoxComponentMetadata> components;

@@ -330,6 +330,8 @@ namespace
       << "configuration = \"Release\"\n"
       << "cpp_std = 23\n"
       << "include_dirs = [\"include\"]\n"
+      << "macos_system_include_dirs = [\"/opt/homebrew/opt/example/include\"]\n"
+      << "macos_system_library_dirs = [\"/opt/homebrew/opt/example/lib\"]\n"
       << "defines = [\"NDEBUG\", \"PROFILE_VALUE=42\"]\n";
     recipe.close();
     forge::BuildOptions options;
@@ -356,6 +358,14 @@ namespace
     expect(contains(generated, "\"NDEBUG\""), "build profile adds a definition");
     expect(contains(generated, "include\""), "build profile adds an include directory");
     expect(
+      contains(generated, "SYSTEM PRIVATE \"/opt/homebrew/opt/example/include\""),
+      "build profile adds a platform system include directory"
+    );
+    expect(
+      contains(generated, "target_link_directories(forge_project PRIVATE \"/opt/homebrew/opt/example/lib\")"),
+      "build profile adds a platform system library directory"
+    );
+    expect(
       commands.size() == 2
         && std::find(commands[0].begin(), commands[0].end(), "-DCMAKE_BUILD_TYPE=Release")
           != commands[0].end(),
@@ -369,6 +379,38 @@ namespace
       "build profile selects the build-time CMake configuration"
     );
     expect(error.str().empty(), "successful build profile does not write an error");
+  }
+
+  void test_build_skips_dependencies_filtered_to_other_targets()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[dependencies]\n"
+      << "missing_windows_sdk = { path = \"missing\", targets = [\"windows-x86_64\"] }\n";
+    recipe.close();
+    forge::BuildOptions options;
+    options.update_target = "linux-x86_64";
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&commands](const std::vector<std::string>& arguments,
+                  const std::filesystem::path&,
+                  std::ostream&)
+      {
+        commands.push_back(arguments);
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), options, runner, output, error) == 0,
+      "build skips dependencies filtered to a different target"
+    );
+    expect(commands.size() == 2, "filtered dependency does not invoke dependency tooling");
+    expect(error.str().empty(), "filtered dependency build does not write an error");
   }
 
   void test_build_selects_named_target()
@@ -1396,6 +1438,7 @@ int main()
   test_build_generates_named_target_definitions();
   test_build_rejects_invalid_recipe_definition();
   test_build_applies_build_profile();
+  test_build_skips_dependencies_filtered_to_other_targets();
   test_build_selects_named_target();
   test_build_requires_target_for_multi_target_recipe();
   test_build_rejects_missing_internal_target();

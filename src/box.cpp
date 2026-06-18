@@ -58,6 +58,16 @@ namespace forge
       std::string os;
       std::string arch;
       std::optional<ToolchainIdentity> toolchain;
+      std::vector<std::filesystem::path> macos_system_include_directories;
+      std::vector<std::filesystem::path> linux_system_include_directories;
+      std::vector<std::filesystem::path> windows_system_include_directories;
+      std::vector<std::filesystem::path> macos_system_library_directories;
+      std::vector<std::filesystem::path> linux_system_library_directories;
+      std::vector<std::filesystem::path> windows_system_library_directories;
+      std::vector<std::string> macos_frameworks;
+      std::vector<std::string> macos_libraries;
+      std::vector<std::string> linux_libraries;
+      std::vector<std::string> windows_libraries;
       std::vector<BoxArtifact> artifacts;
       std::vector<BoxDependency> dependencies;
       std::vector<BoxComponent> components;
@@ -94,6 +104,120 @@ namespace forge
       value = trim(value);
       const auto parsed = std::from_chars(value.data(), value.data() + value.size(), result);
       return parsed.ec == std::errc {} && parsed.ptr == value.data() + value.size();
+    }
+
+    bool parse_strings(std::string_view value, std::vector<std::string>& strings)
+    {
+      value = trim(value);
+
+      if (value.size() < 2 || value.front() != '[' || value.back() != ']')
+      {
+        return false;
+      }
+
+      value = trim(value.substr(1, value.size() - 2));
+      strings.clear();
+
+      while (!value.empty())
+      {
+        if (value.front() != '"')
+        {
+          return false;
+        }
+
+        std::size_t end = 1;
+
+        while (end < value.size() && value[end] != '"')
+        {
+          if (value[end] == '\\')
+          {
+            ++end;
+          }
+
+          ++end;
+        }
+
+        std::string parsed;
+
+        if (end >= value.size() || !parse_string(value.substr(0, end + 1), parsed))
+        {
+          return false;
+        }
+
+        strings.push_back(std::move(parsed));
+        value = trim(value.substr(end + 1));
+
+        if (value.empty())
+        {
+          break;
+        }
+
+        if (value.front() != ',')
+        {
+          return false;
+        }
+
+        value = trim(value.substr(1));
+      }
+
+      return true;
+    }
+
+    bool parse_paths(std::string_view value, std::vector<std::filesystem::path>& paths)
+    {
+      std::vector<std::string> strings;
+
+      if (!parse_strings(value, strings))
+      {
+        return false;
+      }
+
+      paths.clear();
+
+      for (const auto& string : strings)
+      {
+        paths.emplace_back(string);
+      }
+
+      return true;
+    }
+
+    void write_string_array(std::ostream& output,
+                            std::string_view name,
+                            const std::vector<std::string>& values)
+    {
+      if (values.empty())
+      {
+        return;
+      }
+
+      output << name << " = [";
+
+      for (std::size_t index = 0; index < values.size(); ++index)
+      {
+        output << (index == 0 ? "\"" : ", \"") << values[index] << "\"";
+      }
+
+      output << "]\n";
+    }
+
+    void write_path_array(std::ostream& output,
+                          std::string_view name,
+                          const std::vector<std::filesystem::path>& values)
+    {
+      if (values.empty())
+      {
+        return;
+      }
+
+      output << name << " = [";
+
+      for (std::size_t index = 0; index < values.size(); ++index)
+      {
+        output << (index == 0 ? "\"" : ", \"") << values[index].generic_string() << "\"";
+      }
+
+      output << "]\n";
     }
 
     bool read_toolchain(const std::filesystem::path& path,
@@ -198,6 +322,17 @@ namespace forge
     std::string current_target()
     {
       return target_os() + "-" + target_arch();
+    }
+
+    bool dependency_matches_target(const Dependency& dependency)
+    {
+      const auto target = current_target();
+      return dependency.targets.empty()
+        || std::find(
+          dependency.targets.begin(),
+          dependency.targets.end(),
+          target
+        ) != dependency.targets.end();
     }
 
     std::filesystem::path dynamic_library_filename(std::string_view name)
@@ -504,6 +639,54 @@ namespace forge
           << "runtime = \"" << toolchain->runtime << "\"\n";
       }
 
+      if (!recipe.macos_system_include_directories.empty()
+          || !recipe.linux_system_include_directories.empty()
+          || !recipe.windows_system_include_directories.empty()
+          || !recipe.macos_system_library_directories.empty()
+          || !recipe.linux_system_library_directories.empty()
+          || !recipe.windows_system_library_directories.empty()
+          || !recipe.macos_frameworks.empty()
+          || !recipe.macos_libraries.empty()
+          || !recipe.linux_libraries.empty()
+          || !recipe.windows_libraries.empty())
+      {
+        manifest << "\n[requirements]\n";
+        write_path_array(
+          manifest,
+          "macos_system_include_dirs",
+          recipe.macos_system_include_directories
+        );
+        write_path_array(
+          manifest,
+          "linux_system_include_dirs",
+          recipe.linux_system_include_directories
+        );
+        write_path_array(
+          manifest,
+          "windows_system_include_dirs",
+          recipe.windows_system_include_directories
+        );
+        write_path_array(
+          manifest,
+          "macos_system_library_dirs",
+          recipe.macos_system_library_directories
+        );
+        write_path_array(
+          manifest,
+          "linux_system_library_dirs",
+          recipe.linux_system_library_directories
+        );
+        write_path_array(
+          manifest,
+          "windows_system_library_dirs",
+          recipe.windows_system_library_directories
+        );
+        write_string_array(manifest, "macos_frameworks", recipe.macos_frameworks);
+        write_string_array(manifest, "macos_libraries", recipe.macos_libraries);
+        write_string_array(manifest, "linux_libraries", recipe.linux_libraries);
+        write_string_array(manifest, "windows_libraries", recipe.windows_libraries);
+      }
+
       for (const auto& artifact : artifacts)
       {
         manifest
@@ -539,11 +722,33 @@ namespace forge
       return version;
     }
 
+    bool has_platform_specific_requirements(const Recipe& recipe)
+    {
+      return std::any_of(
+          recipe.dependencies.begin(),
+          recipe.dependencies.end(),
+          [](const Dependency& dependency)
+          {
+            return !dependency.targets.empty();
+          }
+        )
+        || !recipe.macos_system_include_directories.empty()
+        || !recipe.linux_system_include_directories.empty()
+        || !recipe.windows_system_include_directories.empty()
+        || !recipe.macos_system_library_directories.empty()
+        || !recipe.linux_system_library_directories.empty()
+        || !recipe.windows_system_library_directories.empty()
+        || !recipe.macos_frameworks.empty()
+        || !recipe.macos_libraries.empty()
+        || !recipe.linux_libraries.empty()
+        || !recipe.windows_libraries.empty();
+    }
+
     std::string box_filename(const Recipe& recipe)
     {
       auto filename = recipe.name + "-" + package_version(recipe);
 
-      if (recipe.type == "header_only")
+      if (recipe.type == "header_only" && !has_platform_specific_requirements(recipe))
       {
         filename += "-ho";
       }
@@ -579,6 +784,11 @@ namespace forge
 
       const auto published_box = working_directory / "boxes" / path;
       return std::filesystem::is_regular_file(published_box) ? published_box : relative_path;
+    }
+
+    bool is_portable_header_only_filename(const std::filesystem::path& path)
+    {
+      return path.filename().string().ends_with("-ho.cbox");
     }
 
     bool prepare_empty_directory(const std::filesystem::path& path,
@@ -701,6 +911,7 @@ namespace forge
               && section != "package"
               && section != "target"
               && section != "toolchain"
+              && section != "requirements"
               && section != "artifact"
               && section != "dependency"
               && section != "component")
@@ -864,6 +1075,46 @@ namespace forge
             manifest.toolchain.emplace();
           }
           valid = parse_string(value, manifest.toolchain->runtime);
+        }
+        else if (identity == "requirements.macos_system_include_dirs")
+        {
+          valid = parse_paths(value, manifest.macos_system_include_directories);
+        }
+        else if (identity == "requirements.linux_system_include_dirs")
+        {
+          valid = parse_paths(value, manifest.linux_system_include_directories);
+        }
+        else if (identity == "requirements.windows_system_include_dirs")
+        {
+          valid = parse_paths(value, manifest.windows_system_include_directories);
+        }
+        else if (identity == "requirements.macos_system_library_dirs")
+        {
+          valid = parse_paths(value, manifest.macos_system_library_directories);
+        }
+        else if (identity == "requirements.linux_system_library_dirs")
+        {
+          valid = parse_paths(value, manifest.linux_system_library_directories);
+        }
+        else if (identity == "requirements.windows_system_library_dirs")
+        {
+          valid = parse_paths(value, manifest.windows_system_library_directories);
+        }
+        else if (identity == "requirements.macos_frameworks")
+        {
+          valid = parse_strings(value, manifest.macos_frameworks);
+        }
+        else if (identity == "requirements.macos_libraries")
+        {
+          valid = parse_strings(value, manifest.macos_libraries);
+        }
+        else if (identity == "requirements.linux_libraries")
+        {
+          valid = parse_strings(value, manifest.linux_libraries);
+        }
+        else if (identity == "requirements.windows_libraries")
+        {
+          valid = parse_strings(value, manifest.windows_libraries);
         }
         else if (section == "artifact" && artifact_index && key == "path")
         {
@@ -1960,6 +2211,11 @@ namespace forge
 
     for (const auto& dependency : recipe.dependencies)
     {
+      if (!dependency_matches_target(dependency))
+      {
+        continue;
+      }
+
       const auto source = project_directory / ".forge" / "dependency-boxes" / (dependency.name + ".cbox");
 
       if (!stage_dependency(source, dependency.name))
@@ -2172,7 +2428,7 @@ namespace forge
             output << "  " << box.string() << "  " << metadata.name
                    << ' ' << version(metadata);
 
-            if (metadata.type == "header_only")
+            if (metadata.type == "header_only" && is_portable_header_only_filename(box))
             {
               output << " [any]";
             }
@@ -2276,7 +2532,7 @@ namespace forge
 
     output << '\n';
 
-    if (manifest.type == "header_only")
+    if (manifest.type == "header_only" && is_portable_header_only_filename(resolved_box))
     {
       output << "Target: any\n";
     }
@@ -2593,6 +2849,16 @@ namespace forge
         manifest.os,
         manifest.arch,
         manifest.toolchain,
+        manifest.macos_system_include_directories,
+        manifest.linux_system_include_directories,
+        manifest.windows_system_include_directories,
+        manifest.macos_system_library_directories,
+        manifest.linux_system_library_directories,
+        manifest.windows_system_library_directories,
+        manifest.macos_frameworks,
+        manifest.macos_libraries,
+        manifest.linux_libraries,
+        manifest.windows_libraries,
         {},
         {},
         {}

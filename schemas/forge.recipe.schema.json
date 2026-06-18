@@ -67,6 +67,30 @@
           "$ref": "#/$defs/compileDefinitions",
           "description": "Private preprocessor definitions applied when compiling the project."
         },
+        "macos_system_include_dirs": {
+          "$ref": "#/$defs/paths",
+          "description": "macOS-only external include search directories passed to CMake as SYSTEM includes."
+        },
+        "linux_system_include_dirs": {
+          "$ref": "#/$defs/paths",
+          "description": "Linux-only external include search directories passed to CMake as SYSTEM includes."
+        },
+        "windows_system_include_dirs": {
+          "$ref": "#/$defs/paths",
+          "description": "Windows-only external include search directories passed to CMake as SYSTEM includes."
+        },
+        "macos_system_library_dirs": {
+          "$ref": "#/$defs/paths",
+          "description": "macOS-only external library search directories passed to CMake."
+        },
+        "linux_system_library_dirs": {
+          "$ref": "#/$defs/paths",
+          "description": "Linux-only external library search directories passed to CMake."
+        },
+        "windows_system_library_dirs": {
+          "$ref": "#/$defs/paths",
+          "description": "Windows-only external library search directories passed to CMake."
+        },
         "macos_frameworks": {
           "$ref": "#/$defs/linkNames"
         },
@@ -143,6 +167,30 @@
           "include_dirs": {
             "$ref": "#/$defs/projectPaths",
             "description": "Private project-relative include search directories."
+          },
+          "macos_system_include_dirs": {
+            "$ref": "#/$defs/paths",
+            "description": "macOS-only external include search directories passed to CMake as SYSTEM includes."
+          },
+          "linux_system_include_dirs": {
+            "$ref": "#/$defs/paths",
+            "description": "Linux-only external include search directories passed to CMake as SYSTEM includes."
+          },
+          "windows_system_include_dirs": {
+            "$ref": "#/$defs/paths",
+            "description": "Windows-only external include search directories passed to CMake as SYSTEM includes."
+          },
+          "macos_system_library_dirs": {
+            "$ref": "#/$defs/paths",
+            "description": "macOS-only external library search directories passed to CMake."
+          },
+          "linux_system_library_dirs": {
+            "$ref": "#/$defs/paths",
+            "description": "Linux-only external library search directories passed to CMake."
+          },
+          "windows_system_library_dirs": {
+            "$ref": "#/$defs/paths",
+            "description": "Windows-only external library search directories passed to CMake."
           },
           "defines": {
             "$ref": "#/$defs/compileDefinitions",
@@ -240,6 +288,14 @@
             "type": "string",
             "minLength": 1,
             "description": "Named library component to consume from a multi-component cbox."
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/platformTarget"
+            },
+            "uniqueItems": true,
+            "description": "Optional platform targets that enable this dependency. Omit to use the dependency on every target."
           }
         },
         "oneOf": [
@@ -290,6 +346,24 @@
               },
               "include_dirs": {
                 "$ref": "#/$defs/projectPaths"
+              },
+              "macos_system_include_dirs": {
+                "$ref": "#/$defs/paths"
+              },
+              "linux_system_include_dirs": {
+                "$ref": "#/$defs/paths"
+              },
+              "windows_system_include_dirs": {
+                "$ref": "#/$defs/paths"
+              },
+              "macos_system_library_dirs": {
+                "$ref": "#/$defs/paths"
+              },
+              "linux_system_library_dirs": {
+                "$ref": "#/$defs/paths"
+              },
+              "windows_system_library_dirs": {
+                "$ref": "#/$defs/paths"
               },
               "defines": {
                 "$ref": "#/$defs/compileDefinitions"
@@ -704,6 +778,29 @@
         "$ref": "#/$defs/projectPath"
       },
       "uniqueItems": true
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "paths": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/path"
+      },
+      "uniqueItems": true
+    },
+    "platformTarget": {
+      "type": "string",
+      "enum": [
+        "linux-x86_64",
+        "linux-arm64",
+        "macos-x86_64",
+        "macos-arm64",
+        "windows-x86",
+        "windows-x86_64",
+        "windows-arm64"
+      ]
     },
     "runtimeFiles": {
       "type": "array",

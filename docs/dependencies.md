@@ -23,6 +23,18 @@ Every source dependency is built into and consumed through a verified box.
 The distinction is whether Forge observes and builds the dependency sources or
 starts from an already packaged artifact.
 
+Dependency entries may include a `targets` array to restrict them to specific
+platform targets:
+
+```toml
+[dependencies]
+3rdparty_OpenAL = { path = "../3rdparty_OpenAL", targets = ["windows-x86_64"] }
+```
+
+Forge ignores target-filtered dependencies on other platforms when resolving,
+building, and packaging boxes. This is useful for adapters that use a packaged
+SDK on one platform and a system-installed SDK on another.
+
 ### Local source
 
 Use an editable sibling checkout during active development:

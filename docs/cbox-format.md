@@ -72,6 +72,12 @@ cpp_std = 20
 configuration = "Debug"
 runtime = "libc++"
 
+[requirements]
+macos_system_include_dirs = ["/opt/homebrew/opt/openal-soft/include"]
+macos_system_library_dirs = ["/opt/homebrew/opt/openal-soft/lib"]
+macos_libraries = ["openal"]
+linux_libraries = ["openal"]
+
 [[artifact]]
 path = "bin/hello"
 kind = "executable"
@@ -128,7 +134,16 @@ import library and stage every contained dynamic-library runtime.
 
 The manifest determines package identity. The archive filename is only a
 human-readable label. Compiled box filenames include their OS and architecture;
-header-only box filenames omit them.
+portable header-only box filenames omit them. Header-only boxes with
+target-filtered dependencies or platform-specific system requirements use
+target-qualified filenames because their dependency graph or consumer link
+requirements differ by platform.
+
+The optional `[requirements]` section records platform-specific system include
+directories, system library search directories, frameworks, and library names
+that consumers must apply when they use the box. Forge emits these as CMake
+`SYSTEM` include directories, `target_link_directories`, and platform-guarded
+link requirements for dependent builds.
 
 Each `[[dependency]]` entry declares one direct dependency embedded as another
 verified `.cbox`. Child boxes recursively carry their own direct dependencies,
