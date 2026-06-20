@@ -698,6 +698,18 @@ namespace forge
       return version;
     }
 
+    std::string package_version(const Recipe& recipe)
+    {
+      auto version = recipe.version;
+
+      if (recipe.build_number)
+      {
+        version += "+build." + std::to_string(*recipe.build_number);
+      }
+
+      return version;
+    }
+
     bool is_safe_project_path(const std::filesystem::path& path)
     {
       if (path.empty() || path.is_absolute() || path.has_root_path())
@@ -2123,6 +2135,9 @@ namespace forge
       if (existing_name != dependency_session->names.end() && existing_name->second != directory)
       {
         const auto existing = dependency_session->nodes.find(existing_name->second);
+        const auto existing_version = existing == dependency_session->nodes.end()
+          ? std::string {}
+          : package_version(existing->second.recipe);
         std::string existing_checksum;
 
         if (!dependency.sha256.empty()
@@ -2133,6 +2148,32 @@ namespace forge
         {
           node = &existing->second;
           return true;
+        }
+
+        auto requested_version = dependency.version;
+
+        if (requested_version.empty() && !is_box)
+        {
+          Recipe requested_recipe;
+
+          if (read_recipe(directory / "forge.recipe.toml", requested_recipe, error))
+          {
+            requested_version = package_version(requested_recipe);
+          }
+          else
+          {
+            return false;
+          }
+        }
+
+        if (!existing_version.empty()
+            && !requested_version.empty()
+            && existing_version != requested_version)
+        {
+          error << "forge: dependency conflict for '" << dependency.name
+                << "': exact versions '" << existing_version << "' and '"
+                << requested_version << "' cannot both be installed\n";
+          return false;
         }
 
         error << "forge: dependency name '" << dependency.name

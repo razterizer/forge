@@ -139,6 +139,19 @@ packages. Compiled package entries are recorded per target, allowing Linux,
 macOS, and Windows resolutions to coexist. Portable header-only packages are
 recorded once with `target = "any"` and reused on every host.
 
+## Shared transitive dependencies
+
+Forge installs one dependency for each package identity in the selected target
+and profile. If two branches of the dependency graph require the same package,
+their exact versions must agree. Forge reuses the single resolved package when
+they match, and rejects the graph when they do not instead of silently choosing
+the newest version.
+
+For example, a consumer may depend on both `Termin8or` and `8Beat` when both
+resolve to the same `Core` version. If one branch requires `Core 1.5.0+build.8`
+and another requires `Core 1.6.0+build.1`, Forge reports a dependency conflict
+so the application can upgrade or pin its dependency graph intentionally.
+
 ## Choosing a form
 
 - Use **local source** while changing both projects together.

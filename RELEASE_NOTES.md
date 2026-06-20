@@ -10,6 +10,8 @@
 - Made header-only boxes with platform-specific dependencies or system
   requirements publish target-qualified cbox assets instead of universal
   `-ho.cbox` assets.
+- Made shared transitive dependency conflicts fail explicitly when exact package
+  versions disagree instead of silently selecting one branch of the graph.
 
 ## 0.8.1
 

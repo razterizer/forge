@@ -4068,6 +4068,83 @@ namespace
     expect(changed_error.str().empty(), "cache invalidation run does not write an error");
   }
 
+  void test_run_rejects_conflicting_transitive_dependency_versions()
+  {
+    TemporaryDirectory directory;
+    const auto core_v1 = directory.path() / "Core-1";
+    const auto core_v2 = directory.path() / "Core-2";
+    const auto wrapper = directory.path() / "wrapper";
+    const auto application = directory.path() / "app";
+
+    write_file(
+      core_v1 / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"Core\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/Core/Core.h\"]\n"
+    );
+    write_file(core_v1 / "include/Core/Core.h", "#pragma once\ninline int core_v1() { return 1; }\n");
+    write_file(
+      core_v2 / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"Core\"\n"
+      "version = \"2.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/Core/Core.h\"]\n"
+    );
+    write_file(core_v2 / "include/Core/Core.h", "#pragma once\ninline int core_v2() { return 2; }\n");
+    write_file(
+      wrapper / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"wrapper\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/wrapper/wrapper.h\"]\n\n"
+      "[dependencies]\n"
+      "Core = { path = \"../Core-2\" }\n"
+    );
+    write_file(wrapper / "include/wrapper/wrapper.h", "#pragma once\ninline int wrapper() { return 0; }\n");
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[dependencies]\n"
+      "Core = { path = \"../Core-1\" }\n"
+      "wrapper = { path = \"../wrapper\" }\n"
+    );
+    write_file(application / "main.cpp", "int main() { return 0; }\n");
+
+    constexpr std::array run_arguments { std::string_view { "run" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(run_arguments, application, output, error) == 2,
+      "run rejects conflicting transitive dependency versions"
+    );
+    expect(
+      contains(error.str(), "dependency conflict for 'Core'")
+        && contains(error.str(), "1.0.0")
+        && contains(error.str(), "2.0.0"),
+      "dependency version conflict explains both exact versions"
+    );
+  }
+
   void test_run_with_pinned_git_dependency()
   {
     TemporaryDirectory directory;
@@ -5049,6 +5126,7 @@ int main()
   test_imported_library_box_round_trip();
   test_run_with_imported_library_dependency();
   test_run_with_local_dependencies();
+  test_run_rejects_conflicting_transitive_dependency_versions();
   test_run_with_pinned_git_dependency();
   test_dependency_profiles();
   test_run_with_local_box_dependency();
