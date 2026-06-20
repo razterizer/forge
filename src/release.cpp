@@ -339,7 +339,10 @@ namespace forge
     {
       auto filename = recipe.name + "-" + package_version(recipe);
 
-      if (recipe.type == "header_only" && !has_platform_specific_requirements(recipe))
+      if (recipe.type == "header_only"
+          && recipe.dependencies.empty()
+          && recipe.selected_internal_dependencies.empty()
+          && !has_platform_specific_requirements(recipe))
       {
         filename += "-ho";
       }
@@ -938,6 +941,11 @@ namespace forge
     }
 
     if (!select_recipe_target(recipe, options.target, error))
+    {
+      return 2;
+    }
+
+    if (!select_dependency_profile(recipe, workflow_profile, true, error))
     {
       return 2;
     }

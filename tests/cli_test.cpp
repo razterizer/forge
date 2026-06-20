@@ -3613,6 +3613,69 @@ namespace
     );
   }
 
+  void test_header_only_box_with_platform_dependency_is_target_qualified()
+  {
+    TemporaryDirectory directory;
+    const auto dependency = directory.path() / "dependency";
+    const auto project = directory.path() / "project";
+    write_file(
+      dependency / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"dependency\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/dependency/dependency.h\"]\n\n"
+      "[build]\n"
+      "macos_frameworks = [\"AudioToolbox\"]\n"
+      "linux_libraries = [\"m\"]\n"
+      "windows_libraries = [\"ole32\"]\n"
+    );
+    write_file(
+      dependency / "include/dependency/dependency.h",
+      "#pragma once\ninline int dependency() { return 1; }\n"
+    );
+    write_file(
+      project / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"project\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/project/project.h\"]\n\n"
+      "[dependencies]\n"
+      "dependency = { path = \"../dependency\" }\n"
+    );
+    write_file(
+      project / "include/project/project.h",
+      "#pragma once\n#include <dependency/dependency.h>\ninline int project() { return dependency(); }\n"
+    );
+
+    constexpr std::array create_arguments {
+      std::string_view { "box" },
+      std::string_view { "create" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(create_arguments, project, output, error) == 0,
+      "box create succeeds for a header-only project with a platform-specific dependency"
+    );
+    expect(
+      std::filesystem::exists(project / ".forge/boxes" / ("project-1.0.0-" + current_target() + ".cbox")),
+      "header-only box with a platform-specific dependency is target-qualified"
+    );
+    expect(
+      !std::filesystem::exists(project / ".forge/boxes/project-1.0.0-ho.cbox"),
+      "header-only box with a platform-specific dependency is not published as portable"
+    );
+  }
+
   void test_imported_library_box_round_trip()
   {
     TemporaryDirectory directory;
@@ -5123,6 +5186,7 @@ int main()
   test_box_round_trip();
   test_static_library_box_round_trip();
   test_header_only_box_round_trip();
+  test_header_only_box_with_platform_dependency_is_target_qualified();
   test_imported_library_box_round_trip();
   test_run_with_imported_library_dependency();
   test_run_with_local_dependencies();

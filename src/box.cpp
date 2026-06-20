@@ -744,11 +744,13 @@ namespace forge
         || !recipe.windows_libraries.empty();
     }
 
-    std::string box_filename(const Recipe& recipe)
+    std::string box_filename(const Recipe& recipe, bool force_target_qualified = false)
     {
       auto filename = recipe.name + "-" + package_version(recipe);
 
-      if (recipe.type == "header_only" && !has_platform_specific_requirements(recipe))
+      if (recipe.type == "header_only"
+          && !force_target_qualified
+          && !has_platform_specific_requirements(recipe))
       {
         filename += "-ho";
       }
@@ -1852,6 +1854,11 @@ namespace forge
       return 2;
     }
 
+    if (!select_dependency_profile(recipe, profile, true, error))
+    {
+      return 2;
+    }
+
     BuildOptions options;
     options.target = target;
     options.profile = profile;
@@ -1922,7 +1929,10 @@ namespace forge
       return 2;
     }
 
-    const auto archive_filename = box_filename(recipe);
+    const auto force_target_qualified =
+      recipe.type == "header_only"
+      && (!recipe.dependencies.empty() || !recipe.selected_internal_dependencies.empty());
+    const auto archive_filename = box_filename(recipe, force_target_qualified);
     const auto box_name = std::filesystem::path { archive_filename }.stem().string();
     const auto boxes_directory = project_directory / ".forge" / "boxes";
     const auto staging_directory = boxes_directory / "staging" / box_name;
