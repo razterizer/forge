@@ -713,6 +713,49 @@ match the names declared by Core's Forge recipe. See
 [`examples/published-core-cbox/`](examples/published-core-cbox/) for the focused
 setup checklist.
 
+### Shared transitive dependencies
+
+Real projects often form diamond-shaped dependency graphs. That shape is fine
+when the shared package has one resolved identity in the selected target and
+profile.
+
+```mermaid
+flowchart TD
+  Asciiroid["Asciiroid_Belt"] --> Termin8or["Termin8or"]
+  Asciiroid --> EightBeat["8Beat"]
+
+  Termin8or --> Core["Core"]
+
+  EightBeat --> Core
+  EightBeat --> Libsndfile["3rdparty_libsndfile"]
+  EightBeat --> OpenALAdapter["AudioLibSwitcher_OpenAL"]
+  EightBeat --> ApplaudioAdapter["AudioLibSwitcher_applaudio"]
+
+  OpenALAdapter --> AudioLibSwitcher["AudioLibSwitcher"]
+  OpenALAdapter --> OpenAL["3rdparty_OpenAL"]
+
+  ApplaudioAdapter --> AudioLibSwitcher
+  ApplaudioAdapter --> Applaudio["applaudio"]
+```
+
+In this example, both `Termin8or` and `8Beat` depend on `Core`. A downstream
+project such as `Asciiroid_Belt` can depend on both libraries without getting
+two unrelated `Core` installations. Forge resolves each package by its package
+identity, version, selected profile, and target, then installs the resolved
+graph once for the consuming build.
+
+Hosted release dependencies keep that resolution reproducible. `forge update`
+writes the exact selected GitHub Release asset and checksum to
+`forge.lock.toml`, and normal build, run, test, and release commands reuse
+those locked entries instead of resolving new assets. Published format-2 cboxes
+also embed their direct dependency boxes, so installing a cbox recursively
+installs the dependency graph it was released and validated with.
+
+That combination avoids the usual diamond-dependency failure modes: duplicate
+include roots for the same logical package, local sibling checkouts leaking
+into CI releases, and different branches of the graph silently selecting
+different platform packages.
+
 ### Local dependency example
 
 A workspace may contain a static library, a header-only library, and an
