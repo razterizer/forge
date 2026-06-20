@@ -744,6 +744,13 @@ two unrelated `Core` installations. Forge resolves each package by its package
 identity, version, selected profile, and target, then installs the resolved
 graph once for the consuming build.
 
+`8Beat` is still a header-only library from the consumer's C++ point of view:
+its public headers are the artifact users include. Its published Forge cboxes
+also embed the platform dependency cboxes selected for that target, such as
+`Core`, the active audio adapter, and Windows SDK/import-library packages. That
+is why a header-only package may still publish target-qualified cboxes when its
+dependency graph differs across macOS, Linux, and Windows.
+
 Hosted release dependencies keep that resolution reproducible. `forge update`
 writes the exact selected GitHub Release asset and checksum to
 `forge.lock.toml`, and normal build, run, test, and release commands reuse
