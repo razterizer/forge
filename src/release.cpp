@@ -296,10 +296,13 @@ namespace forge
 
     bool is_project_relative_path(const std::filesystem::path& path)
     {
+      const auto generic = path.generic_string();
+
       return
         !path.empty()
         && !path.is_absolute()
-        && !path.string().starts_with("..");
+        && generic != ".."
+        && generic.rfind("../", 0) != 0;
     }
 
     std::filesystem::path selected_release_readme(const Recipe& recipe)
