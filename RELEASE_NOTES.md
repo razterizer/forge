@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.8.3
+
+- Added `[release].readme` so executable release archives can include
+  platform-specific README files as `README.txt`.
+
 ## 0.8.2
 
 - Added target-filtered dependencies so recipes can declare platform-specific

@@ -453,6 +453,90 @@ namespace forge
       return !variants.empty();
     }
 
+    bool parse_release_readme(std::string_view value, ReleaseReadme& readme)
+    {
+      value = trim(value);
+
+      if (value.size() < 2 || value.front() != '{' || value.back() != '}')
+      {
+        return false;
+      }
+
+      value = trim(value.substr(1, value.size() - 2));
+      bool saw_entry = false;
+
+      while (!value.empty())
+      {
+        const auto equals = value.find('=');
+
+        if (equals == std::string_view::npos)
+        {
+          return false;
+        }
+
+        const auto key = trim(value.substr(0, equals));
+        value = trim(value.substr(equals + 1));
+
+        if (value.empty() || value.front() != '"')
+        {
+          return false;
+        }
+
+        std::size_t end = 1;
+
+        while (end < value.size() && value[end] != '"')
+        {
+          if (value[end] == '\\')
+          {
+            ++end;
+          }
+
+          ++end;
+        }
+
+        std::string parsed;
+
+        if (end >= value.size() || !parse_string(value.substr(0, end + 1), parsed))
+        {
+          return false;
+        }
+
+        if (key == "linux" && readme.linux.empty())
+        {
+          readme.linux = std::move(parsed);
+        }
+        else if (key == "macos" && readme.macos.empty())
+        {
+          readme.macos = std::move(parsed);
+        }
+        else if (key == "windows" && readme.windows.empty())
+        {
+          readme.windows = std::move(parsed);
+        }
+        else
+        {
+          return false;
+        }
+
+        saw_entry = true;
+        value = trim(value.substr(end + 1));
+
+        if (value.empty())
+        {
+          break;
+        }
+
+        if (value.front() != ',')
+        {
+          return false;
+        }
+
+        value = trim(value.substr(1));
+      }
+
+      return saw_entry;
+    }
+
     bool parse_names(std::string_view value, std::vector<std::string>& names)
     {
       std::vector<std::filesystem::path> paths;
@@ -1158,6 +1242,10 @@ namespace forge
       else if (section == "release" && key == "variants")
       {
         valid = parse_release_variants(value, recipe.release_variants);
+      }
+      else if (section == "release" && key == "readme")
+      {
+        valid = parse_release_readme(value, recipe.release_readme);
       }
       else if (section == "release" && key == "build_number_format")
       {

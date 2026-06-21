@@ -294,6 +294,36 @@ namespace forge
       return true;
     }
 
+    bool is_project_relative_path(const std::filesystem::path& path)
+    {
+      return
+        !path.empty()
+        && !path.is_absolute()
+        && !path.string().starts_with("..");
+    }
+
+    std::filesystem::path selected_release_readme(const Recipe& recipe)
+    {
+      const auto platform = hosted_platform();
+
+      if (platform == "linux")
+      {
+        return recipe.release_readme.linux;
+      }
+
+      if (platform == "macos")
+      {
+        return recipe.release_readme.macos;
+      }
+
+      if (platform == "windows")
+      {
+        return recipe.release_readme.windows;
+      }
+
+      return {};
+    }
+
     std::string_view trim(std::string_view value)
     {
       const auto first = value.find_first_not_of(" \t\r");
@@ -921,9 +951,7 @@ namespace forge
 
     for (const auto& release_file : recipe.release_files)
     {
-      if (release_file.empty()
-          || release_file.is_absolute()
-          || release_file.string().starts_with(".."))
+      if (!is_project_relative_path(release_file))
       {
         error << "forge: release file paths must stay inside the project\n";
         return 2;
@@ -934,6 +962,22 @@ namespace forge
         staging_directory / release_file,
         error
       ))
+      {
+        return 2;
+      }
+    }
+
+    const auto release_readme = selected_release_readme(recipe);
+
+    if (!release_readme.empty())
+    {
+      if (!is_project_relative_path(release_readme))
+      {
+        error << "forge: release README paths must stay inside the project\n";
+        return 2;
+      }
+
+      if (!copy_file(project_directory / release_readme, staging_directory / "README.txt", error))
       {
         return 2;
       }

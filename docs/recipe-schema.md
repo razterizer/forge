@@ -54,6 +54,10 @@ rules:
   { profile = "applaudio-release", suffix = "applaudio" }]`. Each variant
   selects matching dependency/build profiles and appends its suffix to staged
   executable names, for example `demo_1_openal` and `demo_1_applaudio`.
+- `[release].readme` may map platform-specific README files into executable
+  release archives as `README.txt`, for example
+  `{ linux = "demos/README_LINUX.md", macos = "demos/README_MACOS.md",
+  windows = "demos/README_WINDOWS.md" }`.
 - `[profile.workflow-release.build]` and
   `[profile.workflow-release.dependencies]` are the reserved hosted-workflow
   profile. `forge workflow prepare-release` selects it automatically when

@@ -501,6 +501,26 @@
             }
           }
         },
+        "readme": {
+          "type": "object",
+          "description": "Platform-specific README files copied into executable release archives as README.txt.",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "linux": {
+              "$ref": "#/$defs/projectPath",
+              "description": "Project-relative README copied into Linux executable release archives."
+            },
+            "macos": {
+              "$ref": "#/$defs/projectPath",
+              "description": "Project-relative README copied into macOS executable release archives."
+            },
+            "windows": {
+              "$ref": "#/$defs/projectPath",
+              "description": "Project-relative README copied into Windows executable release archives."
+            }
+          }
+        },
         "build_number_format": {
           "type": "string",
           "enum": ["semver", "dotted"],

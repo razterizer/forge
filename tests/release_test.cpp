@@ -66,6 +66,19 @@ namespace
     return false;
   }
 
+  std::string hosted_platform()
+  {
+#ifdef _WIN32
+    return "windows";
+#elif __APPLE__
+    return "macos";
+#elif __linux__
+    return "linux";
+#else
+    return "unknown";
+#endif
+  }
+
   void write_project(const std::filesystem::path& directory)
   {
     std::ofstream recipe { directory / "forge.recipe.toml" };
@@ -80,12 +93,19 @@ namespace
       << "[runtime]\n"
       << "files = [\"config/default.toml\"]\n\n"
       << "[release]\n"
-      << "files = [\"assets\", \"RELEASE_NOTES.md\"]\n";
+      << "files = [\"assets\", \"RELEASE_NOTES.md\"]\n"
+      << "readme = { linux = \"release/README_LINUX.md\", "
+      << "macos = \"release/README_MACOS.md\", "
+      << "windows = \"release/README_WINDOWS.md\" }\n";
 
     std::ofstream source { directory / "main.cpp" };
     source << "int main() {}\n";
     std::ofstream readme { directory / "README.md" };
     readme << "# hello\n";
+    std::filesystem::create_directories(directory / "release");
+    std::ofstream { directory / "release/README_LINUX.md" } << "linux release notes\n";
+    std::ofstream { directory / "release/README_MACOS.md" } << "macos release notes\n";
+    std::ofstream { directory / "release/README_WINDOWS.md" } << "windows release notes\n";
     std::filesystem::create_directories(directory / "assets/nested");
     std::filesystem::create_directories(directory / "assets/.forge");
     std::ofstream { directory / "assets/background.tx" } << "background\n";
@@ -149,6 +169,13 @@ namespace
     expect(
       std::filesystem::exists(directory.path() / ".forge/release/hello-0.1.0/README.md"),
       "release stages an optional readme"
+    );
+    std::ifstream release_readme { directory.path() / ".forge/release/hello-0.1.0/README.txt" };
+    std::ostringstream release_readme_text;
+    release_readme_text << release_readme.rdbuf();
+    expect(
+      contains(release_readme_text.str(), hosted_platform() + " release notes"),
+      "release stages the host platform README as README.txt"
     );
     expect(
       std::filesystem::exists(
