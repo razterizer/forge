@@ -763,6 +763,10 @@ include roots for the same logical package, local sibling checkouts leaking
 into CI releases, and different branches of the graph silently selecting
 different platform packages.
 
+For a concrete reproduction checklist using the current `Core`, sound library,
+`Termin8or`, `8Beat`, and `Pilot_Episode` shapes, see
+[`examples/real-world-ecosystem/`](examples/real-world-ecosystem/).
+
 ### Local dependency example
 
 A workspace may contain a static library, a header-only library, and an

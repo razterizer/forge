@@ -13,6 +13,7 @@ example's directory. The commands assume Forge has been built at `build/dev`.
 | [`workspace/`](workspace/) | Linking to a sibling source checkout with `path` |
 | [`sibling-cbox/`](sibling-cbox/) | Linking to a cbox built from a sibling checkout |
 | [`published-core-cbox/`](published-core-cbox/) | Linking to a published Core cbox after its first release |
+| [`real-world-ecosystem/`](real-world-ecosystem/) | Reproducing the Core, sound library, Termin8or, 8Beat, and Pilot_Episode dependency graph |
 
 For a quick first run:
 
