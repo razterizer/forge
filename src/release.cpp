@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <ctime>
 #include <fstream>
@@ -60,6 +61,19 @@ namespace forge
     std::string current_target()
     {
       return target_os() + "-" + target_arch();
+    }
+
+    std::string hosted_platform()
+    {
+#ifdef _WIN32
+      return "windows";
+#elif __APPLE__
+      return "macos";
+#elif __linux__
+      return "linux";
+#else
+      return "unknown";
+#endif
     }
 
     bool has_current_import_profile(const Recipe& recipe)
@@ -309,6 +323,57 @@ namespace forge
       }
 
       return version;
+    }
+
+    std::string release_slug(std::string_view value)
+    {
+      std::string slug;
+      bool previous_separator = false;
+
+      for (const auto character : value)
+      {
+        const auto byte = static_cast<unsigned char>(character);
+
+        if (std::isalnum(byte))
+        {
+          slug += static_cast<char>(std::tolower(byte));
+          previous_separator = false;
+        }
+        else if (!slug.empty() && !previous_separator)
+        {
+          slug += '-';
+          previous_separator = true;
+        }
+      }
+
+      while (!slug.empty() && slug.back() == '-')
+      {
+        slug.pop_back();
+      }
+
+      return slug.empty() ? "release" : slug;
+    }
+
+    std::string release_bundle_base(const Recipe& recipe)
+    {
+      if (recipe.release_bundle_name)
+      {
+        return *recipe.release_bundle_name;
+      }
+
+      for (const auto& target : recipe.targets)
+      {
+        if (!target.test
+            && (target.type == "header_only"
+                || target.type == "static_library"
+                || target.type == "dynamic_library"
+                || target.type == "imported_library"))
+        {
+          return release_slug(target.name);
+        }
+      }
+
+      return release_slug(recipe.name);
     }
 
     bool has_platform_specific_requirements(const Recipe& recipe)
@@ -863,6 +928,102 @@ namespace forge
     return 0;
   }
 
+    int create_hosted_executable_bundle(const std::filesystem::path& project_directory,
+                                        const Recipe& recipe,
+                                        const ProcessRunner& process_runner,
+                                        std::ostream& output,
+                                        std::ostream& error)
+    {
+      std::vector<std::string> executable_targets;
+
+      for (const auto& target : recipe.targets)
+      {
+        if (!target.test && target.type == "executable")
+        {
+          executable_targets.push_back(target.name);
+        }
+      }
+
+      if (executable_targets.size() < 2)
+      {
+        return 0;
+      }
+
+      const auto release_directory = project_directory / ".forge" / "release";
+      const auto bundle_name = release_bundle_base(recipe)
+        + "-release-" + release_notes_heading(recipe)
+        + "-" + hosted_platform();
+      const auto bundle_directory = release_directory / bundle_name;
+      const auto bundle_archive = release_directory / (bundle_name + ".zip");
+      std::error_code filesystem_error;
+      std::filesystem::remove_all(bundle_directory, filesystem_error);
+      filesystem_error.clear();
+      std::filesystem::remove(bundle_archive, filesystem_error);
+      filesystem_error.clear();
+      std::filesystem::create_directories(bundle_directory, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not create '" << bundle_directory.string() << "'\n";
+        return 2;
+      }
+
+      for (const auto& target : executable_targets)
+      {
+        Recipe target_recipe;
+
+        if (!read_recipe(project_directory / "forge.recipe.toml", target_recipe, error)
+            || !select_recipe_target(target_recipe, target, error))
+        {
+          return 2;
+        }
+
+        const auto package_name = target_recipe.name + "-" + package_version(target_recipe);
+        const auto hosted_archive = release_directory / (package_name + "-" + hosted_target() + ".zip");
+        const auto staged_package = release_directory / package_name;
+
+        if (!std::filesystem::is_directory(staged_package)
+            || !copy_release_entry(staged_package, bundle_directory / package_name, error))
+        {
+          error << "forge: could not add executable release '" << package_name
+                << "' to hosted bundle\n";
+          return 2;
+        }
+
+        std::filesystem::remove(hosted_archive, filesystem_error);
+        filesystem_error.clear();
+      }
+
+      const auto notes = release_directory / "RELEASE_NOTES.md";
+
+      if (std::filesystem::is_regular_file(notes)
+          && !copy_file(notes, bundle_directory / "RELEASE_NOTES.md", error))
+      {
+        return 2;
+      }
+
+      output << "Packaging " << bundle_name << '\n' << std::flush;
+
+      const std::vector<std::string> archive_arguments {
+        "cmake",
+        "-E",
+        "tar",
+        "cf",
+        bundle_archive.string(),
+        "--format=zip",
+        bundle_name
+      };
+
+      if (process_runner(archive_arguments, release_directory, error) != 0)
+      {
+        error << "forge: hosted executable bundle creation failed\n";
+        return 2;
+      }
+
+      output << "Released " << bundle_archive.string() << '\n';
+      return 0;
+    }
+
   int prepare_release(const std::filesystem::path& project_directory,
                       std::ostream& output,
                       std::ostream& error)
@@ -935,6 +1096,11 @@ namespace forge
         {
           return 2;
         }
+      }
+
+      if (create_hosted_executable_bundle(project_directory, recipe, process_runner, output, error) != 0)
+      {
+        return 2;
       }
 
       return 0;

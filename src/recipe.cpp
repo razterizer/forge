@@ -1001,6 +1001,16 @@ namespace forge
       {
         valid = parse_sources(value, recipe.release_files);
       }
+      else if (section == "release" && key == "bundle_name")
+      {
+        std::string name;
+        valid = parse_string(value, name) && is_safe_name(name);
+
+        if (valid)
+        {
+          recipe.release_bundle_name = std::move(name);
+        }
+      }
       else if (section == "release" && key == "build_number_format")
       {
         std::string format;

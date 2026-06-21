@@ -90,9 +90,12 @@ forge release-git --tag="release-<version>-<curr-date>"
 focused release notes expected by hosted release workflows. It performs the
 necessary build, box creation, verification, and local publication steps
 automatically.
-Multi-target projects prepare each library target as its natural cbox and each
-non-test executable target as a platform archive. Marked test executables are
-not published. Selecting a target prepares only that target's hosted asset.
+Multi-target projects prepare each library target as its natural cbox and bundle
+non-test executable targets into one hosted platform archive. Marked test
+executables are not published. Selecting a target prepares only that target's
+hosted asset. Set `[release].bundle_name` to control the bundle filename base;
+otherwise Forge uses the first published library/header target name, then the
+project name.
 Use explicit `forge box create` when a complete format-3 aggregate container is
 wanted.
 `forge release-git` does not build locally; it creates and pushes the tag

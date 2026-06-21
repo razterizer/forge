@@ -118,6 +118,7 @@ namespace forge
     std::map<std::string, BuildProfile> build_profiles;
     std::vector<RuntimeFile> runtime_files;
     std::vector<std::filesystem::path> release_files;
+    std::optional<std::string> release_bundle_name;
     std::optional<std::string> release_notes_build_number_format;
     std::filesystem::path version_header_path;
     std::string version_header_prefix;

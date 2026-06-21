@@ -98,6 +98,17 @@ namespace
 #endif
   }
 
+  std::string current_platform()
+  {
+#ifdef _WIN32
+    return "windows";
+#elif __APPLE__
+    return "macos";
+#else
+    return "linux";
+#endif
+  }
+
   void test_help()
   {
     std::ostringstream output;
@@ -2948,6 +2959,79 @@ namespace
     expect(release_error.str().empty(), "hosted executable release does not write an error");
   }
 
+  void test_prepare_multi_executable_release_bundles_hosted_archives()
+  {
+    TemporaryDirectory directory;
+    const auto project = directory.path() / "arcade";
+    write_file(
+      project / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"Arcade Suite\"\n"
+      "version = \"1.0.0\"\n\n"
+      "[target.arcade]\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n"
+      "sources = []\n"
+      "public_headers = [\"include/arcade/arcade.h\"]\n\n"
+      "[target.demo_1]\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n"
+      "sources = [\"demos/demo_1.cpp\"]\n\n"
+      "[target.demo_2]\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n"
+      "sources = [\"demos/demo_2.cpp\"]\n\n"
+      "[target.unit_tests]\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n"
+      "sources = [\"tests/unit_tests.cpp\"]\n"
+      "test = true\n\n"
+      "[build]\n"
+      "number = 3\n\n"
+      "[release]\n"
+      "bundle_name = \"arcade\"\n"
+      "build_number_format = \"dotted\"\n"
+    );
+    write_file(project / "include/arcade/arcade.h", "#pragma once\n");
+    write_file(project / "demos/demo_1.cpp", "int main() { return 0; }\n");
+    write_file(project / "demos/demo_2.cpp", "int main() { return 0; }\n");
+    write_file(project / "tests/unit_tests.cpp", "int main() { return 0; }\n");
+    write_file(project / "RELEASE_NOTES.md", "# Release notes\n\n## 1.0.0.3\n\n- Release.\n");
+    constexpr std::array arguments {
+      std::string_view { "workflow" },
+      std::string_view { "prepare-release" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, project, output, error) == 0,
+      "multi-executable hosted release assets succeed"
+    );
+
+    const auto bundle =
+      project / ".forge/release" / ("arcade-release-1.0.0.3-" + current_platform() + ".zip");
+
+    expect(std::filesystem::exists(bundle), "multi-executable hosted release creates one bundle");
+    expect(
+      !std::filesystem::exists(
+        project / ".forge/release" / ("demo_1-1.0.0+build.3-" + current_target() + ".zip")
+      ),
+      "multi-executable hosted release removes per-target hosted archives"
+    );
+    expect(
+      !std::filesystem::exists(
+        project / ".forge/release" / ("unit_tests-1.0.0+build.3-" + current_target() + ".zip")
+      ),
+      "multi-executable hosted release does not publish test executables"
+    );
+    expect(
+      contains(output.str(), "Packaging arcade-release-1.0.0.3-" + current_platform()),
+      "multi-executable hosted release reports the bundle"
+    );
+    expect(error.str().empty(), "multi-executable hosted release does not write an error");
+  }
+
   void test_prepare_release_uses_configured_profile()
   {
     TemporaryDirectory directory;
@@ -5172,6 +5256,7 @@ int main()
   test_run_new_project();
   test_release_new_project();
   test_prepare_executable_release();
+  test_prepare_multi_executable_release_bundles_hosted_archives();
   test_prepare_release_uses_configured_profile();
   test_prepare_release_rejects_local_workflow_dependency();
   test_prepare_release_skips_unsupported_imported_library_target();

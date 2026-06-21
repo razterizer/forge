@@ -46,6 +46,9 @@ rules:
   release-note headings use `<version>.<number>` or
   `<version>+build.<number>`. It also qualifies default Git release tags and
   requires `[build].number`.
+- `[release].bundle_name` may set the filename-safe base name for
+  multi-executable hosted release bundles, such as `8beat` for
+  `8beat-release-1.0.0.1-macos.zip`.
 - `[profile.workflow-release.build]` and
   `[profile.workflow-release.dependencies]` are the reserved hosted-workflow
   profile. `forge workflow prepare-release` selects it automatically when

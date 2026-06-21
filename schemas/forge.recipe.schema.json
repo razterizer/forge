@@ -474,6 +474,11 @@
           "$ref": "#/$defs/projectPaths",
           "description": "Project-relative files and directories copied into the release archive."
         },
+        "bundle_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "description": "Filename-safe base name for multi-executable hosted release bundles. Defaults to the first published library/header target name, then the project name."
+        },
         "build_number_format": {
           "type": "string",
           "enum": ["semver", "dotted"],
