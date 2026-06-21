@@ -351,11 +351,13 @@ namespace
   void test_version()
   {
     constexpr std::array arguments { std::string_view { "--version" } };
+    constexpr std::string_view expected_version = "0.8.2+build.10";
     std::ostringstream output;
     std::ostringstream error;
 
     expect(forge::cli::run(arguments, output, error) == 0, "version succeeds");
-    expect(contains(output.str(), forge::cli::version), "version reports the current version");
+    expect(forge::cli::version == expected_version, "compiled version matches the synced version");
+    expect(output.str() == "forge " + std::string { expected_version } + "\n", "version reports the current version");
   }
 
   void test_init_alias_adopts_existing_project()
