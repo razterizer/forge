@@ -49,6 +49,11 @@ rules:
 - `[release].bundle_name` may set the filename-safe base name for
   multi-executable hosted release bundles, such as `8beat` for
   `8beat-release-1.0.0.1-macos.zip`.
+- `[release].variants` may set multiple hosted executable release variants,
+  such as `[{ profile = "workflow-release", suffix = "openal" },
+  { profile = "applaudio-release", suffix = "applaudio" }]`. Each variant
+  selects matching dependency/build profiles and appends its suffix to staged
+  executable names, for example `demo_1_openal` and `demo_1_applaudio`.
 - `[profile.workflow-release.build]` and
   `[profile.workflow-release.dependencies]` are the reserved hosted-workflow
   profile. `forge workflow prepare-release` selects it automatically when

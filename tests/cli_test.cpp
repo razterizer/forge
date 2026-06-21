@@ -109,6 +109,15 @@ namespace
 #endif
   }
 
+  std::string executable_suffix()
+  {
+#ifdef _WIN32
+    return ".exe";
+#else
+    return "";
+#endif
+  }
+
   void test_help()
   {
     std::ostringstream output;
@@ -2990,11 +2999,24 @@ namespace
       "number = 3\n\n"
       "[release]\n"
       "bundle_name = \"arcade\"\n"
+      "variants = [{ profile = \"workflow-release\", suffix = \"one\" }, { profile = \"second-release\", suffix = \"two\" }]\n"
       "build_number_format = \"dotted\"\n"
+      "\n[profile.workflow-release.build]\n"
+      "defines = [\"VARIANT_ONE\"]\n"
+      "\n[profile.second-release.build]\n"
+      "defines = [\"VARIANT_TWO\"]\n"
     );
     write_file(project / "include/arcade/arcade.h", "#pragma once\n");
-    write_file(project / "demos/demo_1.cpp", "int main() { return 0; }\n");
-    write_file(project / "demos/demo_2.cpp", "int main() { return 0; }\n");
+    write_file(
+      project / "demos/demo_1.cpp",
+      "#if !defined(VARIANT_ONE) && !defined(VARIANT_TWO)\n#error missing variant\n#endif\n"
+      "int main() { return 0; }\n"
+    );
+    write_file(
+      project / "demos/demo_2.cpp",
+      "#if !defined(VARIANT_ONE) && !defined(VARIANT_TWO)\n#error missing variant\n#endif\n"
+      "int main() { return 0; }\n"
+    );
     write_file(project / "tests/unit_tests.cpp", "int main() { return 0; }\n");
     write_file(project / "RELEASE_NOTES.md", "# Release notes\n\n## 1.0.0.3\n\n- Release.\n");
     constexpr std::array arguments {
@@ -3013,6 +3035,20 @@ namespace
       project / ".forge/release" / ("arcade-release-1.0.0.3-" + current_platform() + ".zip");
 
     expect(std::filesystem::exists(bundle), "multi-executable hosted release creates one bundle");
+    expect(
+      std::filesystem::exists(
+        project / ".forge/release" / ("arcade-release-1.0.0.3-" + current_platform())
+          / "demo_1-1.0.0+build.3" / ("demo_1_one" + executable_suffix())
+      ),
+      "multi-executable hosted release bundle includes the first variant executable"
+    );
+    expect(
+      std::filesystem::exists(
+        project / ".forge/release" / ("arcade-release-1.0.0.3-" + current_platform())
+          / "demo_1-1.0.0+build.3" / ("demo_1_two" + executable_suffix())
+      ),
+      "multi-executable hosted release bundle includes the second variant executable"
+    );
     expect(
       !std::filesystem::exists(
         project / ".forge/release" / ("demo_1-1.0.0+build.3-" + current_target() + ".zip")
@@ -3087,7 +3123,7 @@ namespace
       "workflow release rejects local dependencies"
     );
     expect(
-      contains(error.str(), "workflow-release dependency 'Core' uses a local project path")
+      contains(error.str(), "workflow release dependency 'Core' in profile 'workflow-release' uses a local project path")
         && contains(error.str(), "[profile.workflow-release.dependencies]"),
       "workflow release explains how to replace a local dependency"
     );

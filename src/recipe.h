@@ -91,6 +91,12 @@ namespace forge
     std::vector<std::string> compile_definitions;
   };
 
+  struct ReleaseVariant
+  {
+    std::string profile;
+    std::string suffix;
+  };
+
   struct Recipe
   {
     std::string name;
@@ -119,6 +125,7 @@ namespace forge
     std::vector<RuntimeFile> runtime_files;
     std::vector<std::filesystem::path> release_files;
     std::optional<std::string> release_bundle_name;
+    std::vector<ReleaseVariant> release_variants;
     std::optional<std::string> release_notes_build_number_format;
     std::filesystem::path version_header_path;
     std::string version_header_prefix;

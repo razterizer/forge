@@ -479,6 +479,28 @@
           "pattern": "^[A-Za-z0-9_.-]+$",
           "description": "Filename-safe base name for multi-executable hosted release bundles. Defaults to the first published library/header target name, then the project name."
         },
+        "variants": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Hosted executable release variants. Each variant selects matching dependency/build profiles and appends its suffix to staged executable names.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["profile"],
+            "properties": {
+              "profile": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]+$",
+                "description": "Dependency/build profile selected for this release variant."
+              },
+              "suffix": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]+$",
+                "description": "Filename suffix appended to each executable. Defaults to profile when omitted."
+              }
+            }
+          }
+        },
         "build_number_format": {
           "type": "string",
           "enum": ["semver", "dotted"],

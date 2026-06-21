@@ -309,6 +309,150 @@ namespace forge
       return true;
     }
 
+    bool parse_release_variant(std::string_view value, ReleaseVariant& variant)
+    {
+      value = trim(value);
+
+      if (value.size() < 2 || value.front() != '{' || value.back() != '}')
+      {
+        return false;
+      }
+
+      value = trim(value.substr(1, value.size() - 2));
+      bool has_profile = false;
+      bool has_suffix = false;
+
+      while (!value.empty())
+      {
+        const auto equals = value.find('=');
+
+        if (equals == std::string_view::npos)
+        {
+          return false;
+        }
+
+        const auto key = trim(value.substr(0, equals));
+        value = trim(value.substr(equals + 1));
+
+        if (value.empty() || value.front() != '"')
+        {
+          return false;
+        }
+
+        std::size_t end = 1;
+
+        while (end < value.size() && value[end] != '"')
+        {
+          if (value[end] == '\\')
+          {
+            ++end;
+          }
+
+          ++end;
+        }
+
+        std::string parsed;
+
+        if (end >= value.size() || !parse_string(value.substr(0, end + 1), parsed))
+        {
+          return false;
+        }
+
+        if (key == "profile" && !has_profile)
+        {
+          variant.profile = std::move(parsed);
+          has_profile = true;
+        }
+        else if (key == "suffix" && !has_suffix)
+        {
+          variant.suffix = std::move(parsed);
+          has_suffix = true;
+        }
+        else
+        {
+          return false;
+        }
+
+        value = trim(value.substr(end + 1));
+
+        if (value.empty())
+        {
+          break;
+        }
+
+        if (value.front() != ',')
+        {
+          return false;
+        }
+
+        value = trim(value.substr(1));
+      }
+
+      if (!has_profile || variant.profile.empty())
+      {
+        return false;
+      }
+
+      if (!has_suffix)
+      {
+        variant.suffix = variant.profile;
+      }
+
+      return is_safe_name(variant.profile) && is_safe_name(variant.suffix);
+    }
+
+    bool parse_release_variants(std::string_view value, std::vector<ReleaseVariant>& variants)
+    {
+      value = trim(value);
+
+      if (value.size() < 2 || value.front() != '[' || value.back() != ']')
+      {
+        return false;
+      }
+
+      value = trim(value.substr(1, value.size() - 2));
+      variants.clear();
+
+      while (!value.empty())
+      {
+        if (value.front() != '{')
+        {
+          return false;
+        }
+
+        const auto end = value.find('}');
+
+        if (end == std::string_view::npos)
+        {
+          return false;
+        }
+
+        ReleaseVariant variant;
+
+        if (!parse_release_variant(value.substr(0, end + 1), variant))
+        {
+          return false;
+        }
+
+        variants.push_back(std::move(variant));
+        value = trim(value.substr(end + 1));
+
+        if (value.empty())
+        {
+          break;
+        }
+
+        if (value.front() != ',')
+        {
+          return false;
+        }
+
+        value = trim(value.substr(1));
+      }
+
+      return !variants.empty();
+    }
+
     bool parse_names(std::string_view value, std::vector<std::string>& names)
     {
       std::vector<std::filesystem::path> paths;
@@ -1011,6 +1155,10 @@ namespace forge
           recipe.release_bundle_name = std::move(name);
         }
       }
+      else if (section == "release" && key == "variants")
+      {
+        valid = parse_release_variants(value, recipe.release_variants);
+      }
       else if (section == "release" && key == "build_number_format")
       {
         std::string format;
@@ -1064,6 +1212,25 @@ namespace forge
     {
       error << "forge: release.build_number_format requires build.number\n";
       return false;
+    }
+
+    std::vector<std::string> release_variant_suffixes;
+
+    for (const auto& variant : recipe.release_variants)
+    {
+      if (!is_safe_name(variant.profile)
+          || !is_safe_name(variant.suffix)
+          || std::find(
+               release_variant_suffixes.begin(),
+               release_variant_suffixes.end(),
+               variant.suffix
+             ) != release_variant_suffixes.end())
+      {
+        error << "forge: release variants require unique safe profile suffixes\n";
+        return false;
+      }
+
+      release_variant_suffixes.push_back(variant.suffix);
     }
 
     if (recipe.version_header_path.empty() != recipe.version_header_prefix.empty())

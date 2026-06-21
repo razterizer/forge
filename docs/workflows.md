@@ -96,6 +96,12 @@ executables are not published. Selecting a target prepares only that target's
 hosted asset. Set `[release].bundle_name` to control the bundle filename base;
 otherwise Forge uses the first published library/header target name, then the
 project name.
+Set `[release].variants` when hosted executable bundles should include multiple
+profile-built copies of each executable. Each variant names a dependency/build
+profile and a filename suffix. For example, `[{ profile = "workflow-release",
+suffix = "openal" }, { profile = "applaudio-release", suffix = "applaudio" }]`
+stages `demo_1_openal` and `demo_1_applaudio` in the same `demo_1` release
+folder.
 Use explicit `forge box create` when a complete format-3 aggregate container is
 wanted.
 `forge release-git` does not build locally; it creates and pushes the tag

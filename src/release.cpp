@@ -32,6 +32,26 @@ namespace forge
         : std::nullopt;
     }
 
+    std::vector<std::string> selected_workflow_release_profiles(const Recipe& recipe)
+    {
+      std::vector<std::string> profiles;
+
+      for (const auto& variant : recipe.release_variants)
+      {
+        profiles.push_back(variant.profile);
+      }
+
+      if (profiles.empty())
+      {
+        if (const auto profile = selected_workflow_release_profile(recipe))
+        {
+          profiles.push_back(*profile);
+        }
+      }
+
+      return profiles;
+    }
+
     std::string target_os()
     {
 #ifdef __APPLE__
@@ -102,42 +122,48 @@ namespace forge
 
     bool validate_workflow_release_dependencies(Recipe recipe, std::ostream& error)
     {
-      const auto profile = selected_workflow_release_profile(recipe);
+      const auto profiles = selected_workflow_release_profiles(recipe);
 
-      if (!profile)
+      if (profiles.empty())
       {
         return true;
       }
 
-      if (!select_dependency_profile(recipe, profile, true, error))
+      for (const auto& profile : profiles)
       {
-        return false;
-      }
+        Recipe profiled = recipe;
 
-      for (const auto& dependency : recipe.dependencies)
-      {
-        if (!dependency_matches_current_target(dependency))
+        if (!select_dependency_profile(profiled, profile, true, error))
         {
-          continue;
+          return false;
         }
 
-        const auto local_git =
-          !dependency.git.empty()
-          && !dependency.git.starts_with("https://")
-          && !dependency.git.starts_with("http://")
-          && !dependency.git.starts_with("ssh://")
-          && !dependency.git.starts_with("git@");
-
-        if (!dependency.path.empty() || !dependency.box.empty() || local_git)
+        for (const auto& dependency : profiled.dependencies)
         {
-          error
-            << "forge: workflow-release dependency '" << dependency.name
-            << "' uses a local "
-            << (!dependency.path.empty() ? "project path"
-                : !dependency.box.empty() ? "box path"
-                : "Git location")
-            << "; add a reproducible entry under [profile.workflow-release.dependencies]\n";
-          return false;
+          if (!dependency_matches_current_target(dependency))
+          {
+            continue;
+          }
+
+          const auto local_git =
+            !dependency.git.empty()
+            && !dependency.git.starts_with("https://")
+            && !dependency.git.starts_with("http://")
+            && !dependency.git.starts_with("ssh://")
+            && !dependency.git.starts_with("git@");
+
+          if (!dependency.path.empty() || !dependency.box.empty() || local_git)
+          {
+            error
+              << "forge: workflow release dependency '" << dependency.name
+              << "' in profile '" << profile
+              << "' uses a local "
+              << (!dependency.path.empty() ? "project path"
+                  : !dependency.box.empty() ? "box path"
+                  : "Git location")
+              << "; add a reproducible entry under [profile." << profile << ".dependencies]\n";
+            return false;
+          }
         }
       }
 
@@ -732,12 +758,17 @@ namespace forge
     return release_project(project_directory, target, std::nullopt, process_runner, output, error);
   }
 
-  int release_project(const std::filesystem::path& project_directory,
-                      const std::optional<std::string>& target,
-                      const std::optional<std::string>& profile,
-                      const ProcessRunner& process_runner,
-                      std::ostream& output,
-                      std::ostream& error)
+  namespace
+  {
+
+    int release_project_impl(const std::filesystem::path& project_directory,
+                             const std::optional<std::string>& target,
+                             const std::optional<std::string>& profile,
+                             const std::optional<std::string>& executable_suffix,
+                             bool merge_release,
+                             const ProcessRunner& process_runner,
+                             std::ostream& output,
+                             std::ostream& error)
   {
     Recipe recipe;
 
@@ -802,12 +833,21 @@ namespace forge
     const auto archive_path = release_directory / (package_name + ".zip");
     const auto extracted_notes_path = release_directory / "RELEASE_NOTES.md";
     std::error_code filesystem_error;
-    std::filesystem::remove_all(staging_directory, filesystem_error);
-    filesystem_error.clear();
+    const auto existing_merge_staging =
+      merge_release && std::filesystem::is_directory(staging_directory);
+
+    if (!merge_release)
+    {
+      std::filesystem::remove_all(staging_directory, filesystem_error);
+      filesystem_error.clear();
+    }
     std::filesystem::remove(archive_path, filesystem_error);
     filesystem_error.clear();
-    std::filesystem::remove(extracted_notes_path, filesystem_error);
-    filesystem_error.clear();
+    if (!merge_release)
+    {
+      std::filesystem::remove(extracted_notes_path, filesystem_error);
+      filesystem_error.clear();
+    }
     std::filesystem::create_directories(staging_directory, filesystem_error);
 
     if (filesystem_error)
@@ -816,7 +856,18 @@ namespace forge
       return 2;
     }
 
-    if (!copy_file(executable, staging_directory / executable.filename(), error))
+    auto staged_executable_name = executable.filename().string();
+
+    if (executable_suffix)
+    {
+#ifdef _WIN32
+      staged_executable_name = recipe.name + "_" + *executable_suffix + ".exe";
+#else
+      staged_executable_name = recipe.name + "_" + *executable_suffix;
+#endif
+    }
+
+    if (!copy_file(executable, staging_directory / staged_executable_name, error))
     {
       return 2;
     }
@@ -836,14 +887,15 @@ namespace forge
 
     std::vector<RuntimeAsset> runtime_assets;
 
-    if (!collect_runtime_assets(project_directory, recipe.runtime_files, runtime_assets, error)
+    if (!existing_merge_staging
+        && (!collect_runtime_assets(project_directory, recipe.runtime_files, runtime_assets, error)
         || (!runtime_assets.empty()
             && !stage_runtime_assets(
               runtime_assets,
               staging_directory,
               staging_directory / ".forge" / "runtime-assets.txt",
               error
-            )))
+            ))))
     {
       return 2;
     }
@@ -899,11 +951,18 @@ namespace forge
       return 2;
     }
 
-    if (release_notes
+    if (!merge_release
+        && release_notes
         && (!write_release_notes(staging_directory / "RELEASE_NOTES.md", *release_notes, error)
             || !write_release_notes(release_directory / "RELEASE_NOTES.md", *release_notes, error)))
     {
       return 2;
+    }
+
+    if (merge_release)
+    {
+      output << "Staged " << package_name << " (" << *executable_suffix << ")\n";
+      return 0;
     }
 
     output << "Packaging " << package_name << '\n' << std::flush;
@@ -926,6 +985,27 @@ namespace forge
 
     output << "Released " << archive_path.string() << '\n';
     return 0;
+  }
+
+  } // namespace
+
+  int release_project(const std::filesystem::path& project_directory,
+                      const std::optional<std::string>& target,
+                      const std::optional<std::string>& profile,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    return release_project_impl(
+      project_directory,
+      target,
+      profile,
+      std::nullopt,
+      false,
+      process_runner,
+      output,
+      error
+    );
   }
 
     int create_hosted_executable_bundle(const std::filesystem::path& project_directory,
@@ -1078,7 +1158,7 @@ namespace forge
       return 2;
     }
 
-    const auto workflow_profile = selected_workflow_release_profile(recipe);
+    const auto workflow_profile = options.profile ? options.profile : selected_workflow_release_profile(recipe);
 
     if (!options.target && recipe.targets.size() > 1)
     {
@@ -1089,12 +1169,45 @@ namespace forge
           continue;
         }
 
-        auto target_options = options;
-        target_options.target = release_target.name;
-
-        if (prepare_release(project_directory, target_options, process_runner, output, error) != 0)
+        if (release_target.type == "executable" && !recipe.release_variants.empty())
         {
-          return 2;
+          bool first_variant = true;
+
+          for (const auto& variant : recipe.release_variants)
+          {
+            auto target_options = options;
+            target_options.target = release_target.name;
+            target_options.profile = variant.profile;
+            target_options.executable_suffix = variant.suffix;
+            target_options.merge_executable_release = true;
+
+            if (first_variant)
+            {
+              std::error_code filesystem_error;
+              std::filesystem::remove_all(
+                project_directory / ".forge" / "release"
+                  / (release_target.name + "-" + package_version(recipe)),
+                filesystem_error
+              );
+            }
+
+            if (prepare_release(project_directory, target_options, process_runner, output, error) != 0)
+            {
+              return 2;
+            }
+
+            first_variant = false;
+          }
+        }
+        else
+        {
+          auto target_options = options;
+          target_options.target = release_target.name;
+
+          if (prepare_release(project_directory, target_options, process_runner, output, error) != 0)
+          {
+            return 2;
+          }
         }
       }
 
@@ -1137,16 +1250,23 @@ namespace forge
 
     if (recipe.type == "executable")
     {
-      if (release_project(
+      if (release_project_impl(
         project_directory,
         options.target,
         workflow_profile,
+        options.executable_suffix,
+        options.merge_executable_release,
         process_runner,
         output,
         error
       ) != 0)
       {
         return 2;
+      }
+
+      if (options.merge_executable_release)
+      {
+        return 0;
       }
 
       const auto archive = release_directory / (recipe.name + "-" + package_version(recipe) + ".zip");

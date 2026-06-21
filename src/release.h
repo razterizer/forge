@@ -19,7 +19,10 @@ namespace forge
   struct PrepareReleaseOptions
   {
     std::optional<std::string> target;
+    std::optional<std::string> profile;
+    std::optional<std::string> executable_suffix;
     bool skip_unsupported = false;
+    bool merge_executable_release = false;
   };
 
   int release_project(const std::filesystem::path& project_directory,
