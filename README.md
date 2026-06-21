@@ -713,16 +713,17 @@ match the names declared by Core's Forge recipe. See
 [`examples/published-core-cbox/`](examples/published-core-cbox/) for the focused
 setup checklist.
 
-### Shared transitive dependencies
+### Ecosystem dependency overview
 
-Real projects often form diamond-shaped dependency graphs. That shape is fine
-when the shared package has one resolved identity in the selected target and
-profile.
+Real projects often form diamond-shaped dependency graphs. Forge treats that
+shape as the normal case: a top-level application names the libraries it uses,
+those libraries carry their own package closures, and shared packages are
+resolved once for the selected target and profile.
 
 ```mermaid
 flowchart TD
-  Asciiroid["Asciiroid_Belt"] --> Termin8or["Termin8or"]
-  Asciiroid --> EightBeat["8Beat"]
+  App["Top-level app<br/>Asciiroid_Belt / Pilot_Episode"] --> Termin8or["Termin8or"]
+  App --> EightBeat["8Beat"]
 
   Termin8or --> Core["Core"]
 
@@ -736,13 +737,29 @@ flowchart TD
 
   ApplaudioAdapter --> AudioLibSwitcher
   ApplaudioAdapter --> Applaudio["applaudio"]
+
+  classDef app fill:#f5f5f5,stroke:#555,color:#111;
+  classDef direct fill:#e8f3ff,stroke:#4a6fa5,color:#111;
+  classDef shared fill:#ecf8ef,stroke:#4f8b5f,color:#111;
+  classDef platform fill:#fff4df,stroke:#a96f21,color:#111;
+
+  class App app;
+  class Termin8or,EightBeat direct;
+  class Core,AudioLibSwitcher shared;
+  class Libsndfile,OpenALAdapter,ApplaudioAdapter,OpenAL,Applaudio platform;
 ```
 
+Read the graph from the application downward. The application depends directly
+on `Termin8or` and `8Beat`. It does not need to manually list `Core`,
+`AudioLibSwitcher`, OpenAL, applaudio, or libsndfile unless its own source uses
+those APIs directly. Those packages are carried by the published dependency
+cboxes and selected profile.
+
 In this example, both `Termin8or` and `8Beat` depend on `Core`. A downstream
-project such as `Asciiroid_Belt` can depend on both libraries without getting
-two unrelated `Core` installations. Forge resolves each package by its package
-identity, version, selected profile, and target, then installs the resolved
-graph once for the consuming build.
+project can depend on both libraries without getting two unrelated `Core`
+installations. Forge resolves each package by its package identity, version,
+selected profile, and target, then installs the resolved graph once for the
+consuming build.
 
 `8Beat` is still a header-only library from the consumer's C++ point of view:
 its public headers are the artifact users include. Its published Forge cboxes
@@ -763,8 +780,8 @@ include roots for the same logical package, local sibling checkouts leaking
 into CI releases, and different branches of the graph silently selecting
 different platform packages.
 
-For a concrete reproduction checklist using the current `Core`, sound library,
-`Termin8or`, `8Beat`, and `Pilot_Episode` shapes, see
+For the concrete recipe checklist behind this overview, using the current
+`Core`, sound library, `Termin8or`, `8Beat`, and `Pilot_Episode` shapes, see
 [`examples/real-world-ecosystem/`](examples/real-world-ecosystem/).
 
 ### Local dependency example

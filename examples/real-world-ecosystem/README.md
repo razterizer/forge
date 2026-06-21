@@ -1,11 +1,11 @@
 # Real-world ecosystem: Core, sound libs, Termin8or, and Pilot_Episode
 
-This example records the package shapes used by the current Forge dogfood
-projects. It is a reproducibility checklist, not a standalone source tree.
-Use it when moving a project from hand-written dependency scripts to Forge
-recipes and hosted cboxes.
+This example is the concrete recipe checklist behind the ecosystem graph in the
+main README. It records the package shapes used by the current Forge dogfood
+projects. It is not a standalone source tree; use it when moving a project from
+hand-written dependency scripts to Forge recipes and hosted cboxes.
 
-The graph is:
+The same graph, with `Pilot_Episode` as the top-level application, is:
 
 ```mermaid
 flowchart TD
@@ -31,6 +31,13 @@ Both branches must agree on the same package identity and version for the
 selected target/profile. If they do, Forge installs the package once. If they do
 not, Forge reports a conflict so the top-level project can upgrade or pin the
 graph intentionally.
+
+Read the graph as a split between what the top-level project owns and what its
+dependencies own. `Pilot_Episode` owns its direct dependencies on `Termin8or`
+and `8Beat`. `Termin8or` owns its `Core` dependency. `8Beat` owns `Core`,
+libsndfile, and the selected audio adapter closure. Forge's lockfile records
+the resolved cbox asset and checksum for each selected target/profile so the
+same graph can be rebuilt locally and in release workflows.
 
 ## Release order
 
