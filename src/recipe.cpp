@@ -501,17 +501,17 @@ namespace forge
           return false;
         }
 
-        if (key == "linux" && readme.linux.empty())
+        if (key == "linux" && readme.linux_path.empty())
         {
-          readme.linux = parsed;
+          readme.linux_path = parsed;
         }
-        else if (key == "macos" && readme.macos.empty())
+        else if (key == "macos" && readme.macos_path.empty())
         {
-          readme.macos = parsed;
+          readme.macos_path = parsed;
         }
-        else if (key == "windows" && readme.windows.empty())
+        else if (key == "windows" && readme.windows_path.empty())
         {
-          readme.windows = parsed;
+          readme.windows_path = parsed;
         }
         else
         {

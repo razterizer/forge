@@ -99,9 +99,9 @@ namespace forge
 
   struct ReleaseReadme
   {
-    std::filesystem::path linux;
-    std::filesystem::path macos;
-    std::filesystem::path windows;
+    std::filesystem::path linux_path;
+    std::filesystem::path macos_path;
+    std::filesystem::path windows_path;
   };
 
   struct Recipe

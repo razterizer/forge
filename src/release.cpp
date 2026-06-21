@@ -312,17 +312,17 @@ namespace forge
 
       if (platform == "linux")
       {
-        return recipe.release_readme.linux;
+        return recipe.release_readme.linux_path;
       }
 
       if (platform == "macos")
       {
-        return recipe.release_readme.macos;
+        return recipe.release_readme.macos_path;
       }
 
       if (platform == "windows")
       {
-        return recipe.release_readme.windows;
+        return recipe.release_readme.windows_path;
       }
 
       return {};
