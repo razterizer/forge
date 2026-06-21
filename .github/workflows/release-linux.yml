@@ -21,7 +21,32 @@ jobs:
         run: cmake --preset dev
 
       - name: Build
-        run: cmake --build --preset dev
+        run: |
+          set -o pipefail
+          cmake --build --preset dev 2>&1 | tee forge-build-linux-modern.log
+
+      - name: Upload Linux build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-build-log-linux-modern
+          path: forge-build-linux-modern.log
+          retention-days: 7
+
+      - name: Prepare Linux build log asset
+        if: failure()
+        run: cp forge-build-linux-modern.log forge-build-linux-modern-${{ github.run_id }}.log
+
+      - name: Upload Linux build log to release
+        if: failure()
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: forge-build-linux-modern-${{ github.run_id }}.log
+          artifactContentType: text/plain
+          artifactErrorsFailBuild: false
+          replacesArtifacts: false
+          tag: ${{ github.ref_name }}
 
       - name: Test
         run: ctest --preset dev
@@ -55,7 +80,32 @@ jobs:
         run: cmake --preset dev
 
       - name: Build
-        run: cmake --build --preset dev
+        run: |
+          set -o pipefail
+          cmake --build --preset dev 2>&1 | tee forge-build-linux-legacy.log
+
+      - name: Upload Linux build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-build-log-linux-legacy
+          path: forge-build-linux-legacy.log
+          retention-days: 7
+
+      - name: Prepare Linux build log asset
+        if: failure()
+        run: cp forge-build-linux-legacy.log forge-build-linux-legacy-${{ github.run_id }}.log
+
+      - name: Upload Linux build log to release
+        if: failure()
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: forge-build-linux-legacy-${{ github.run_id }}.log
+          artifactContentType: text/plain
+          artifactErrorsFailBuild: false
+          replacesArtifacts: false
+          tag: ${{ github.ref_name }}
 
       - name: Test
         run: ctest --preset dev
