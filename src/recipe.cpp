@@ -503,15 +503,15 @@ namespace forge
 
         if (key == "linux" && readme.linux.empty())
         {
-          readme.linux = std::move(parsed);
+          readme.linux = std::filesystem::path { std::move(parsed) };
         }
         else if (key == "macos" && readme.macos.empty())
         {
-          readme.macos = std::move(parsed);
+          readme.macos = std::filesystem::path { std::move(parsed) };
         }
         else if (key == "windows" && readme.windows.empty())
         {
-          readme.windows = std::move(parsed);
+          readme.windows = std::filesystem::path { std::move(parsed) };
         }
         else
         {
