@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.8.5
+
+- Kept header-only boxes portable when their dependencies are header-only and
+  have no platform-specific requirements, so packages such as Termin8or can
+  publish one `-ho.cbox` while still exporting runtime assets.
+
 ## 0.8.4
 
 - Added transitive runtime assets for library and header-only cboxes, so

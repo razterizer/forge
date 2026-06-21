@@ -2,12 +2,12 @@
 
 [project]
 name = "forge"
-version = "0.8.4"
+version = "0.8.5"
 type = "executable"
 cpp_std = 20
 
 [build]
-number = 12
+number = 13
 
 [sources]
 paths = ["src/box.cpp", "src/bump.cpp", "src/build.cpp", "src/clean.cpp", "src/cli.cpp", "src/fprocess.cpp", "src/github.cpp", "src/init.cpp", "src/main.cpp", "src/new.cpp", "src/recipe.cpp", "src/release.cpp", "src/run.cpp", "src/runtime_assets.cpp", "src/sha256.cpp", "src/test.cpp", "src/workspace.cpp", "src/zip.cpp"]

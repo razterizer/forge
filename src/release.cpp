@@ -504,14 +504,64 @@ namespace forge
 
     std::string hosted_target();
 
-    std::string hosted_box_filename(const Recipe& recipe)
+    bool dependencies_require_target_qualified_box(
+      const std::filesystem::path& project_directory,
+      const Recipe& recipe,
+      const ProcessRunner& process_runner,
+      std::ostream& error)
+    {
+      const auto dependency_boxes_directory = project_directory / ".forge" / "dependency-boxes";
+
+      for (const auto& dependency : recipe.dependencies)
+      {
+        if (!dependency_matches_current_target(dependency))
+        {
+          continue;
+        }
+
+        BoxMetadata metadata;
+        const auto box = dependency_boxes_directory / (dependency.name + ".cbox");
+
+        if (!read_box_metadata(box, project_directory, process_runner, metadata, error))
+        {
+          return true;
+        }
+
+        if (metadata.type != "header_only"
+            || !metadata.macos_system_include_directories.empty()
+            || !metadata.linux_system_include_directories.empty()
+            || !metadata.windows_system_include_directories.empty()
+            || !metadata.macos_system_library_directories.empty()
+            || !metadata.linux_system_library_directories.empty()
+            || !metadata.windows_system_library_directories.empty()
+            || !metadata.macos_frameworks.empty()
+            || !metadata.macos_libraries.empty()
+            || !metadata.linux_libraries.empty()
+            || !metadata.windows_libraries.empty())
+        {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    std::string hosted_box_filename(const std::filesystem::path& project_directory,
+                                    const Recipe& recipe,
+                                    const ProcessRunner& process_runner,
+                                    std::ostream& error)
     {
       auto filename = recipe.name + "-" + package_version(recipe);
 
       if (recipe.type == "header_only"
-          && recipe.dependencies.empty()
           && recipe.selected_internal_dependencies.empty()
-          && !has_platform_specific_requirements(recipe))
+          && !has_platform_specific_requirements(recipe)
+          && !dependencies_require_target_qualified_box(
+            project_directory,
+            recipe,
+            process_runner,
+            error
+          ))
       {
         filename += "-ho";
       }
@@ -1393,7 +1443,12 @@ namespace forge
       }
 
       const auto boxes_directory = project_directory / ".forge" / "boxes";
-      const auto box = boxes_directory / hosted_box_filename(recipe);
+      const auto box = boxes_directory / hosted_box_filename(
+        project_directory,
+        recipe,
+        process_runner,
+        error
+      );
 
       if (!std::filesystem::is_regular_file(box))
       {
