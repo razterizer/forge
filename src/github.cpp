@@ -729,7 +729,7 @@ namespace forge
           "        uses: ncipollo/release-action@v1\n"
           "        with:\n"
           "          allowUpdates: true\n"
-          "          artifacts: release-assets/*\n"
+          "          artifacts: release-assets/*.tar.gz,release-assets/*.cbox,release-assets/*.sha256\n"
           "          bodyFile: release-assets/RELEASE_NOTES.md\n"
           "          tag: ${{ github.ref_name }}\n";
     }
