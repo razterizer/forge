@@ -48,6 +48,7 @@ namespace forge
       std::vector<std::string> windows_libraries;
       std::vector<ResolvedLibrary> libraries;
       std::vector<std::filesystem::path> runtimes;
+      std::vector<RuntimeAsset> runtime_assets;
     };
 
     struct DependencyNode
@@ -1808,7 +1809,7 @@ namespace forge
       {
         const auto modified = std::filesystem::last_write_time(file, filesystem_error);
 
-        if (filesystem_error || modified >= box_time)
+        if (filesystem_error || modified > box_time)
         {
           return false;
         }
@@ -2316,7 +2317,6 @@ namespace forge
 
         if (!is_box && dependency_recipe.type.empty() && !dependency_recipe.targets.empty())
         {
-          const auto package_name = dependency_recipe.name;
           const auto preferred = std::find_if(
             dependency_recipe.targets.begin(),
             dependency_recipe.targets.end(),
@@ -2341,7 +2341,6 @@ namespace forge
             return false;
           }
 
-          dependency_recipe.name = package_name;
           dependency_target = preferred->name;
         }
 
@@ -2577,10 +2576,24 @@ namespace forge
           node.box_metadata ? node.box_metadata->linux_libraries : std::vector<std::string> {},
           node.box_metadata ? node.box_metadata->windows_libraries : std::vector<std::string> {},
           {},
+          {},
           {}
         };
 
       add_dependency_include_directories(resolved, node.box_metadata);
+
+      if (node.box_metadata)
+      {
+        for (const auto& artifact : node.box_metadata->artifacts)
+        {
+          if (artifact.kind == "runtime_asset")
+          {
+            auto destination_path = artifact.path;
+            destination_path = destination_path.lexically_relative("runtime-assets");
+            resolved.runtime_assets.push_back({ destination / artifact.path, destination_path });
+          }
+        }
+      }
 
       if (node.recipe.type == "static_library")
       {
@@ -2862,6 +2875,19 @@ namespace forge
       return true;
     }
 
+    void collect_dependency_runtime_assets(const std::vector<ResolvedDependency>& dependencies,
+                                           std::vector<RuntimeAsset>& runtime_assets)
+    {
+      for (const auto& dependency : dependencies)
+      {
+        runtime_assets.insert(
+          runtime_assets.end(),
+          dependency.runtime_assets.begin(),
+          dependency.runtime_assets.end()
+        );
+      }
+    }
+
     bool stage_internal_runtime_dependencies(
       const std::filesystem::path& build_directory,
       const std::vector<RecipeTarget>& targets,
@@ -3130,13 +3156,6 @@ namespace forge
         return 2;
       }
 
-      if (!target.runtime_files.empty())
-      {
-        error << "forge: internal library target '" << target.name
-              << "' cannot declare runtime assets\n";
-        return 2;
-      }
-
       for (const auto& source : target.sources)
       {
         if (source.is_absolute()
@@ -3258,9 +3277,9 @@ namespace forge
       }
     }
 
-    if (recipe.type != "executable" && !recipe.runtime_files.empty())
+    if (recipe.type == "imported_library" && !recipe.runtime_files.empty())
     {
-      error << "forge: runtime assets are supported only for executable projects\n";
+      error << "forge: imported_library projects cannot declare runtime assets\n";
       return 2;
     }
 
@@ -3324,6 +3343,29 @@ namespace forge
     if (!stage_runtime_dependencies(build_directory / "runtime", dependencies, error))
     {
       return 2;
+    }
+
+    collect_dependency_runtime_assets(dependencies, runtime_assets);
+
+    for (const auto& target : recipe.internal_targets)
+    {
+      std::vector<RuntimeAsset> target_runtime_assets;
+
+      if (!collect_runtime_assets(
+        project_directory,
+        target.runtime_files,
+        target_runtime_assets,
+        error
+      ))
+      {
+        return 2;
+      }
+
+      runtime_assets.insert(
+        runtime_assets.end(),
+        target_runtime_assets.begin(),
+        target_runtime_assets.end()
+      );
     }
 
     std::error_code filesystem_error;

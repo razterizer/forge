@@ -1,4 +1,5 @@
 #include "box.h"
+#include "fprocess.h"
 #include "sha256.h"
 
 #include <chrono>
@@ -255,6 +256,80 @@ namespace
     }
 
     expect(contains(read_file(manifest), "build = 6"), "box manifest includes the build number");
+  }
+
+  void test_create_header_only_box_stages_runtime_assets()
+  {
+    TemporaryDirectory directory;
+    std::filesystem::create_directories(directory.path() / "include/hello");
+    std::filesystem::create_directories(directory.path() / "data/fonts");
+    std::ofstream recipe { directory.path() / "forge.recipe.toml" };
+    recipe
+      << "[project]\n"
+      << "name = \"hello\"\n"
+      << "version = \"0.1.0\"\n\n"
+      << "[target.hello]\n"
+      << "type = \"header_only\"\n"
+      << "cpp_std = 20\n"
+      << "sources = []\n"
+      << "public_headers = [\"include/hello/hello.h\"]\n"
+      << "runtime_files = [{ source = \"data/fonts\", destination = \"hello/fonts\" }]\n";
+    recipe.close();
+    std::ofstream { directory.path() / "include/hello/hello.h" } << "#pragma once\n";
+    std::ofstream { directory.path() / "data/fonts/font.txt" } << "font\n";
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&commands, &directory](const std::vector<std::string>& command,
+                              const std::filesystem::path& working_directory,
+                              std::ostream& process_error)
+      {
+        commands.push_back(command);
+
+        if (command.size() > 1 && command[1] == "--build")
+        {
+          std::filesystem::create_directories(directory.path() / ".forge/build/hello");
+          std::ofstream { directory.path() / ".forge/build/hello/forge-toolchain.toml" }
+            << "compiler = \"ExampleCompiler\"\n"
+            << "compiler_version = \"1.0\"\n"
+            << "cpp_std = 20\n"
+            << "configuration = \"Debug\"\n"
+            << "runtime = \"default\"\n";
+          return 0;
+        }
+
+        if (command.size() > 2 && command[1] == "-E" && command[2] == "tar")
+        {
+          return forge::run_process(command, working_directory, process_error);
+        }
+
+        return 0;
+      };
+
+    expect(
+      forge::create_box(directory.path(), std::optional<std::string> { "hello" }, runner, output, error) == 0,
+      "header-only box create succeeds with runtime assets"
+    );
+
+    const auto staging_root = directory.path() / ".forge/boxes/staging";
+    std::filesystem::path manifest;
+
+    for (const auto& entry : std::filesystem::directory_iterator { staging_root })
+    {
+      manifest = entry.path() / "cbox.toml";
+    }
+
+    expect(
+      contains(read_file(manifest), "path = \"runtime-assets/hello/fonts/font.txt\""),
+      "header-only box manifest declares exported runtime assets"
+    );
+    expect(
+      std::filesystem::exists(manifest.parent_path() / "runtime-assets/hello/fonts/font.txt"),
+      "header-only box stages exported runtime assets"
+    );
+    expect(error.str().empty(), "header-only box with runtime assets does not write an error");
   }
 
 #ifdef _WIN32
@@ -636,6 +711,7 @@ int main()
 {
   test_create_box_stages_manifest_and_executable();
   test_create_box_includes_build_number();
+  test_create_header_only_box_stages_runtime_assets();
 #ifdef _WIN32
   test_create_windows_dynamic_library_box();
 #endif

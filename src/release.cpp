@@ -233,6 +233,50 @@ namespace forge
       return true;
     }
 
+    bool collect_staged_runtime_assets(const std::filesystem::path& build_directory,
+                                       std::vector<RuntimeAsset>& assets,
+                                       std::ostream& error)
+    {
+      const auto manifest = build_directory / ".forge" / "runtime-assets.txt";
+      std::ifstream input { manifest };
+      std::string line;
+      assets.clear();
+
+      if (!input)
+      {
+        return true;
+      }
+
+      while (std::getline(input, line))
+      {
+        if (line.empty())
+        {
+          continue;
+        }
+
+        const auto path = std::filesystem::path { line };
+
+        if (path.empty() || path.is_absolute() || path.has_root_path())
+        {
+          error << "forge: staged runtime asset manifest contains an unsafe path\n";
+          return false;
+        }
+
+        for (const auto& component : path)
+        {
+          if (component == "." || component == ".." || component.empty())
+          {
+            error << "forge: staged runtime asset manifest contains an unsafe path\n";
+            return false;
+          }
+        }
+
+        assets.push_back({ build_directory / path, path });
+      }
+
+      return true;
+    }
+
     bool copy_release_entry(const std::filesystem::path& source,
                             const std::filesystem::path& destination,
                             std::ostream& error)
@@ -922,14 +966,14 @@ namespace forge
     std::vector<RuntimeAsset> runtime_assets;
 
     if (!existing_merge_staging
-        && (!collect_runtime_assets(project_directory, recipe.runtime_files, runtime_assets, error)
-        || (!runtime_assets.empty()
-            && !stage_runtime_assets(
-              runtime_assets,
-              staging_directory,
-              staging_directory / ".forge" / "runtime-assets.txt",
-              error
-            ))))
+        && (!collect_staged_runtime_assets(build_directory, runtime_assets, error)
+            || (!runtime_assets.empty()
+                && !stage_runtime_assets(
+                  runtime_assets,
+                  staging_directory,
+                  staging_directory / ".forge" / "runtime-assets.txt",
+                  error
+                ))))
     {
       return 2;
     }

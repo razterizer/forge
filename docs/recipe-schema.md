@@ -86,10 +86,12 @@ rules:
   resolutions to `forge.lock.toml`; normal builds require those locked entries.
   Multi-component GitHub releases may declare `package` for the aggregate cbox
   identity and `component` for the named library selected from it.
-- Executable projects may declare project-relative `[runtime].files`, which
-  Forge stages beside the executable and includes in boxes and releases.
-  String entries preserve their paths; `{ source, destination }` entries map a
-  project file to a different executable-relative destination.
+- Projects may declare project-relative `[runtime].files`. Executable runtime
+  files are staged beside the executable and included in boxes and releases.
+  Library and header-only runtime files are exported in boxes and staged
+  transitively by consumers. String entries preserve their paths; `{ source,
+  destination }` entries map a project file or directory to a different
+  executable-relative destination such as `Termin8or/fonts`.
 - Repositories may replace the legacy project target with one or more
   `[target.<name>]` sections. Each named target declares its own type, C++
   standard, sources, public headers, and runtime files.

@@ -198,7 +198,7 @@
           },
           "runtime_files": {
             "$ref": "#/$defs/runtimeFiles",
-            "description": "Project-relative runtime assets copied beside this executable target, optionally mapped to a different destination."
+            "description": "Project-relative runtime assets. Executable target assets are staged beside that executable; library target assets are exported to consumers and optionally mapped to a different destination."
           },
           "dependencies": {
             "type": "array",
@@ -453,7 +453,7 @@
     },
     "runtime": {
       "type": "object",
-      "description": "Project-owned files and directories staged beside an executable.",
+      "description": "Project-owned files and directories staged beside this executable or exported from this library.",
       "additionalProperties": false,
       "required": [
         "files"
@@ -461,7 +461,7 @@
       "properties": {
         "files": {
           "$ref": "#/$defs/runtimeFiles",
-          "description": "Project-relative runtime assets copied after builds and included in executable boxes and releases, optionally mapped to a different destination."
+          "description": "Project-relative runtime assets copied after executable builds and releases, or exported transitively by library boxes, optionally mapped to a different destination."
         }
       }
     },

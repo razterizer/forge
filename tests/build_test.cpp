@@ -1,4 +1,5 @@
 #include "build.h"
+#include "fprocess.h"
 
 #include <algorithm>
 #include <chrono>
@@ -658,6 +659,95 @@ namespace
     expect(contains(error.str(), "collides"), "build explains the runtime asset collision");
   }
 
+  void test_build_stages_dependency_runtime_assets()
+  {
+    TemporaryDirectory directory;
+    const auto dependency = directory.path() / "dependency";
+    const auto application = directory.path() / "application";
+    std::filesystem::create_directories(dependency / "include/dependency");
+    std::filesystem::create_directories(dependency / "assets/fonts");
+    std::filesystem::create_directories(application);
+    std::ofstream dependency_recipe { dependency / "forge.recipe.toml" };
+    dependency_recipe
+      << "[project]\n"
+      << "name = \"dependency\"\n"
+      << "version = \"1.0.0\"\n"
+      << "type = \"header_only\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = []\n"
+      << "public_headers = [\"include/dependency/dependency.h\"]\n\n"
+      << "[runtime]\n"
+      << "files = [{ source = \"assets/fonts\", destination = \"dependency/fonts\" }]\n";
+    dependency_recipe.close();
+    std::ofstream { dependency / "include/dependency/dependency.h" } << "#pragma once\n";
+    std::ofstream { dependency / "assets/fonts/font.txt" } << "font\n";
+    std::ofstream application_recipe { application / "forge.recipe.toml" };
+    application_recipe
+      << "[project]\n"
+      << "name = \"application\"\n"
+      << "version = \"1.0.0\"\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = [\"main.cpp\"]\n\n"
+      << "[dependencies]\n"
+      << "dependency = { path = \"../dependency\" }\n";
+    application_recipe.close();
+    std::ofstream { application / "main.cpp" } << "int main() {}\n";
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&application, &dependency](const std::vector<std::string>& arguments,
+                                 const std::filesystem::path& working_directory,
+                                 std::ostream& process_error)
+      {
+        if (arguments.size() > 1 && arguments[1] == "--build")
+        {
+          const auto build_directory = working_directory / ".forge/build";
+          std::filesystem::create_directories(build_directory);
+          std::ofstream { build_directory / "forge-toolchain.toml" }
+            << "compiler = \"ExampleCompiler\"\n"
+            << "compiler_version = \"1.0\"\n"
+            << "cpp_std = 20\n"
+            << "configuration = \"Debug\"\n"
+            << "runtime = \"default\"\n";
+
+          if (working_directory == application)
+          {
+#ifdef _WIN32
+            std::ofstream { build_directory / "application.exe" } << "exe\n";
+#else
+            std::ofstream { build_directory / "application" } << "exe\n";
+#endif
+          }
+
+          if (working_directory == dependency)
+          {
+            return 0;
+          }
+        }
+
+        if (arguments.size() > 2 && arguments[1] == "-E" && arguments[2] == "tar")
+        {
+          return forge::run_process(arguments, working_directory, process_error);
+        }
+
+        return 0;
+      };
+
+    expect(
+      forge::build_project(application, runner, output, error) == 0,
+      "build succeeds with dependency runtime assets"
+    );
+    expect(
+      read_file(application / ".forge/build/dependency/fonts/font.txt") == "font\n",
+      "build stages dependency runtime assets beside the executable"
+    );
+    expect(error.str().empty(), "dependency runtime asset build does not write an error");
+  }
+
   void test_build_generates_static_library()
   {
     TemporaryDirectory directory;
@@ -877,6 +967,82 @@ namespace
     );
     expect(invocations == 0, "invalid dependencies do not invoke external tools");
     expect(contains(error.str(), "does not match"), "build explains dependency name mismatch");
+  }
+
+  void test_build_accepts_named_target_dependency()
+  {
+    TemporaryDirectory directory;
+    const auto dependency = directory.path() / "dependency";
+    const auto application = directory.path() / "application";
+    std::filesystem::create_directories(dependency / "include/targetlib");
+    std::filesystem::create_directories(application);
+    std::ofstream dependency_recipe { dependency / "forge.recipe.toml" };
+    dependency_recipe
+      << "[project]\n"
+      << "name = \"Package Display Name\"\n"
+      << "version = \"1.0.0\"\n\n"
+      << "[target.targetlib]\n"
+      << "type = \"header_only\"\n"
+      << "cpp_std = 20\n"
+      << "sources = []\n"
+      << "public_headers = [\"include/targetlib/targetlib.h\"]\n";
+    dependency_recipe.close();
+    std::ofstream { dependency / "include/targetlib/targetlib.h" } << "#pragma once\n";
+    std::ofstream application_recipe { application / "forge.recipe.toml" };
+    application_recipe
+      << "[project]\n"
+      << "name = \"application\"\n"
+      << "version = \"1.0.0\"\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = [\"main.cpp\"]\n\n"
+      << "[dependencies]\n"
+      << "targetlib = { path = \"../dependency\" }\n";
+    application_recipe.close();
+    std::ofstream { application / "main.cpp" } << "int main() {}\n";
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&application](const std::vector<std::string>& arguments,
+                     const std::filesystem::path& working_directory,
+                     std::ostream& process_error)
+      {
+        if (arguments.size() > 1 && arguments[1] == "--build")
+        {
+          const auto build_directory = working_directory / ".forge/build";
+          std::filesystem::create_directories(build_directory);
+          std::ofstream { build_directory / "forge-toolchain.toml" }
+            << "compiler = \"ExampleCompiler\"\n"
+            << "compiler_version = \"1.0\"\n"
+            << "cpp_std = 20\n"
+            << "configuration = \"Debug\"\n"
+            << "runtime = \"default\"\n";
+
+          if (working_directory == application)
+          {
+#ifdef _WIN32
+            std::ofstream { build_directory / "application.exe" } << "exe\n";
+#else
+            std::ofstream { build_directory / "application" } << "exe\n";
+#endif
+          }
+        }
+
+        if (arguments.size() > 2 && arguments[1] == "-E" && arguments[2] == "tar")
+        {
+          return forge::run_process(arguments, working_directory, process_error);
+        }
+
+        return 0;
+      };
+
+    expect(
+      forge::build_project(application, runner, output, error) == 0,
+      "build accepts a dependency named after a local library target"
+    );
+    expect(error.str().empty(), "named target dependency build does not write an error");
   }
 
   void test_build_rejects_dependency_cycle()
@@ -1445,8 +1611,10 @@ int main()
   test_build_rejects_internal_target_cycle();
   test_build_stages_runtime_assets();
   test_build_rejects_runtime_asset_collision();
+  test_build_stages_dependency_runtime_assets();
   test_build_rejects_missing_source_without_running_process();
   test_build_rejects_dependency_name_mismatch();
+  test_build_accepts_named_target_dependency();
   test_build_rejects_dependency_cycle();
   test_update_resolves_github_dependency();
   test_named_update_skips_other_unlocked_github_dependencies();

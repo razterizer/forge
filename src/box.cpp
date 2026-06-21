@@ -1401,12 +1401,14 @@ namespace forge
           || (manifest.type == "static_library"
               && (library_count != 1
                   || header_count == 0
-                  || library_count + header_count != manifest.artifacts.size()))
+                  || library_count + header_count + runtime_asset_count
+                     != manifest.artifacts.size()))
           || (manifest.type == "dynamic_library"
               && (dynamic_library_count != 1
                   || import_library_count != (manifest.os == "windows" ? 1 : 0)
                   || header_count == 0
                   || dynamic_library_count + import_library_count + header_count
+                     + runtime_asset_count
                      != manifest.artifacts.size()))
           || (manifest.type == "imported_library"
               && (header_count == 0
@@ -1414,7 +1416,8 @@ namespace forge
                   || library_count + dynamic_library_count + import_library_count + header_count
                      != manifest.artifacts.size()))
           || (manifest.type == "header_only"
-              && (header_count == 0 || header_count != manifest.artifacts.size()))))
+              && (header_count == 0
+                  || header_count + runtime_asset_count != manifest.artifacts.size()))))
       {
         error << "forge: box manifest artifacts do not match package type\n";
         return false;
@@ -1944,6 +1947,34 @@ namespace forge
     }
 
     std::vector<BoxArtifact> artifacts;
+    std::vector<RuntimeAsset> runtime_assets;
+
+    if (!recipe.runtime_files.empty()
+        && !collect_runtime_assets(project_directory, recipe.runtime_files, runtime_assets, error))
+    {
+      return 2;
+    }
+
+    const auto stage_runtime_asset_artifacts =
+      [&runtime_assets, &staging_directory, &artifacts, &error]()
+      {
+        for (const auto& asset : runtime_assets)
+        {
+          if (!stage_artifact(
+            asset.source,
+            std::filesystem::path { "runtime-assets" } / asset.path,
+            "runtime_asset",
+            staging_directory,
+            artifacts,
+            error
+          ))
+          {
+            return false;
+          }
+        }
+
+        return true;
+      };
 
     if (recipe.type == "executable")
     {
@@ -1959,26 +1990,9 @@ namespace forge
         return 2;
       }
 
-      std::vector<RuntimeAsset> runtime_assets;
-
-      if (!collect_runtime_assets(project_directory, recipe.runtime_files, runtime_assets, error))
+      if (!stage_runtime_asset_artifacts())
       {
         return 2;
-      }
-
-      for (const auto& asset : runtime_assets)
-      {
-        if (!stage_artifact(
-          asset.source,
-          std::filesystem::path { "runtime-assets" } / asset.path,
-          "runtime_asset",
-          staging_directory,
-          artifacts,
-          error
-        ))
-        {
-          return 2;
-        }
       }
     }
     else if (recipe.type == "static_library")
@@ -2008,6 +2022,11 @@ namespace forge
         {
           return 2;
         }
+      }
+
+      if (!stage_runtime_asset_artifacts())
+      {
+        return 2;
       }
     }
     else if (recipe.type == "dynamic_library")
@@ -2051,6 +2070,11 @@ namespace forge
           return 2;
         }
       }
+
+      if (!stage_runtime_asset_artifacts())
+      {
+        return 2;
+      }
     }
     else if (recipe.type == "header_only")
     {
@@ -2067,6 +2091,11 @@ namespace forge
         {
           return 2;
         }
+      }
+
+      if (!stage_runtime_asset_artifacts())
+      {
+        return 2;
       }
     }
     else if (recipe.type == "imported_library")
@@ -2311,11 +2340,6 @@ namespace forge
     if (recipe.type == "executable")
     {
       archive_arguments.push_back("bin");
-
-      if (std::filesystem::is_directory(staging_directory / "runtime-assets"))
-      {
-        archive_arguments.push_back("runtime-assets");
-      }
     }
     else if (recipe.type == "static_library")
     {
@@ -2348,6 +2372,11 @@ namespace forge
     else
     {
       archive_arguments.push_back("include");
+    }
+
+    if (std::filesystem::is_directory(staging_directory / "runtime-assets"))
+    {
+      archive_arguments.push_back("runtime-assets");
     }
 
     if (!dependencies.empty())

@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.8.4
+
+- Added transitive runtime assets for library and header-only cboxes, so
+  dependency-owned files can be staged beside consuming executables and included
+  in releases without copying them into each consumer repository.
+- Made local named-target dependencies use the selected library target identity,
+  matching hosted component behavior for packages whose display name differs
+  from the consumed target name.
+
 ## 0.8.3
 
 - Added `[release].readme` so executable release archives can include
