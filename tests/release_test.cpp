@@ -173,8 +173,9 @@ namespace
     std::ifstream release_readme { directory.path() / ".forge/release/hello-0.1.0/README.txt" };
     std::ostringstream release_readme_text;
     release_readme_text << release_readme.rdbuf();
+    const auto expected_release_readme_text = hosted_platform() + " release notes";
     expect(
-      contains(release_readme_text.str(), hosted_platform() + " release notes"),
+      contains(release_readme_text.str(), expected_release_readme_text),
       "release stages the host platform README as README.txt"
     );
     expect(
