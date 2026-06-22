@@ -33,8 +33,10 @@ namespace forge
     struct ResolvedDependency
     {
       std::string name;
+      std::string type;
       std::filesystem::path root;
       std::optional<ToolchainIdentity> toolchain;
+      bool has_static_library = false;
       std::vector<std::filesystem::path> include_directories;
       std::vector<std::filesystem::path> macos_system_include_directories;
       std::vector<std::filesystem::path> linux_system_include_directories;
@@ -2128,6 +2130,27 @@ namespace forge
       std::filesystem::path git_checkout;
       auto resolved_dependency = dependency;
       std::optional<std::string> dependency_target;
+      const auto has_local_github_fallback =
+        !resolved_dependency.path.empty() && !resolved_dependency.github.empty();
+      const auto updating_github_dependency =
+        dependency_session->options.update_dependencies && !resolved_dependency.github.empty();
+
+      if (has_local_github_fallback && !updating_github_dependency)
+      {
+        const auto local_path =
+          std::filesystem::weakly_canonical(parent_directory / resolved_dependency.path, filesystem_error);
+
+        if (!filesystem_error && std::filesystem::is_directory(local_path))
+        {
+          resolved_dependency.github.clear();
+          resolved_dependency.package.clear();
+          resolved_dependency.version.clear();
+          resolved_dependency.component.clear();
+          resolved_dependency.variant.clear();
+        }
+
+        filesystem_error.clear();
+      }
 
       if (!resolved_dependency.github.empty()
           && !use_locked_github_dependency(
@@ -2637,8 +2660,10 @@ namespace forge
       resolved =
         {
           node.recipe.name,
+          node.recipe.type,
           destination,
           node.box_metadata ? node.box_metadata->toolchain : std::nullopt,
+          false,
           {},
           node.box_metadata ? node.box_metadata->macos_system_include_directories
                             : std::vector<std::filesystem::path> {},
@@ -2685,6 +2710,7 @@ namespace forge
             if (artifact.kind == "static_library")
             {
               resolved.libraries.push_back({ destination / artifact.path, std::nullopt });
+              resolved.has_static_library = true;
             }
           }
         }
@@ -2699,6 +2725,7 @@ namespace forge
             { destination / "lib" / ("lib" + node.recipe.name + ".a"), std::nullopt }
           );
 #endif
+          resolved.has_static_library = true;
         }
       }
       else if (node.recipe.type == "dynamic_library")
@@ -2759,6 +2786,11 @@ namespace forge
           if (artifact.kind == "static_library" || artifact.kind == "import_library")
           {
             resolved.libraries.push_back({ path, std::nullopt });
+
+            if (artifact.kind == "static_library")
+            {
+              resolved.has_static_library = true;
+            }
           }
           else if (artifact.kind == "dynamic_library")
           {
@@ -2894,6 +2926,11 @@ namespace forge
       for (const auto& dependency : dependencies)
       {
         if (dependency.libraries.empty())
+        {
+          continue;
+        }
+
+        if (dependency.type == "imported_library" && !dependency.has_static_library)
         {
           continue;
         }

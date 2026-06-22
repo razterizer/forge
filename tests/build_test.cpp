@@ -305,10 +305,17 @@ namespace
 
     const forge::ProcessRunner runner =
       [&invocations](const std::vector<std::string>&,
-                     const std::filesystem::path&,
+                     const std::filesystem::path& working_directory,
                      std::ostream&)
       {
         ++invocations;
+        std::filesystem::create_directories(working_directory / ".forge/build");
+        std::ofstream { working_directory / ".forge/build/forge-toolchain.toml" }
+          << "compiler = \"ExampleCompiler\"\n"
+          << "compiler_version = \"1.0\"\n"
+          << "cpp_std = 20\n"
+          << "configuration = \"Debug\"\n"
+          << "runtime = \"default\"\n";
         return 0;
       };
 
@@ -1584,6 +1591,111 @@ namespace
     expect(contains(error.str(), "conflicts with forge.lock.toml"), "lockfile conflict is explained");
   }
 
+  void test_build_uses_local_dependency_before_github_fallback()
+  {
+    TemporaryDirectory directory;
+    const auto dependency = directory.path() / "answer";
+    const auto application = directory.path() / "app";
+    std::filesystem::create_directories(dependency / "include/answer");
+    std::filesystem::create_directories(application);
+    std::ofstream dependency_recipe { dependency / "forge.recipe.toml" };
+    dependency_recipe
+      << "[project]\n"
+      << "name = \"answer\"\n"
+      << "version = \"0.1.0\"\n"
+      << "type = \"header_only\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = []\n"
+      << "public_headers = [\"include/answer/answer.h\"]\n";
+    dependency_recipe.close();
+    std::ofstream { dependency / "include/answer/answer.h" } << "#pragma once\n";
+    std::ofstream application_recipe { application / "forge.recipe.toml" };
+    application_recipe
+      << "[project]\n"
+      << "name = \"app\"\n"
+      << "version = \"1.0.0\"\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = [\"main.cpp\"]\n\n"
+      << "[dependencies]\n"
+      << "answer = { path = \"../answer\", github = \"example/answer\", version = \"1.2.3\" }\n";
+    application_recipe.close();
+    std::ofstream { application / "main.cpp" } << "int main() { return 0; }\n";
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::build_project(application, runner, output, error) == 2,
+      "build reaches local dependency packaging before its GitHub fallback"
+    );
+    expect(invocations > 0, "local fallback build invokes normal build tools");
+    expect(
+      contains(output.str(), "Resolving dependency answer"),
+      "available local dependency is resolved from its path"
+    );
+    expect(
+      !contains(output.str(), "Using locked dependency answer"),
+      "available local dependency does not consume the GitHub lock"
+    );
+
+    std::filesystem::remove_all(dependency);
+    invocations = 0;
+    output.str({});
+    error.str({});
+
+    expect(
+      forge::build_project(application, runner, output, error) == 2,
+      "build falls back to GitHub locking when the local dependency is missing"
+    );
+    expect(invocations == 0, "missing local dependency without a lock does not invoke external tools");
+    expect(
+      contains(error.str(), "run forge update answer"),
+      "missing local dependency explains how to lock the GitHub fallback"
+    );
+
+    const std::string checksum =
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    std::ofstream lock { application / "forge.lock.toml" };
+    lock
+      << "format = 2\n\n"
+      << "[[dependency]]\n"
+      << "name = \"answer\"\n"
+      << "github = \"example/answer\"\n"
+      << "package = \"answer\"\n"
+      << "version = \"1.2.3\"\n"
+      << "target = \"any\"\n"
+      << "url = \"https://example.invalid/answer.cbox\"\n"
+      << "sha256 = \"" << checksum << "\"\n";
+    lock.close();
+    std::filesystem::create_directories(application / ".forge/cache/downloads");
+    std::ofstream { application / ".forge/cache/downloads" / (checksum + ".cbox") };
+    invocations = 0;
+    output.str({});
+    error.str({});
+
+    expect(
+      forge::build_project(application, runner, output, error) == 2,
+      "missing local dependency uses its locked GitHub fallback"
+    );
+    expect(invocations == 0, "locked GitHub fallback skips downloads when cached");
+    expect(
+      contains(output.str(), "Using locked dependency answer for any"),
+      "missing local dependency reports the selected locked fallback"
+    );
+  }
+
   void test_build_validates_locked_github_component_identity()
   {
     TemporaryDirectory directory;
@@ -1809,6 +1921,7 @@ int main()
   test_update_resolves_github_dependency_variant();
   test_update_resolves_github_component_dependency();
   test_build_requires_and_uses_locked_github_dependency();
+  test_build_uses_local_dependency_before_github_fallback();
   test_build_validates_locked_github_component_identity();
   test_build_validates_locked_github_variant_identity();
   test_build_uses_locked_github_dependency_variant();

@@ -758,6 +758,8 @@ namespace forge
       }
 
       const auto local_sources = !dependency.path.empty() + !dependency.box.empty();
+      const auto has_github_package =
+        !dependency.github.empty() && !dependency.version.empty();
       const auto exact_commit =
         (dependency.commit.size() == 40 || dependency.commit.size() == 64)
         && std::all_of(
@@ -778,6 +780,13 @@ namespace forge
              && dependency.version.empty()
              && dependency.git.empty()
              && dependency.commit.empty())
+            || (!dependency.path.empty()
+                && dependency.box.empty()
+                && dependency.url.empty()
+                && dependency.sha256.empty()
+                && has_github_package
+                && dependency.git.empty()
+                && dependency.commit.empty())
             || (local_sources == 0
                 && !dependency.url.empty()
                 && !dependency.sha256.empty()

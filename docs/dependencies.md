@@ -96,6 +96,20 @@ workflow:
 Core = { github = "razterizer/Core", version = "1.5.0+build.8" }
 ```
 
+You can also declare a local development path with a GitHub Release fallback in
+the same dependency. Normal builds use the local checkout when it exists, while
+`forge update` resolves the GitHub package and writes the lock entry used on
+machines where the local checkout is absent:
+
+```toml
+[dependencies]
+Core = { path = "../Core", github = "razterizer/Core", version = "1.5.0+build.8" }
+```
+
+If the path is missing during a normal build, Forge uses the matching
+`forge.lock.toml` entry. If no lock exists for the current target, run
+`forge update Core`.
+
 Select a named cbox variant when the release publishes more than one compatible
 package shape for the same library:
 

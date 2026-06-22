@@ -3976,6 +3976,8 @@ namespace
     const auto second = directory.path() / "second-source";
     const auto third = directory.path() / "third-source";
     const auto imported = directory.path() / "vendor-sdk";
+    const auto dynamic_imported = directory.path() / "dynamic-vendor-sdk";
+    const auto dynamic_application = directory.path() / "dynamic-app";
     const auto application = directory.path() / "app";
 
     const auto write_static_project =
@@ -4176,6 +4178,67 @@ namespace
     expect(
       version_changed_error.str().empty(),
       "compiler-version-compatible imported library build does not write an error"
+    );
+
+    auto dynamic_imported_recipe =
+      "[project]\n"
+      "name = \"dynamic-vendor-sdk\"\n"
+      "version = \"4.2.0\"\n"
+      "type = \"imported_library\"\n\n"
+      "[import." + current_target() + "]\n"
+      + read_file(third / ".forge/build/forge-toolchain.toml")
+      + "public_headers = [\"vendor/include\"]\n"
+      "dynamic_libraries = [\"vendor/runtime/" + third_runtime.filename().string() + "\"]\n";
+#ifdef _WIN32
+    dynamic_imported_recipe +=
+      "import_libraries = [\"vendor/lib/" + third_import_library.filename().string() + "\"]\n";
+#endif
+    const auto dynamic_compiler = dynamic_imported_recipe.find("compiler = ");
+    dynamic_imported_recipe.replace(
+      dynamic_compiler,
+      dynamic_imported_recipe.find('\n', dynamic_compiler) - dynamic_compiler,
+      "compiler = \"IncompatibleCompiler\""
+    );
+    write_file(dynamic_imported / "forge.recipe.toml", dynamic_imported_recipe);
+    write_file(dynamic_imported / "vendor/include/third/third.h", "int third();\n");
+    std::filesystem::create_directories(dynamic_imported / "vendor/runtime");
+    std::filesystem::copy_file(
+      third_runtime,
+      dynamic_imported / "vendor/runtime" / third_runtime.filename()
+    );
+#ifdef _WIN32
+    std::filesystem::create_directories(dynamic_imported / "vendor/lib");
+    std::filesystem::copy_file(
+      third_import_library,
+      dynamic_imported / "vendor/lib" / third_import_library.filename()
+    );
+#endif
+    write_file(
+      dynamic_application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"dynamic-app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[dependencies]\n"
+      "dynamic-vendor-sdk = { path = \"../dynamic-vendor-sdk\" }\n"
+    );
+    write_file(
+      dynamic_application / "main.cpp",
+      "#include <third/third.h>\n"
+      "int main() { return third() == 1 ? 0 : 1; }\n"
+    );
+    std::ostringstream dynamic_output;
+    std::ostringstream dynamic_error;
+    expect(
+      forge::cli::run(run_arguments, dynamic_application, dynamic_output, dynamic_error) == 0,
+      "build accepts a dynamic imported-library dependency with a different compiler"
+    );
+    expect(
+      dynamic_error.str().empty(),
+      "dynamic imported-library compiler mismatch does not write an error"
     );
 
     auto incompatible_recipe = imported_recipe;

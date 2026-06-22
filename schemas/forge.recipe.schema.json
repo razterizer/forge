@@ -305,19 +305,95 @@
         },
         "oneOf": [
           {
-            "required": ["path"]
+            "required": ["path", "github", "version"],
+            "not": {
+              "anyOf": [
+                { "required": ["box"] },
+                { "required": ["url"] },
+                { "required": ["sha256"] },
+                { "required": ["git"] },
+                { "required": ["commit"] }
+              ]
+            }
           },
           {
-            "required": ["box"]
+            "required": ["path"],
+            "not": {
+              "anyOf": [
+                { "required": ["box"] },
+                { "required": ["url"] },
+                { "required": ["sha256"] },
+                { "required": ["github"] },
+                { "required": ["package"] },
+                { "required": ["version"] },
+                { "required": ["git"] },
+                { "required": ["commit"] },
+                { "required": ["component"] },
+                { "required": ["variant"] }
+              ]
+            }
           },
           {
-            "required": ["url", "sha256"]
+            "required": ["box"],
+            "not": {
+              "anyOf": [
+                { "required": ["path"] },
+                { "required": ["url"] },
+                { "required": ["sha256"] },
+                { "required": ["github"] },
+                { "required": ["package"] },
+                { "required": ["version"] },
+                { "required": ["git"] },
+                { "required": ["commit"] },
+                { "required": ["component"] },
+                { "required": ["variant"] }
+              ]
+            }
           },
           {
-            "required": ["github", "version"]
+            "required": ["url", "sha256"],
+            "not": {
+              "anyOf": [
+                { "required": ["path"] },
+                { "required": ["box"] },
+                { "required": ["github"] },
+                { "required": ["package"] },
+                { "required": ["version"] },
+                { "required": ["git"] },
+                { "required": ["commit"] },
+                { "required": ["component"] },
+                { "required": ["variant"] }
+              ]
+            }
           },
           {
-            "required": ["git", "commit"]
+            "required": ["github", "version"],
+            "not": {
+              "anyOf": [
+                { "required": ["path"] },
+                { "required": ["box"] },
+                { "required": ["url"] },
+                { "required": ["sha256"] },
+                { "required": ["git"] },
+                { "required": ["commit"] }
+              ]
+            }
+          },
+          {
+            "required": ["git", "commit"],
+            "not": {
+              "anyOf": [
+                { "required": ["path"] },
+                { "required": ["box"] },
+                { "required": ["url"] },
+                { "required": ["sha256"] },
+                { "required": ["github"] },
+                { "required": ["package"] },
+                { "required": ["version"] },
+                { "required": ["component"] },
+                { "required": ["variant"] }
+              ]
+            }
           }
         ]
       }
