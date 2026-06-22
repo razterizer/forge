@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.8.8
+
+- Added `forge profile list` to show declared dependency/build profiles and
+  profile-backed release or cbox variants.
+
 ## 0.8.7
 
 - Made source dependency box packaging reuse a dependency profile only when the

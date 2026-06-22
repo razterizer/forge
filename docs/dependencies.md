@@ -143,6 +143,9 @@ forge build --profile=pinned
 forge test --profile=pinned
 ```
 
+Use `forge profile list` to inspect declared dependency/build profiles and
+profile-backed release or cbox variants.
+
 Commit `forge.lock.toml` after updating remotely resolved GitHub Release
 packages. Compiled package entries are recorded per target, allowing Linux,
 macOS, and Windows resolutions to coexist. Portable header-only packages are

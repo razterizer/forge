@@ -540,6 +540,13 @@ forge run --profile=dev
 forge test --profile=pinned
 ```
 
+List declared dependency/build profiles and profile-backed release or cbox
+variants:
+
+```sh
+forge profile list
+```
+
 The root recipe must declare the requested profile. Forge propagates the
 selection through transitive source dependencies; dependencies declaring the
 same profile use its dependency and build settings, while dependencies without

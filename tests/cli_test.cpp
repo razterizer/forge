@@ -150,6 +150,7 @@ namespace
       std::string_view { "build" },
       std::string_view { "run" },
       std::string_view { "test" },
+      std::string_view { "profile" },
       std::string_view { "update" },
       std::string_view { "bump" },
       std::string_view { "clean" },
@@ -351,13 +352,115 @@ namespace
   void test_version()
   {
     constexpr std::array arguments { std::string_view { "--version" } };
-    constexpr std::string_view expected_version = "0.8.7+build.15";
+    constexpr std::string_view expected_version = "0.8.8+build.16";
     std::ostringstream output;
     std::ostringstream error;
 
     expect(forge::cli::run(arguments, output, error) == 0, "version succeeds");
     expect(forge::cli::version == expected_version, "compiled version matches the synced version");
     expect(output.str() == "forge " + std::string { expected_version } + "\n", "version reports the current version");
+  }
+
+  void test_profile_list()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"profiles\"\n"
+      "version = \"0.1.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[release]\n"
+      "variants = [{ profile = \"workflow-release\", suffix = \"hosted\" }]\n\n"
+      "[box]\n"
+      "variants = [{ profile = \"applaudio-release\", suffix = \"applaudio\" }]\n\n"
+      "[profile.dev.dependencies]\n"
+      "Core = { path = \"../Core\" }\n\n"
+      "[profile.workflow-release.dependencies]\n"
+      "Core = { github = \"example/Core\", version = \"1.0.0\" }\n\n"
+      "[profile.workflow-release.build]\n"
+      "configuration = \"Release\"\n\n"
+      "[profile.applaudio-release.build]\n"
+      "configuration = \"Release\"\n"
+      "defines = [\"USE_APPLAUDIO\"]\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+    constexpr std::array arguments {
+      std::string_view { "profile" },
+      std::string_view { "list" }
+    };
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "profile list succeeds"
+    );
+    expect(
+      contains(output.str(), "Profiles:\n")
+        && contains(output.str(), "  dev  dependencies\n")
+        && contains(output.str(), "  workflow-release  dependencies, build, release variant 'hosted'\n")
+        && contains(output.str(), "  applaudio-release  build, box variant 'applaudio'\n"),
+      "profile list reports dependency, build, release, and box profile roles"
+    );
+    expect(error.str().empty(), "profile list does not write an error");
+  }
+
+  void test_profile_list_reports_no_profiles()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"plain\"\n"
+      "version = \"0.1.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+    constexpr std::array arguments {
+      std::string_view { "profile" },
+      std::string_view { "list" }
+    };
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "profile list succeeds without profiles"
+    );
+    expect(output.str() == "No profiles declared\n", "profile list reports empty profile set");
+    expect(error.str().empty(), "empty profile list does not write an error");
+  }
+
+  void test_profile_rejects_invalid_usage()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"plain\"\n"
+      "version = \"0.1.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+    constexpr std::array arguments {
+      std::string_view { "profile" }
+    };
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "profile rejects missing subcommand"
+    );
+    expect(contains(error.str(), "forge profile list"), "profile usage explains list subcommand");
+    expect(output.str().empty(), "invalid profile usage does not write output");
   }
 
   void test_init_alias_adopts_existing_project()
@@ -5249,6 +5352,9 @@ int main()
   test_cli_rejects_invalid_compile_definition();
   test_cli_runs_and_tests_workspace();
   test_version();
+  test_profile_list();
+  test_profile_list_reports_no_profiles();
+  test_profile_rejects_invalid_usage();
   test_init_alias_adopts_existing_project();
   test_init_discovers_existing_sources();
   test_init_ignores_generated_directories();

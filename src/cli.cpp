@@ -15,6 +15,8 @@
 #include <array>
 #include <filesystem>
 #include <ostream>
+#include <set>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -31,6 +33,7 @@ namespace forge::cli
       std::string_view { "build" },
       std::string_view { "bump" },
       std::string_view { "clean" },
+      std::string_view { "profile" },
       std::string_view { "run" },
       std::string_view { "test" },
       std::string_view { "update" },
@@ -58,6 +61,7 @@ namespace forge::cli
         << "  build           Build a project, target, or workspace selection\n"
         << "  bump            Bump the project version and prepare release notes\n"
         << "  clean           Remove all generated Forge state for a project\n"
+        << "  profile         List recipe dependency and build profiles\n"
         << "  run             Build and run an executable project or target\n"
         << "  test            Build and run marked test targets\n"
         << "  update          Resolve and lock GitHub cbox dependencies\n"
@@ -147,6 +151,17 @@ namespace forge::cli
           << "  forge run [target|project[/target]] [--profile=<name>] [-- arguments...]\n\n"
           << "Arguments after '--' are forwarded to the executable. Workspace runs\n"
           << "require a project or project/target selection.\n";
+        return true;
+      }
+
+      if (command == "profile")
+      {
+        output
+          << "List profiles declared by the current Forge recipe.\n\n"
+          << "Usage:\n"
+          << "  forge profile list\n\n"
+          << "Shows each `[profile.<name>.dependencies]` and `[profile.<name>.build]`\n"
+          << "profile, including whether it is referenced by release or cbox variants.\n";
         return true;
       }
 
@@ -303,6 +318,96 @@ namespace forge::cli
       return true;
     }
 
+    int list_profiles(const std::filesystem::path& project_directory,
+                      std::ostream& output,
+                      std::ostream& error)
+    {
+      Recipe recipe;
+
+      if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
+      {
+        return 2;
+      }
+
+      std::set<std::string> profiles;
+
+      for (const auto& [name, _] : recipe.dependency_profiles)
+      {
+        profiles.insert(name);
+      }
+
+      for (const auto& [name, _] : recipe.build_profiles)
+      {
+        profiles.insert(name);
+      }
+
+      for (const auto& variant : recipe.release_variants)
+      {
+        profiles.insert(variant.profile);
+      }
+
+      for (const auto& variant : recipe.box_variants)
+      {
+        profiles.insert(variant.profile);
+      }
+
+      if (profiles.empty())
+      {
+        output << "No profiles declared\n";
+        return 0;
+      }
+
+      output << "Profiles:\n";
+
+      for (const auto& profile : profiles)
+      {
+        output << "  " << profile << "  ";
+        bool wrote = false;
+
+        const auto write_role =
+          [&output, &wrote](std::string_view role)
+          {
+            if (wrote)
+            {
+              output << ", ";
+            }
+
+            output << role;
+            wrote = true;
+          };
+
+        if (recipe.dependency_profiles.contains(profile))
+        {
+          write_role("dependencies");
+        }
+
+        if (recipe.build_profiles.contains(profile))
+        {
+          write_role("build");
+        }
+
+        for (const auto& variant : recipe.release_variants)
+        {
+          if (variant.profile == profile)
+          {
+            write_role("release variant '" + variant.suffix + "'");
+          }
+        }
+
+        for (const auto& variant : recipe.box_variants)
+        {
+          if (variant.profile == profile)
+          {
+            write_role("box variant '" + variant.suffix + "'");
+          }
+        }
+
+        output << '\n';
+      }
+
+      return 0;
+    }
+
   } // namespace
 
   int run(std::span<const std::string_view> arguments,
@@ -346,7 +451,9 @@ namespace forge::cli
 
     if ((arguments.size() == 2
          && (arguments[1] == "--help" || arguments[1] == "-h"))
-        || ((arguments.front() == "box" || arguments.front() == "workflow")
+        || ((arguments.front() == "box"
+             || arguments.front() == "profile"
+             || arguments.front() == "workflow")
             && (arguments.back() == "--help" || arguments.back() == "-h")))
     {
       print_command_help(arguments.front(), output);
@@ -566,6 +673,17 @@ namespace forge::cli
       }
 
       return bump_project(working_directory, arguments[1], output, error);
+    }
+
+    if (arguments.front() == "profile")
+    {
+      if (arguments.size() == 2 && arguments[1] == "list")
+      {
+        return list_profiles(working_directory, output, error);
+      }
+
+      error << "forge: usage: forge profile list\n";
+      return 2;
     }
 
     if (arguments.front() == "update")
