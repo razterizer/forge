@@ -12,12 +12,14 @@
 #include "test.h"
 #include "workspace.h"
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <ostream>
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace forge::cli
@@ -357,40 +359,43 @@ namespace forge::cli
         return 0;
       }
 
-      output << "Profiles:\n";
+      std::size_t profile_width = std::string_view { "Profile" }.size();
 
       for (const auto& profile : profiles)
       {
-        output << "  " << profile << "  ";
-        bool wrote = false;
+        profile_width = std::max(profile_width, profile.size());
+      }
 
-        const auto write_role =
-          [&output, &wrote](std::string_view role)
+      output << "Profiles:\n";
+      output << "  Profile" << std::string(profile_width - std::string_view { "Profile" }.size(), ' ')
+             << "  Roles\n";
+      output << "  " << std::string(profile_width, '-') << "  -----\n";
+
+      for (const auto& profile : profiles)
+      {
+        std::vector<std::string> roles;
+
+        const auto add_role =
+          [&roles](std::string role)
           {
-            if (wrote)
-            {
-              output << ", ";
-            }
-
-            output << role;
-            wrote = true;
+            roles.push_back(std::move(role));
           };
 
         if (recipe.dependency_profiles.contains(profile))
         {
-          write_role("dependencies");
+          add_role("dependencies");
         }
 
         if (recipe.build_profiles.contains(profile))
         {
-          write_role("build");
+          add_role("build");
         }
 
         for (const auto& variant : recipe.release_variants)
         {
           if (variant.profile == profile)
           {
-            write_role("release variant '" + variant.suffix + "'");
+            add_role("release variant '" + variant.suffix + "'");
           }
         }
 
@@ -398,8 +403,20 @@ namespace forge::cli
         {
           if (variant.profile == profile)
           {
-            write_role("box variant '" + variant.suffix + "'");
+            add_role("box variant '" + variant.suffix + "'");
           }
+        }
+
+        output << "  " << profile << std::string(profile_width - profile.size(), ' ') << "  ";
+
+        for (std::size_t index = 0; index < roles.size(); ++index)
+        {
+          if (index > 0)
+          {
+            output << ", ";
+          }
+
+          output << roles[index];
         }
 
         output << '\n';

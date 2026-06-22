@@ -58,6 +58,14 @@ namespace forge
       output << '[' << current << '/' << total << "] " << description << '\n' << std::flush;
     }
 
+    void report_subprogress(std::ostream& output,
+                            std::size_t current,
+                            std::size_t total,
+                            std::string_view description)
+    {
+      output << "      [" << current << '/' << total << "] " << description << '\n' << std::flush;
+    }
+
     bool is_ignored_directory(const std::filesystem::path& path)
     {
       const auto name = path.filename().string();
@@ -3742,6 +3750,13 @@ namespace forge
       report_progress(output, 4, 6, "Resolving dependencies");
     }
 
+    const std::size_t dependency_progress_total = options.github ? 7 : 6;
+
+    if (show_progress)
+    {
+      report_subprogress(output, 1, dependency_progress_total, "Inferring include directories");
+    }
+
     auto include_directories = infer_include_directories(project_directory, sources, headers);
 
     if (visual_studio_project)
@@ -3758,8 +3773,24 @@ namespace forge
       );
     }
 
+    if (show_progress)
+    {
+      report_subprogress(output, 2, dependency_progress_total, "Scanning unresolved includes");
+    }
+
     auto unresolved = unresolved_includes(project_directory, sources, headers);
+
+    if (show_progress)
+    {
+      report_subprogress(output, 3, dependency_progress_total, "Matching sibling Forge projects");
+    }
+
     auto sibling_dependencies = infer_sibling_dependencies(project_directory, unresolved);
+
+    if (show_progress)
+    {
+      report_subprogress(output, 4, dependency_progress_total, "Reading project references");
+    }
 
     if (visual_studio_project)
     {
@@ -3790,7 +3821,18 @@ namespace forge
       );
     }
 
+    if (show_progress)
+    {
+      report_subprogress(output, 5, dependency_progress_total, "Preparing GitHub suggestions");
+    }
+
     const auto suggestions = github_suggestions(project_directory, unresolved);
+
+    if (show_progress && options.github)
+    {
+      report_subprogress(output, 6, dependency_progress_total, "Verifying GitHub candidates");
+    }
+
     const auto github_dependencies = options.github
       ? resolve_github_dependencies(
         project_directory,
@@ -3800,6 +3842,17 @@ namespace forge
         output
       )
       : std::vector<GitHubDependency> {};
+
+    if (show_progress)
+    {
+      report_subprogress(
+        output,
+        dependency_progress_total,
+        dependency_progress_total,
+        "Dependency resolution complete"
+      );
+    }
+
     const auto project_name = visual_studio_project
       ? visual_studio_project->name
       : project_directory.filename().string();

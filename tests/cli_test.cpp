@@ -400,8 +400,11 @@ namespace
     );
     expect(
       contains(output.str(), "Profiles:\n")
-        && contains(output.str(), "  dev  dependencies\n")
-        && contains(output.str(), "  workflow-release  dependencies, build, release variant 'hosted'\n")
+        && contains(output.str(), "  Profile")
+        && contains(output.str(), "  Roles\n")
+        && contains(output.str(), "  -------")
+        && contains(output.str(), "  dev                dependencies\n")
+        && contains(output.str(), "  workflow-release   dependencies, build, release variant 'hosted'\n")
         && contains(output.str(), "  applaudio-release  build, box variant 'applaudio'\n"),
       "profile list reports dependency, build, release, and box profile roles"
     );
@@ -532,6 +535,8 @@ namespace
         && contains(output.str(), "[2/6] Scanning sources and headers")
         && contains(output.str(), "[3/6] Reading project metadata")
         && contains(output.str(), "[4/6] Resolving dependencies")
+        && contains(output.str(), "      [2/6] Scanning unresolved includes")
+        && contains(output.str(), "      [6/6] Dependency resolution complete")
         && contains(output.str(), "[5/6] Writing recipe")
         && contains(output.str(), "[6/6] Creating release support"),
       "adopt reports project adoption progress"
