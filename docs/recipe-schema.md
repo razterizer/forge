@@ -54,6 +54,11 @@ rules:
   { profile = "applaudio-release", suffix = "applaudio" }]`. Each variant
   selects matching dependency/build profiles and appends its suffix to staged
   executable names, for example `demo_1_openal` and `demo_1_applaudio`.
+- `[box].variants` may set multiple hosted dependency box variants, using the
+  same `{ profile, suffix }` form. Each variant selects matching
+  dependency/build profiles and appends its suffix to the generated cbox name,
+  for example `8Beat-1.0.0+build.1-openal-macos-arm64.cbox` and
+  `8Beat-1.0.0+build.1-applaudio-macos-arm64.cbox`.
 - `[release].readme` may map platform-specific README files into executable
   release archives as `README.txt`, for example
   `{ linux = "demos/README_LINUX.md", macos = "demos/README_MACOS.md",
@@ -85,7 +90,9 @@ rules:
   packaged `version`. `forge update` writes their exact target-specific
   resolutions to `forge.lock.toml`; normal builds require those locked entries.
   Multi-component GitHub releases may declare `package` for the aggregate cbox
-  identity and `component` for the named library selected from it.
+  identity and `component` for the named library selected from it. Dependency
+  cbox variants may declare `variant = "name"` to resolve filenames with that
+  variant suffix.
 - Projects may declare project-relative `[runtime].files`. Executable runtime
   files are staged beside the executable and included in boxes and releases.
   Library and header-only runtime files are exported in boxes and staged

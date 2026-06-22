@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -256,6 +257,65 @@ namespace
     }
 
     expect(contains(read_file(manifest), "build = 6"), "box manifest includes the build number");
+  }
+
+  void test_create_box_variant_uses_profile_suffix()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[box]\n"
+      << "variants = [{ profile = \"applaudio-release\", suffix = \"applaudio\" }]\n"
+      << "\n[profile.applaudio-release.build]\n"
+      << "configuration = \"Release\"\n"
+      << "defines = [\"USE_APPLAUDIO\"]\n";
+    recipe.close();
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&commands, &directory](const std::vector<std::string>& command,
+                              const std::filesystem::path&,
+                              std::ostream&)
+      {
+        commands.push_back(command);
+
+        if (command.size() > 1 && command[1] == "--build")
+        {
+          std::filesystem::create_directories(directory.path() / ".forge/build");
+          write_toolchain(directory.path());
+#ifdef _WIN32
+          std::ofstream executable { directory.path() / ".forge/build/hello.exe" };
+#else
+          std::ofstream executable { directory.path() / ".forge/build/hello" };
+#endif
+        }
+
+        return 0;
+      };
+
+    expect(
+      forge::create_box(
+        directory.path(),
+        std::nullopt,
+        std::optional<std::string> { "applaudio-release" },
+        runner,
+        output,
+        error
+      ) == 0,
+      "box create succeeds with a configured cbox variant profile"
+    );
+    expect(
+      commands.size() == 3 && contains(commands[2][4], "hello-0.1.0-applaudio-"),
+      "variant box archive name includes the configured suffix"
+    );
+    expect(
+      contains(output.str(), "Creating box hello-0.1.0-applaudio-"),
+      "variant box create reports the suffixed box name"
+    );
+    expect(error.str().empty(), "successful variant box create does not write an error");
   }
 
   void test_create_header_only_box_stages_runtime_assets()
@@ -711,6 +771,7 @@ int main()
 {
   test_create_box_stages_manifest_and_executable();
   test_create_box_includes_build_number();
+  test_create_box_variant_uses_profile_suffix();
   test_create_header_only_box_stages_runtime_assets();
 #ifdef _WIN32
   test_create_windows_dynamic_library_box();

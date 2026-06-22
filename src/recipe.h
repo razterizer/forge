@@ -29,6 +29,7 @@ namespace forge
     std::string commit;
     std::string type;
     std::string component;
+    std::string variant;
     std::string resolved_target;
     std::vector<std::string> targets;
   };
@@ -133,6 +134,7 @@ namespace forge
     std::vector<std::filesystem::path> release_files;
     std::optional<std::string> release_bundle_name;
     std::vector<ReleaseVariant> release_variants;
+    std::vector<ReleaseVariant> box_variants;
     ReleaseReadme release_readme;
     std::optional<std::string> release_notes_build_number_format;
     std::filesystem::path version_header_path;

@@ -1343,6 +1343,87 @@ namespace
     }
   }
 
+  void test_update_resolves_github_dependency_variant()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[profile.pinned.dependencies]\n"
+      << "answer = { github = \"example/answer\", version = \"1.2.3+build.6\", "
+         "variant = \"applaudio\" }\n";
+    recipe.close();
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+    const std::string checksum =
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+#ifdef _WIN32
+    const std::string target = "windows-x86_64";
+#elif __APPLE__
+    const std::string target = "macos-arm64";
+#else
+    const std::string target = "linux-x86_64";
+#endif
+
+    const auto asset = "answer-1.2.3+build.6-applaudio-" + target + ".cbox";
+    const std::string release_url =
+      "https://github.com/example/answer/releases/download/release-1.2.3.6/";
+    const forge::ProcessRunner runner =
+      [&commands, &checksum, &asset](const std::vector<std::string>& arguments,
+                                    const std::filesystem::path&,
+                                    std::ostream&)
+      {
+        commands.push_back(arguments);
+
+        if (arguments.size() > 2
+            && arguments[1].starts_with("-DURL=")
+            && arguments[1].ends_with(".sha256"))
+        {
+          const auto destination = arguments[2].substr(std::string { "-DDESTINATION=" }.size());
+          std::ofstream { destination } << checksum << "  " << asset << '\n';
+          return 0;
+        }
+
+        if (arguments.size() > 2 && arguments[1].starts_with("-DURL="))
+        {
+          const auto destination = arguments[2].substr(std::string { "-DDESTINATION=" }.size());
+          std::ofstream { destination };
+          return 0;
+        }
+
+        return 1;
+      };
+
+    forge::BuildOptions options;
+    options.dependencies_only = true;
+    options.update_dependencies = true;
+    options.profile = "pinned";
+    expect(
+      forge::build_project(directory.path(), options, runner, output, error) == 2,
+      "variant GitHub dependency update reaches box validation"
+    );
+    expect(commands.size() == 2, "variant update downloads checksum and box once");
+
+    if (commands.size() == 2)
+    {
+      expect(
+        commands[0][1] == "-DURL=" + release_url + asset + ".sha256",
+        "variant update resolves the variant checksum asset URL"
+      );
+      expect(
+        commands[1][1] == "-DURL=" + release_url + asset,
+        "variant update resolves the variant box asset URL"
+      );
+    }
+
+    expect(
+      contains(output.str(), "Resolving GitHub dependency answer variant applaudio"),
+      "variant update reports the selected cbox variant"
+    );
+  }
+
   void test_update_resolves_github_component_dependency()
   {
     TemporaryDirectory directory;
@@ -1560,6 +1641,112 @@ namespace
     );
   }
 
+  void test_build_validates_locked_github_variant_identity()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[dependencies]\n"
+      << "answer = { github = \"example/answer\", version = \"1.2.3\", "
+         "variant = \"applaudio\" }\n";
+    recipe.close();
+
+#ifdef _WIN32
+    const std::string target = "windows-x86_64";
+#elif __APPLE__
+    const std::string target = "macos-arm64";
+#else
+    const std::string target = "linux-x86_64";
+#endif
+
+    const std::string checksum =
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    std::ofstream lock { directory.path() / "forge.lock.toml" };
+    lock
+      << "format = 2\n\n"
+      << "[[dependency]]\n"
+      << "name = \"answer\"\n"
+      << "github = \"example/answer\"\n"
+      << "variant = \"openal\"\n"
+      << "version = \"1.2.3\"\n"
+      << "target = \"" << target << "\"\n"
+      << "url = \"https://example.invalid/answer.cbox\"\n"
+      << "sha256 = \"" << checksum << "\"\n";
+    lock.close();
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 1;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 2,
+      "build rejects a lock selecting a different GitHub cbox variant"
+    );
+    expect(invocations == 0, "GitHub variant lock conflict does not access the network");
+    expect(
+      contains(error.str(), "run forge update answer"),
+      "GitHub variant lock conflict explains how to resolve it"
+    );
+  }
+
+  void test_build_uses_locked_github_dependency_variant()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[dependencies]\n"
+      << "answer = { github = \"example/answer\", version = \"1.2.3\", "
+         "variant = \"applaudio\" }\n";
+    recipe.close();
+
+    const std::string checksum =
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    std::ofstream lock { directory.path() / "forge.lock.toml" };
+    lock
+      << "format = 2\n\n"
+      << "[[dependency]]\n"
+      << "name = \"answer\"\n"
+      << "github = \"example/answer\"\n"
+      << "variant = \"applaudio\"\n"
+      << "version = \"1.2.3\"\n"
+      << "target = \"any\"\n"
+      << "url = \"https://example.invalid/answer-applaudio.cbox\"\n"
+      << "sha256 = \"" << checksum << "\"\n";
+    lock.close();
+    std::filesystem::create_directories(directory.path() / ".forge/cache/downloads");
+    std::ofstream { directory.path() / ".forge/cache/downloads" / (checksum + ".cbox") };
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 1;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 2,
+      "locked GitHub variant dependency reaches box validation"
+    );
+    expect(invocations == 0, "locked GitHub variant dependency skips downloads");
+    expect(
+      contains(output.str(), "Using locked dependency answer variant applaudio for any"),
+      "build reports the selected locked cbox variant"
+    );
+  }
+
   void test_build_rejects_incomplete_github_dependency()
   {
     TemporaryDirectory directory;
@@ -1619,9 +1806,12 @@ int main()
   test_update_resolves_github_dependency();
   test_named_update_skips_other_unlocked_github_dependencies();
   test_update_resolves_github_dependency_for_requested_target();
+  test_update_resolves_github_dependency_variant();
   test_update_resolves_github_component_dependency();
   test_build_requires_and_uses_locked_github_dependency();
   test_build_validates_locked_github_component_identity();
+  test_build_validates_locked_github_variant_identity();
+  test_build_uses_locked_github_dependency_variant();
   test_build_rejects_incomplete_github_dependency();
 
   return failures == 0 ? 0 : 1;

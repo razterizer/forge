@@ -96,10 +96,19 @@ workflow:
 Core = { github = "razterizer/Core", version = "1.5.0+build.8" }
 ```
 
+Select a named cbox variant when the release publishes more than one compatible
+package shape for the same library:
+
+```toml
+[dependencies]
+EightBeat = { github = "razterizer/8Beat", package = "8Beat", version = "1.0.0+build.1", variant = "applaudio" }
+```
+
 Run `forge update Core` to resolve the release asset for the current target and
 write its exact URL, checksum, package identity, and selected component to
 `forge.lock.toml`. Normal builds require the matching lock entry and do not
-re-resolve GitHub.
+re-resolve GitHub. Variant names are part of the lock identity, so the same
+package can be locked independently for different cbox variants.
 
 ## Dependency profiles
 

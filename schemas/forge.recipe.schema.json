@@ -289,6 +289,11 @@
             "minLength": 1,
             "description": "Named library component to consume from a multi-component cbox."
           },
+          "variant": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "description": "Named GitHub Release cbox variant to consume, such as openal or applaudio."
+          },
           "targets": {
             "type": "array",
             "items": {
@@ -315,6 +320,35 @@
             "required": ["git", "commit"]
           }
         ]
+      }
+    },
+    "box": {
+      "type": "object",
+      "description": "Dependency cbox publication settings.",
+      "additionalProperties": false,
+      "properties": {
+        "variants": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Hosted dependency cbox variants. Each variant selects matching dependency/build profiles and appends its suffix to the cbox filename.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["profile"],
+            "properties": {
+              "profile": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]+$",
+                "description": "Dependency/build profile selected for this cbox variant."
+              },
+              "suffix": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]+$",
+                "description": "Filename suffix inserted before the target or ho suffix. Defaults to profile when omitted."
+              }
+            }
+          }
+        }
       }
     },
     "profile": {

@@ -102,6 +102,20 @@ profile and a filename suffix. For example, `[{ profile = "workflow-release",
 suffix = "openal" }, { profile = "applaudio-release", suffix = "applaudio" }]`
 stages `demo_1_openal` and `demo_1_applaudio` in the same `demo_1` release
 folder.
+Set `[box].variants` when a published dependency cbox should expose multiple
+profile-built forms. For example:
+
+```toml
+[box]
+variants = [
+  { profile = "workflow-release", suffix = "openal" },
+  { profile = "applaudio-release", suffix = "applaudio" }
+]
+```
+
+This publishes names such as `8Beat-1.0.0+build.1-openal-macos-arm64.cbox` and
+`8Beat-1.0.0+build.1-applaudio-macos-arm64.cbox`, letting consumers pin the
+intended variant explicitly.
 Use explicit `forge box create` when a complete format-3 aggregate container is
 wanted.
 `forge release-git` does not build locally; it creates and pushes the tag

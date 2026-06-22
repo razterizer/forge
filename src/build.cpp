@@ -66,6 +66,7 @@ namespace forge
       std::string github;
       std::string package;
       std::string component;
+      std::string variant;
       std::string version;
       std::string target;
       std::string url;
@@ -546,7 +547,8 @@ namespace forge
       if (!is_github_repository(dependency.github)
           || !is_github_package_version(dependency.version)
           || (!dependency.package.empty() && !is_safe_dependency_name(dependency.package))
-          || (!dependency.component.empty() && !is_safe_dependency_name(dependency.component)))
+          || (!dependency.component.empty() && !is_safe_dependency_name(dependency.component))
+          || (!dependency.variant.empty() && !is_safe_dependency_name(dependency.variant)))
       {
         error << "forge: dependency '" << dependency.name
               << "' has an invalid GitHub repository or version\n";
@@ -557,12 +559,39 @@ namespace forge
       const auto selected_target = dependency_target();
       const auto selected_os = dependency_target_os();
       const auto selected_arch = dependency_target_arch();
+      const auto variant = dependency.variant.empty()
+        ? std::string {}
+        : "-" + dependency.variant;
       const auto compiled_asset = package
         + "-" + dependency.version
+        + variant
         + "-" + selected_os
         + "-" + selected_arch
         + ".cbox";
-      const auto header_only_asset = package + "-" + dependency.version + "-ho.cbox";
+      const auto header_only_asset = package + "-" + dependency.version + variant + "-ho.cbox";
+      std::vector<std::string> candidate_assets { compiled_asset };
+
+      if (selected_os == "linux")
+      {
+        candidate_assets.push_back(
+          package
+            + "-" + dependency.version
+            + variant
+            + "-" + selected_os
+            + "-" + selected_arch
+            + "-linux-modern.cbox"
+        );
+        candidate_assets.push_back(
+          package
+            + "-" + dependency.version
+            + variant
+            + "-" + selected_os
+            + "-" + selected_arch
+            + "-linux-legacy.cbox"
+        );
+      }
+
+      candidate_assets.push_back(header_only_asset);
       std::vector<std::string> tag_versions;
       const auto build_metadata = dependency.version.find("+build.");
 
@@ -609,13 +638,18 @@ namespace forge
         }
       }
 
+      if (!dependency.variant.empty())
+      {
+        output << " variant " << dependency.variant;
+      }
+
       output << '\n' << std::flush;
 
       for (const auto& tag_version : tag_versions)
       {
         const auto release_url = release_base + tag_version + "/";
 
-        for (const auto& asset : { compiled_asset, header_only_asset })
+        for (const auto& asset : candidate_assets)
         {
           const auto checksum_path = cache_directory / (asset + ".sha256");
           std::ostringstream download_error;
@@ -682,9 +716,13 @@ namespace forge
       return result.find('"') == std::string::npos;
     }
 
-    std::string lock_key(std::string_view name, std::string_view target)
+    std::string lock_key(std::string_view name,
+                         std::string_view variant,
+                         std::string_view target)
     {
-      return std::string { name } + '\n' + std::string { target };
+      return std::string { name }
+        + '\n' + std::string { variant }
+        + '\n' + std::string { target };
     }
 
     std::string package_version(const BoxMetadata& metadata)
@@ -849,6 +887,7 @@ namespace forge
               || dependency->github.empty()
               || (!dependency->package.empty() && !is_safe_dependency_name(dependency->package))
               || (!dependency->component.empty() && !is_safe_dependency_name(dependency->component))
+              || (!dependency->variant.empty() && !is_safe_dependency_name(dependency->variant))
               || dependency->version.empty()
               || dependency->target.empty()
               || dependency->url.empty()
@@ -863,7 +902,7 @@ namespace forge
             dependency->package = dependency->name;
           }
 
-          const auto key = lock_key(dependency->name, dependency->target);
+          const auto key = lock_key(dependency->name, dependency->variant, dependency->target);
 
           if (!dependency_session->locked_dependencies.emplace(key, *dependency).second)
           {
@@ -921,6 +960,7 @@ namespace forge
                 && key != "github"
                 && key != "package"
                 && key != "component"
+                && key != "variant"
                 && key != "version"
                 && key != "target"
                 && key != "url"
@@ -945,6 +985,10 @@ namespace forge
         else if (key == "component")
         {
           dependency->component = std::move(parsed);
+        }
+        else if (key == "variant")
+        {
+          dependency->variant = std::move(parsed);
         }
         else if (key == "version")
         {
@@ -1008,6 +1052,11 @@ namespace forge
         if (!dependency.component.empty())
         {
           lock << "component = \"" << dependency.component << "\"\n";
+        }
+
+        if (!dependency.variant.empty())
+        {
+          lock << "variant = \"" << dependency.variant << "\"\n";
         }
 
         lock
@@ -1088,6 +1137,7 @@ namespace forge
              entry != dependency_session->locked_dependencies.end();)
         {
           if (entry->second.name == dependency.name
+              && entry->second.variant == dependency.variant
               && (resolved_target == "any" || entry->second.target == "any"
                   || entry->second.target == resolved_target))
           {
@@ -1099,12 +1149,15 @@ namespace forge
           }
         }
 
-        dependency_session->locked_dependencies[lock_key(dependency.name, resolved_target)] =
+        dependency_session->locked_dependencies[
+          lock_key(dependency.name, dependency.variant, resolved_target)
+        ] =
           {
             dependency.name,
             dependency.github,
             dependency.package.empty() ? dependency.name : dependency.package,
             dependency.component,
+            dependency.variant,
             dependency.version,
             resolved_target,
             dependency.url,
@@ -1114,11 +1167,15 @@ namespace forge
         return true;
       }
 
-      auto locked = dependency_session->locked_dependencies.find(lock_key(dependency.name, target));
+      auto locked = dependency_session->locked_dependencies.find(
+        lock_key(dependency.name, dependency.variant, target)
+      );
 
       if (locked == dependency_session->locked_dependencies.end())
       {
-        locked = dependency_session->locked_dependencies.find(lock_key(dependency.name, "any"));
+        locked = dependency_session->locked_dependencies.find(
+          lock_key(dependency.name, dependency.variant, "any")
+        );
       }
 
       if (locked == dependency_session->locked_dependencies.end())
@@ -1138,6 +1195,7 @@ namespace forge
       if (locked->second.github != dependency.github
           || locked->second.package != (dependency.package.empty() ? dependency.name : dependency.package)
           || locked->second.component != dependency.component
+          || locked->second.variant != dependency.variant
           || locked->second.version != dependency.version)
       {
         error << "forge: dependency '" << dependency.name
@@ -1160,6 +1218,11 @@ namespace forge
       if (!dependency.component.empty())
       {
         output << " component " << dependency.component;
+      }
+
+      if (!dependency.variant.empty())
+      {
+        output << " variant " << dependency.variant;
       }
 
       output << " for " << locked->second.target << '\n';
@@ -2290,6 +2353,7 @@ namespace forge
                 {},
                 {},
                 child.type,
+                {},
                 {},
                 {},
                 {}

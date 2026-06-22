@@ -732,6 +732,10 @@ namespace forge
         {
           dependency.component = parsed_value;
         }
+        else if (kind == "variant" && dependency.variant.empty())
+        {
+          dependency.variant = parsed_value;
+        }
         else
         {
           return false;
@@ -770,6 +774,7 @@ namespace forge
              && dependency.sha256.empty()
              && dependency.github.empty()
              && dependency.package.empty()
+             && dependency.variant.empty()
              && dependency.version.empty()
              && dependency.git.empty()
              && dependency.commit.empty())
@@ -778,6 +783,7 @@ namespace forge
                 && !dependency.sha256.empty()
                 && dependency.github.empty()
                 && dependency.package.empty()
+                && dependency.variant.empty()
                 && dependency.version.empty()
                 && dependency.git.empty()
                 && dependency.commit.empty())
@@ -793,6 +799,7 @@ namespace forge
                 && dependency.sha256.empty()
                 && dependency.github.empty()
                 && dependency.package.empty()
+                && dependency.variant.empty()
                 && dependency.version.empty()
                 && !dependency.git.empty()
                 && exact_commit));
@@ -1242,6 +1249,10 @@ namespace forge
       else if (section == "release" && key == "variants")
       {
         valid = parse_release_variants(value, recipe.release_variants);
+      }
+      else if (section == "box" && key == "variants")
+      {
+        valid = parse_release_variants(value, recipe.box_variants);
       }
       else if (section == "release" && key == "readme")
       {

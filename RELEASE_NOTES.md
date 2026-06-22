@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.8.6
+
+- Added explicit hosted cbox variants through `[box].variants` and
+  `variant = "..."` GitHub dependencies, so packages can publish and consume
+  profile-built forms such as OpenAL and applaudio without changing the package
+  identity.
+- Made GitHub cbox resolution understand Linux workflow compatibility suffixes
+  such as `linux-modern` and `linux-legacy`.
+
 ## 0.8.5
 
 - Kept header-only boxes portable when their dependencies are header-only and

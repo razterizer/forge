@@ -504,6 +504,26 @@ namespace forge
 
     std::string hosted_target();
 
+    std::string box_variant_suffix(const Recipe& recipe,
+                                   const std::optional<std::string>& profile)
+    {
+      if (!profile)
+      {
+        return {};
+      }
+
+      const auto variant = std::find_if(
+        recipe.box_variants.begin(),
+        recipe.box_variants.end(),
+        [&profile](const ReleaseVariant& candidate)
+        {
+          return candidate.profile == *profile;
+        }
+      );
+
+      return variant == recipe.box_variants.end() ? std::string {} : variant->suffix;
+    }
+
     bool dependencies_require_target_qualified_box(
       const std::filesystem::path& project_directory,
       const Recipe& recipe,
@@ -548,10 +568,16 @@ namespace forge
 
     std::string hosted_box_filename(const std::filesystem::path& project_directory,
                                     const Recipe& recipe,
+                                    std::string_view variant,
                                     const ProcessRunner& process_runner,
                                     std::ostream& error)
     {
       auto filename = recipe.name + "-" + package_version(recipe);
+
+      if (!variant.empty())
+      {
+        filename += "-" + std::string { variant };
+      }
 
       if (recipe.type == "header_only"
           && recipe.selected_internal_dependencies.empty()
@@ -1366,6 +1392,27 @@ namespace forge
       return 2;
     }
 
+    if (!options.profile
+        && (recipe.type == "static_library"
+            || recipe.type == "dynamic_library"
+            || recipe.type == "imported_library"
+            || recipe.type == "header_only")
+        && !recipe.box_variants.empty())
+    {
+      for (const auto& variant : recipe.box_variants)
+      {
+        auto target_options = options;
+        target_options.profile = variant.profile;
+
+        if (prepare_release(project_directory, target_options, process_runner, output, error) != 0)
+        {
+          return 2;
+        }
+      }
+
+      return 0;
+    }
+
     if (!select_dependency_profile(recipe, workflow_profile, true, error))
     {
       return 2;
@@ -1446,6 +1493,7 @@ namespace forge
       const auto box = boxes_directory / hosted_box_filename(
         project_directory,
         recipe,
+        box_variant_suffix(recipe, workflow_profile),
         process_runner,
         error
       );
