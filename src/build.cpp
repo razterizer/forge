@@ -56,6 +56,7 @@ namespace forge
       std::filesystem::path directory;
       Recipe recipe;
       std::optional<std::string> target;
+      std::optional<std::string> profile;
       std::filesystem::path box;
       std::optional<BoxMetadata> box_metadata;
     };
@@ -2368,6 +2369,14 @@ namespace forge
           return false;
         }
 
+        const auto selected_dependency_profile =
+          !is_box
+          && dependency_session->options.profile
+          && (dependency_recipe.dependency_profiles.contains(*dependency_session->options.profile)
+              || dependency_recipe.build_profiles.contains(*dependency_session->options.profile))
+            ? dependency_session->options.profile
+            : std::optional<std::string> {};
+
         if (!is_box
             && !select_dependency_profile(
               dependency_recipe,
@@ -2434,6 +2443,7 @@ namespace forge
               directory,
               std::move(dependency_recipe),
               dependency_target,
+              selected_dependency_profile,
               is_box ? directory : std::filesystem::path {},
               std::move(box_metadata)
             }
@@ -2479,7 +2489,14 @@ namespace forge
 
       output << "Resolving dependency " << node.recipe.name << '\n';
 
-      if (create_box(node.directory, node.target, process_runner, output, error) != 0)
+      if (create_box(
+        node.directory,
+        node.target,
+        node.profile,
+        process_runner,
+        output,
+        error
+      ) != 0)
       {
         return false;
       }

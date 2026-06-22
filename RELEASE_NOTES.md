@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.8.7
+
+- Made source dependency box packaging reuse a dependency profile only when the
+  dependency recipe declares that profile, so local profile-selected dependency
+  builds package the same dependency set they compiled.
+
 ## 0.8.6
 
 - Added explicit hosted cbox variants through `[box].variants` and
