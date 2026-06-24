@@ -1606,7 +1606,7 @@ namespace
     write_file(
       remote / "forge.recipe.toml",
       "[project]\n"
-      "name = \"answer\"\n"
+      "name = \"The Answer Library\"\n"
       "version = \"1.0.0\"\n"
       "type = \"header_only\"\n"
       "cpp_std = 20\n\n"
@@ -1656,7 +1656,11 @@ namespace
           + std::string { commit } + "\" }"
       )
         && contains(recipe, "[profile.workflow-release.dependencies]"),
-      "adopt --github writes an exact Git commit pin"
+      "adopt --github writes an exact Git commit pin named after the repository"
+    );
+    expect(
+      !contains(recipe, "The Answer Library ="),
+      "adopt --github avoids display names as dependency keys"
     );
     expect(
       contains(output.str(), "Pinned GitHub dependency example/answer at " + std::string { commit }),

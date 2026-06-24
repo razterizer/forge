@@ -2714,16 +2714,16 @@ namespace forge
           continue;
         }
 
-        const GitHubDependency dependency { recipe.name, repository, git, *commit };
-        const auto existing = dependencies.find(recipe.name);
+        const GitHubDependency dependency { name, repository, git, *commit };
+        const auto existing = dependencies.find(dependency.name);
 
         if (existing != dependencies.end() && existing->second.repository != repository)
         {
-          conflicting_names.insert(recipe.name);
+          conflicting_names.insert(dependency.name);
           continue;
         }
 
-        dependencies[recipe.name] = dependency;
+        dependencies[dependency.name] = dependency;
       }
 
       std::vector<GitHubDependency> result;
