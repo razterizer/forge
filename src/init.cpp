@@ -3750,7 +3750,8 @@ namespace forge
       report_progress(output, 4, 6, "Resolving dependencies");
     }
 
-    const std::size_t dependency_progress_total = options.github ? 7 : 6;
+    const auto verify_git_dependencies = options.dependency_style == DependencyStyle::git;
+    const std::size_t dependency_progress_total = verify_git_dependencies ? 7 : 6;
 
     if (show_progress)
     {
@@ -3828,12 +3829,12 @@ namespace forge
 
     const auto suggestions = github_suggestions(project_directory, unresolved);
 
-    if (show_progress && options.github)
+    if (show_progress && verify_git_dependencies)
     {
       report_subprogress(output, 6, dependency_progress_total, "Verifying GitHub candidates");
     }
 
-    const auto github_dependencies = options.github
+    const auto github_dependencies = verify_git_dependencies
       ? resolve_github_dependencies(
         project_directory,
         suggestions,
@@ -4393,7 +4394,7 @@ namespace forge
         << (sibling_dependencies.size() == 1 ? "y\n" : "ies\n");
     }
 
-    if (!options.github && !suggestions.empty())
+    if (!verify_git_dependencies && !suggestions.empty())
     {
       output << "Suggested GitHub dependencies:\n";
 
@@ -4409,7 +4410,7 @@ namespace forge
         output << '\n';
       }
 
-      output << "Run 'forge adopt --github' to verify and pin suggestions\n";
+      output << "Run 'forge adopt --dependency-style=git' to verify and pin suggestions\n";
     }
 
     if (entry_points.empty() && !sources.empty() && public_headers.empty())

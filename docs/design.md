@@ -19,8 +19,9 @@ compilers and build systems rather than replacing them.
   a compatibility alias. Remaining library-looking includes are reported as
   dependency candidates. Unambiguous public-header matches from sibling
   single-target Forge libraries are added as local path dependencies. A GitHub
-  origin enables non-network same-owner suggestions; `forge adopt --github`
-  explicitly verifies and pins accepted repositories by exact commit.
+  origin enables non-network same-owner suggestions; `forge adopt` with
+  `--dependency-style=git` explicitly verifies and pins accepted repositories
+  by exact commit. `forge adopt --github` remains a compatibility alias.
 - `forge adopt` imports concrete metadata from CMake, Visual Studio projects
   and solutions, Xcode projects, MSBuild property sheets, and
   configuration-matched `.xcconfig` files. Generated CMake IDE projects do not

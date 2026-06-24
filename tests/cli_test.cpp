@@ -1033,6 +1033,64 @@ namespace
     );
   }
 
+  void test_adopt_dependency_style_option()
+  {
+    TemporaryDirectory valid_directory;
+    constexpr std::array local_arguments {
+      std::string_view { "adopt" },
+      std::string_view { "--dependency-style=local" }
+    };
+    write_file(valid_directory.path() / "main.cpp", "int main() {}\n");
+    std::ostringstream local_output;
+    std::ostringstream local_error;
+
+    expect(
+      forge::cli::run(local_arguments, valid_directory.path(), local_output, local_error) == 0,
+      "adopt accepts the local dependency style"
+    );
+    expect(local_error.str().empty(), "local dependency style does not write an error");
+
+    TemporaryDirectory invalid_directory;
+    constexpr std::array invalid_arguments {
+      std::string_view { "adopt" },
+      std::string_view { "--dependency-style=github" }
+    };
+    std::ostringstream invalid_output;
+    std::ostringstream invalid_error;
+
+    expect(
+      forge::cli::run(invalid_arguments, invalid_directory.path(), invalid_output, invalid_error) == 2,
+      "adopt rejects unknown dependency styles"
+    );
+    expect(
+      contains(invalid_error.str(), "dependency style must be local or git"),
+      "invalid dependency style explains valid choices"
+    );
+
+    TemporaryDirectory duplicate_directory;
+    constexpr std::array duplicate_arguments {
+      std::string_view { "adopt" },
+      std::string_view { "--dependency-style=git" },
+      std::string_view { "--github" }
+    };
+    std::ostringstream duplicate_output;
+    std::ostringstream duplicate_error;
+
+    expect(
+      forge::cli::run(
+        duplicate_arguments,
+        duplicate_directory.path(),
+        duplicate_output,
+        duplicate_error
+      ) == 2,
+      "adopt rejects duplicate dependency style selections"
+    );
+    expect(
+      contains(duplicate_error.str(), "dependency style specified more than once"),
+      "duplicate dependency styles are explained"
+    );
+  }
+
   void test_adopt_merges_mirrored_cmake_and_visual_studio_projects()
   {
     TemporaryDirectory directory;
@@ -1577,7 +1635,7 @@ namespace
       "adopt derives a GitHub suggestion from the origin owner and include prefix"
     );
     expect(
-      contains(output.str(), "forge adopt --github"),
+      contains(output.str(), "forge adopt --dependency-style=git"),
       "adopt explains how to verify and pin GitHub suggestions"
     );
     expect(
@@ -1639,16 +1697,16 @@ namespace
         return 2;
       };
     forge::AdoptOptions options;
-    options.github = true;
+    options.dependency_style = forge::DependencyStyle::git;
     std::ostringstream output;
     std::ostringstream error;
 
     expect(
       forge::adopt_project(application, options, runner, output, error) == 0,
-      "adopt --github verifies a GitHub dependency"
+      "adopt --dependency-style=git verifies a GitHub dependency"
     );
     const auto recipe = read_file(application / "forge.recipe.toml");
-    expect(cloned, "adopt --github clones the suggested repository");
+    expect(cloned, "adopt --dependency-style=git clones the suggested repository");
     expect(
       contains(
         recipe,
@@ -1656,15 +1714,15 @@ namespace
           + std::string { commit } + "\" }"
       )
         && contains(recipe, "[profile.workflow-release.dependencies]"),
-      "adopt --github writes an exact Git commit pin named after the repository"
+      "adopt --dependency-style=git writes an exact Git commit pin named after the repository"
     );
     expect(
       !contains(recipe, "The Answer Library ="),
-      "adopt --github avoids display names as dependency keys"
+      "adopt --dependency-style=git avoids display names as dependency keys"
     );
     expect(
       contains(output.str(), "Pinned GitHub dependency example/answer at " + std::string { commit }),
-      "adopt --github reports the exact pin"
+      "adopt --dependency-style=git reports the exact pin"
     );
     expect(error.str().empty(), "verified GitHub adoption does not write an error");
   }
@@ -5439,6 +5497,7 @@ int main()
   test_adopt_preserves_cmake_interface_library_with_programs();
   test_adopt_accepts_library_type_hint();
   test_adopt_explains_imported_library_hint_boundary();
+  test_adopt_dependency_style_option();
   test_adopt_merges_mirrored_cmake_and_visual_studio_projects();
   test_adopt_prefers_cmake_over_generated_solution();
   test_adopt_imports_xcode_project();

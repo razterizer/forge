@@ -80,10 +80,14 @@ namespace forge::cli
         output
           << "Discover an existing C++ project and create Forge metadata.\n\n"
           << "Usage:\n"
-          << "  forge adopt [--github] [--library-type=<type>] [--init-version=<ver>]\n"
-          << "              [--version-header-path=<path>]\n\n"
+          << "  forge adopt [--dependency-style=<style>] [--library-type=<type>]\n"
+          << "              [--init-version=<ver>] [--version-header-path=<path>]\n\n"
           << "Options:\n"
-          << "  --github               Verify inferred GitHub source dependencies\n"
+          << "  --dependency-style=<style>\n"
+          << "                         Dependency style: local or git\n"
+          << "                         local keeps verified sibling dependencies as paths;\n"
+          << "                         git verifies inferred GitHub source dependencies\n"
+          << "  --github               Alias for --dependency-style=git\n"
           << "  --library-type=<type>  Resolve an ambiguous library as header_only,\n"
           << "                         static_library, or dynamic_library\n"
           << "                         Use imported_library in the recipe for\n"
@@ -99,7 +103,7 @@ namespace forge::cli
           << "Examples:\n"
           << "  forge adopt\n"
           << "  forge adopt --library-type=static_library\n"
-          << "  forge adopt --github\n";
+          << "  forge adopt --dependency-style=git\n";
         return true;
       }
 
@@ -1007,12 +1011,47 @@ namespace forge::cli
     if (arguments.front() == "adopt")
     {
       AdoptOptions options;
+      bool dependency_style_set = false;
 
       for (const auto argument : arguments.subspan(1))
       {
         if (argument == "--github")
         {
-          options.github = true;
+          if (dependency_style_set)
+          {
+            error << "forge: dependency style specified more than once\n";
+            return 2;
+          }
+
+          options.dependency_style = DependencyStyle::git;
+          dependency_style_set = true;
+        }
+        else if (argument.starts_with("--dependency-style="))
+        {
+          if (dependency_style_set)
+          {
+            error << "forge: dependency style specified more than once\n";
+            return 2;
+          }
+
+          const auto style =
+            argument.substr(std::string_view { "--dependency-style=" }.size());
+
+          if (style == "local")
+          {
+            options.dependency_style = DependencyStyle::local;
+          }
+          else if (style == "git")
+          {
+            options.dependency_style = DependencyStyle::git;
+          }
+          else
+          {
+            error << "forge: dependency style must be local or git\n";
+            return 2;
+          }
+
+          dependency_style_set = true;
         }
         else if (argument.starts_with("--library-type="))
         {
@@ -1046,8 +1085,9 @@ namespace forge::cli
         else
         {
           error
-            << "forge: usage: forge adopt [--github] [--library-type=<type>] "
-            << "[--init-version=<ver>] [--version-header-path=<path>]\n";
+            << "forge: usage: forge adopt [--dependency-style=<style>] "
+            << "[--library-type=<type>] [--init-version=<ver>] "
+            << "[--version-header-path=<path>]\n";
           return 2;
         }
       }

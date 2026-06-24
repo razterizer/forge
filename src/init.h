@@ -10,9 +10,15 @@
 namespace forge
 {
 
+  enum class DependencyStyle
+  {
+    local,
+    git
+  };
+
   struct AdoptOptions
   {
-    bool github = false;
+    DependencyStyle dependency_style = DependencyStyle::local;
     std::optional<std::string> library_type;
     std::optional<std::string> initial_version;
     std::optional<std::filesystem::path> version_header_path;

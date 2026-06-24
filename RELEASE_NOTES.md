@@ -4,6 +4,9 @@
 
 - Added `forge profile list` to show declared dependency/build profiles and
   profile-backed release or cbox variants.
+- Added `forge adopt --dependency-style=git` as the clearer spelling for
+  verifying inferred GitHub source dependencies, with `--github` retained as a
+  compatibility alias.
 
 ## 0.8.7
 
