@@ -358,12 +358,13 @@ dependencies = ["hello"]
 test = true
 ```
 
-Build, run, or test named targets with:
+Build targets, build and launch them, launch an already-built executable, or
+run tests with:
 
 ```sh
 forge build examples
-forge run examples -- --help
 forge build-and-run examples -- --help
+forge run examples -- --help
 forge test
 forge test unit_tests -- --quick
 forge box create hello
@@ -779,10 +780,10 @@ dependency graph differs across macOS, Linux, and Windows.
 
 Hosted release dependencies keep that resolution reproducible. `forge update`
 writes the exact selected GitHub Release asset and checksum to
-`forge.lock.toml`, and normal build, run, test, and release commands reuse
-those locked entries instead of resolving new assets. Published format-2 cboxes
-also embed their direct dependency boxes, so installing a cbox recursively
-installs the dependency graph it was released and validated with.
+`forge.lock.toml`, and normal build, build-and-run, test, and release commands
+reuse those locked entries instead of resolving new assets. Published format-2
+cboxes also embed their direct dependency boxes, so installing a cbox
+recursively installs the dependency graph it was released and validated with.
 
 That combination avoids the usual diamond-dependency failure modes: duplicate
 include roots for the same logical package, local sibling checkouts leaking

@@ -16,6 +16,6 @@ From this directory:
 ../../build/dev/forge build answer
 ```
 
-Building or running `answer-app` automatically builds, boxes, installs, and
-links the sibling `answer` project. Editing `answer` and running the app again
-rebuilds the dependency when needed.
+Building `answer-app`, or launching it with `build-and-run`, automatically
+builds, boxes, installs, and links the sibling `answer` project. Editing
+`answer` and using `build-and-run` again rebuilds the dependency when needed.
