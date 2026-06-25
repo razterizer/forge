@@ -4,9 +4,16 @@
 
 - Added `forge profile list` to show declared dependency/build profiles and
   profile-backed release or cbox variants.
+- Added `github` fallback metadata for local source dependencies, so local
+  development recipes can also record the hosted repository Forge should use
+  when adopting or locking reproducible dependency graphs.
 - Added `forge adopt --dependency-style=git` as the clearer spelling for
   verifying inferred GitHub source dependencies, with `--github` retained as a
   compatibility alias.
+- Renamed the build-then-launch workflow to `forge build-and-run`, while
+  keeping `forge run` focused on launching an already-built executable.
+- Made launch commands print the selected profile before running the executable,
+  so default and explicit profile choices are visible in command output.
 
 ## 0.8.7
 
