@@ -11,9 +11,29 @@ namespace forge
 {
   namespace
   {
+    struct LaunchProfile
+    {
+      std::string name = "default";
+      std::string configuration = "Debug";
+    };
+
+    bool resolve_launch_profile(Recipe recipe,
+                                const std::optional<std::string>& profile,
+                                LaunchProfile& launch_profile,
+                                std::ostream& error)
+    {
+      if (profile)
+      {
+        launch_profile.name = *profile;
+      }
+
+      return select_dependency_profile(recipe, profile, true, error)
+        && select_build_profile(recipe, profile, true, launch_profile.configuration, error);
+    }
 
     int launch_project(const std::filesystem::path& project_directory,
                        const std::optional<std::string>& target,
+                       const std::optional<std::string>& profile,
                        std::span<const std::string_view> arguments,
                        const ProcessRunner& process_runner,
                        std::ostream& output,
@@ -27,6 +47,12 @@ namespace forge
       }
 
       if (!select_recipe_target(recipe, target, error))
+      {
+        return 2;
+      }
+
+      LaunchProfile launch_profile;
+      if (!resolve_launch_profile(recipe, profile, launch_profile, error))
       {
         return 2;
       }
@@ -68,7 +94,8 @@ namespace forge
         process_arguments.emplace_back(argument);
       }
 
-      output << "Running " << recipe.name << '\n' << std::flush;
+      output << "Running " << recipe.name << " with profile " << launch_profile.name
+             << " (" << launch_profile.configuration << ")\n" << std::flush;
       return process_runner(process_arguments, executable.parent_path(), error);
     }
 
@@ -145,8 +172,7 @@ namespace forge
                   std::ostream& output,
                   std::ostream& error)
   {
-    (void)profile;
-    return launch_project(project_directory, target, arguments, process_runner, output, error);
+    return launch_project(project_directory, target, profile, arguments, process_runner, output, error);
   }
 
   int build_and_run_project(const std::filesystem::path& project_directory,
@@ -228,7 +254,7 @@ namespace forge
       return 2;
     }
 
-    return launch_project(project_directory, target, arguments, process_runner, output, error);
+    return launch_project(project_directory, target, profile, arguments, process_runner, output, error);
   }
 
 } // namespace forge

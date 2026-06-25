@@ -168,7 +168,56 @@ namespace
       "build-and-run launches from the staged runtime directory"
     );
     expect(contains(output.str(), "Running hello"), "build-and-run reports the launched project");
+    expect(
+      contains(output.str(), "profile default (Debug)"),
+      "build-and-run reports the default launch profile"
+    );
     expect(error.str().empty(), "successful build-and-run does not write an error");
+  }
+
+  void test_build_and_run_reports_selected_profile()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    {
+      std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+      recipe
+        << "\n[profile.Release.build]\n"
+        << "configuration = \"Release\"\n";
+    }
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&directory](const std::vector<std::string>& command,
+                   const std::filesystem::path&,
+                   std::ostream&)
+      {
+        if (command.size() > 1 && command[1] == "--build")
+        {
+          write_executable(directory.path());
+        }
+
+        return 0;
+      };
+
+    expect(
+      forge::build_and_run_project(
+        directory.path(),
+        std::nullopt,
+        std::string { "Release" },
+        {},
+        runner,
+        output,
+        error
+      ) == 0,
+      "build-and-run succeeds with a selected build profile"
+    );
+    expect(
+      contains(output.str(), "Running hello with profile Release (Release)"),
+      "build-and-run reports the selected launch profile"
+    );
+    expect(error.str().empty(), "profiled build-and-run does not write an error");
   }
 
   void test_build_and_run_stops_when_build_fails()
@@ -264,6 +313,7 @@ int main()
 {
   test_run_forwards_arguments();
   test_build_and_run_builds_and_forwards_arguments();
+  test_build_and_run_reports_selected_profile();
   test_build_and_run_stops_when_build_fails();
   test_build_and_run_selects_named_target();
 
