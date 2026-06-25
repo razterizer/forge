@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.8.9
+
+- Describe changes.
+
 ## 0.8.8
 
 - Added `forge profile list` to show declared dependency/build profiles and
