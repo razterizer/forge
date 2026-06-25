@@ -70,7 +70,58 @@ namespace
     source << "int main() {}\n";
   }
 
-  void test_run_builds_and_forwards_arguments()
+  void write_executable(const std::filesystem::path& directory,
+                        const std::filesystem::path& relative_directory = {})
+  {
+    std::filesystem::create_directories(directory / ".forge/build" / relative_directory);
+#ifdef _WIN32
+    std::ofstream executable { directory / ".forge/build" / relative_directory / "hello.exe" };
+#else
+    std::ofstream executable { directory / ".forge/build" / relative_directory / "hello" };
+#endif
+  }
+
+  void test_run_forwards_arguments()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    write_executable(directory.path());
+    std::vector<std::vector<std::string>> commands;
+    std::vector<std::filesystem::path> working_directories;
+    std::ostringstream output;
+    std::ostringstream error;
+    constexpr std::array arguments {
+      std::string_view { "--message" },
+      std::string_view { "hello world" }
+    };
+
+    const forge::ProcessRunner runner =
+      [&commands, &working_directories](const std::vector<std::string>& command,
+                                        const std::filesystem::path& working_directory,
+                                        std::ostream&)
+      {
+        commands.push_back(command);
+        working_directories.push_back(working_directory);
+        return 7;
+      };
+
+    expect(
+      forge::run_project(directory.path(), arguments, runner, output, error) == 7,
+      "run returns the program exit status"
+    );
+    expect(commands.size() == 1, "run launches the existing program without building");
+    expect(commands[0].size() == 3, "run forwards program arguments");
+    expect(commands[0][1] == "--message", "run forwards the first argument");
+    expect(commands[0][2] == "hello world", "run preserves arguments containing spaces");
+    expect(
+      working_directories[0] == directory.path() / ".forge/build",
+      "run launches from the staged runtime directory"
+    );
+    expect(contains(output.str(), "Running hello"), "run reports the launched project");
+    expect(error.str().empty(), "successful run does not write an error");
+  }
+
+  void test_build_and_run_builds_and_forwards_arguments()
   {
     TemporaryDirectory directory;
     write_project(directory.path());
@@ -93,12 +144,7 @@ namespace
 
         if (command.size() > 1 && command[1] == "--build")
         {
-          std::filesystem::create_directories(directory.path() / ".forge/build");
-#ifdef _WIN32
-          std::ofstream executable { directory.path() / ".forge/build/hello.exe" };
-#else
-          std::ofstream executable { directory.path() / ".forge/build/hello" };
-#endif
+          write_executable(directory.path());
         }
 
         if (commands.size() == 3)
@@ -110,22 +156,22 @@ namespace
       };
 
     expect(
-      forge::run_project(directory.path(), arguments, runner, output, error) == 7,
-      "run returns the program exit status"
+      forge::build_and_run_project(directory.path(), arguments, runner, output, error) == 7,
+      "build-and-run returns the program exit status"
     );
-    expect(commands.size() == 3, "run configures, builds, and launches the program");
-    expect(commands[2].size() == 3, "run forwards program arguments");
-    expect(commands[2][1] == "--message", "run forwards the first argument");
-    expect(commands[2][2] == "hello world", "run preserves arguments containing spaces");
+    expect(commands.size() == 3, "build-and-run configures, builds, and launches the program");
+    expect(commands[2].size() == 3, "build-and-run forwards program arguments");
+    expect(commands[2][1] == "--message", "build-and-run forwards the first argument");
+    expect(commands[2][2] == "hello world", "build-and-run preserves arguments containing spaces");
     expect(
       working_directories[2] == directory.path() / ".forge/build",
-      "run launches from the staged runtime directory"
+      "build-and-run launches from the staged runtime directory"
     );
-    expect(contains(output.str(), "Running hello"), "run reports the launched project");
-    expect(error.str().empty(), "successful run does not write an error");
+    expect(contains(output.str(), "Running hello"), "build-and-run reports the launched project");
+    expect(error.str().empty(), "successful build-and-run does not write an error");
   }
 
-  void test_run_stops_when_build_fails()
+  void test_build_and_run_stops_when_build_fails()
   {
     TemporaryDirectory directory;
     write_project(directory.path());
@@ -143,13 +189,13 @@ namespace
       };
 
     expect(
-      forge::run_project(directory.path(), {}, runner, output, error) == 2,
-      "run reports a build failure"
+      forge::build_and_run_project(directory.path(), {}, runner, output, error) == 2,
+      "build-and-run reports a build failure"
     );
-    expect(invocations == 1, "run does not launch after a build failure");
+    expect(invocations == 1, "build-and-run does not launch after a build failure");
   }
 
-  void test_run_selects_named_target()
+  void test_build_and_run_selects_named_target()
   {
     TemporaryDirectory directory;
     std::filesystem::create_directories(directory.path() / "Examples");
@@ -196,7 +242,7 @@ namespace
       };
 
     expect(
-      forge::run_project(
+      forge::build_and_run_project(
         directory.path(),
         std::string { "examples" },
         arguments,
@@ -204,21 +250,22 @@ namespace
         output,
         error
       ) == 0,
-      "run succeeds for a selected named target"
+      "build-and-run succeeds for a selected named target"
     );
-    expect(commands.size() == 3, "named target run configures, builds, and launches");
-    expect(commands[2][1] == "--message", "named target run forwards arguments");
-    expect(contains(output.str(), "Running examples"), "run reports the selected named target");
-    expect(error.str().empty(), "selected named target run does not write an error");
+    expect(commands.size() == 3, "named target build-and-run configures, builds, and launches");
+    expect(commands[2][1] == "--message", "named target build-and-run forwards arguments");
+    expect(contains(output.str(), "Running examples"), "build-and-run reports the selected named target");
+    expect(error.str().empty(), "selected named target build-and-run does not write an error");
   }
 
 } // namespace
 
 int main()
 {
-  test_run_builds_and_forwards_arguments();
-  test_run_stops_when_build_fails();
-  test_run_selects_named_target();
+  test_run_forwards_arguments();
+  test_build_and_run_builds_and_forwards_arguments();
+  test_build_and_run_stops_when_build_fails();
+  test_build_and_run_selects_named_target();
 
   return failures == 0 ? 0 : 1;
 }

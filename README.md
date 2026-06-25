@@ -363,6 +363,7 @@ Build, run, or test named targets with:
 ```sh
 forge build examples
 forge run examples -- --help
+forge build-and-run examples -- --help
 forge test
 forge test unit_tests -- --quick
 forge box create hello
@@ -537,7 +538,7 @@ Select a profile for the complete command:
 
 ```sh
 forge build --profile=pinned
-forge run --profile=dev
+forge build-and-run --profile=dev
 forge test --profile=pinned
 ```
 
@@ -629,7 +630,7 @@ Select dependencies from a named profile before resolving:
 forge update answer --profile=pinned
 ```
 
-Normal `forge build`, `forge run`, and release commands require matching
+Normal `forge build`, `forge build-and-run`, and release commands require matching
 target-specific lock entries and never re-resolve GitHub release checksums.
 They fail with an update command when the recipe and lockfile disagree.
 Updating resolves and verifies dependencies without building the current
@@ -875,7 +876,7 @@ Run the application from its project directory:
 
 ```sh
 cd workspace/calculator
-/path/to/forge run
+/path/to/forge build-and-run
 ```
 
 Libraries declare their own dependencies using the same syntax. Dependency
@@ -891,12 +892,13 @@ doubled = { path = "../doubled" }
 Build and run a Forge project:
 
 ```sh
-/path/to/forge/build/dev/forge run
-/path/to/forge/build/dev/forge run --message "hello world"
+/path/to/forge/build/dev/forge build-and-run
+/path/to/forge/build/dev/forge build-and-run --message "hello world"
 ```
 
-`forge run` performs an incremental build, forwards its remaining arguments to
-the executable, and returns the executable's exit status.
+`forge build-and-run` performs an incremental build, forwards its remaining
+arguments to the executable, and returns the executable's exit status. `forge run`
+launches the already-built executable without rebuilding it.
 
 Build every root project in a workspace, or one selected project and its
 dependency closure:
@@ -916,8 +918,8 @@ Run a selected workspace project or named target, and run tests across the
 workspace:
 
 ```sh
-forge run Termin8or
-forge run Termin8or/examples -- --help
+forge build-and-run Termin8or
+forge build-and-run Termin8or/examples -- --help
 forge test
 forge test Termin8or/unit_tests -- --quick
 ```
@@ -1041,7 +1043,7 @@ Executable projects can declare files needed at runtime:
 files = ["assets", "config/default.toml", { source = "Examples/Blocks.txt", destination = "Blocks.txt" }]
 ```
 
-`forge build` and `forge run` stage these files beside the executable while
+`forge build` and `forge build-and-run` stage these files beside the executable while
 preserving their project-relative paths by default. A mapped entry copies
 `source` to its requested executable-relative `destination`. Forge also
 includes runtime assets automatically in executable boxes and releases.

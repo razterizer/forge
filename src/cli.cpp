@@ -33,6 +33,7 @@ namespace forge::cli
       std::string_view { "init" },
       std::string_view { "new" },
       std::string_view { "build" },
+      std::string_view { "build-and-run" },
       std::string_view { "bump" },
       std::string_view { "clean" },
       std::string_view { "profile" },
@@ -61,10 +62,11 @@ namespace forge::cli
         << "  init            Alias for adopt\n"
         << "  new             Create a new Forge C++ project\n"
         << "  build           Build a project, target, or workspace selection\n"
+        << "  build-and-run   Build and run an executable project or target\n"
         << "  bump            Bump the project version and prepare release notes\n"
         << "  clean           Remove all generated Forge state for a project\n"
         << "  profile         List recipe dependency and build profiles\n"
-        << "  run             Build and run an executable project or target\n"
+        << "  run             Run an already-built executable project or target\n"
         << "  test            Build and run marked test targets\n"
         << "  update          Resolve and lock GitHub cbox dependencies\n"
         << "  release         Build and package a local executable release\n"
@@ -152,9 +154,21 @@ namespace forge::cli
       if (command == "run")
       {
         output
+          << "Run an already-built executable project or target.\n\n"
+          << "Usage:\n"
+          << "  forge run [target|project[/target]] [-- arguments...]\n\n"
+          << "Arguments after '--' are forwarded to the executable. Workspace runs\n"
+          << "require a project or project/target selection. Use 'forge build' first,\n"
+          << "or use 'forge build-and-run' to build before launching.\n";
+        return true;
+      }
+
+      if (command == "build-and-run")
+      {
+        output
           << "Build and run an executable project or target.\n\n"
           << "Usage:\n"
-          << "  forge run [target|project[/target]] [--profile=<name>] [-- arguments...]\n\n"
+          << "  forge build-and-run [target|project[/target]] [--profile=<name>] [-- arguments...]\n\n"
           << "Arguments after '--' are forwarded to the executable. Workspace runs\n"
           << "require a project or project/target selection.\n";
         return true;
@@ -565,8 +579,9 @@ namespace forge::cli
       return 2;
     }
 
-    if (arguments.front() == "run")
+    if (arguments.front() == "run" || arguments.front() == "build-and-run")
     {
+      const auto build_first = arguments.front() == "build-and-run";
       const auto workspace =
         !std::filesystem::exists(working_directory / "forge.recipe.toml")
         && std::filesystem::exists(working_directory / "forge.workspace.toml");
@@ -590,6 +605,12 @@ namespace forge::cli
         }
         else if (!forwarding && argument.starts_with("--profile="))
         {
+          if (!build_first)
+          {
+            error << "forge: --profile applies to build commands; use 'forge build-and-run'\n";
+            return 2;
+          }
+
           if (!read_profile_option(argument, profile, error))
           {
             return 2;
@@ -609,8 +630,21 @@ namespace forge::cli
       {
         if (!target)
         {
-          error << "forge: workspace run requires <project> or <project>/<target>\n";
+          error << "forge: workspace " << arguments.front()
+                << " requires <project> or <project>/<target>\n";
           return 2;
+        }
+
+        if (build_first)
+        {
+          return build_and_run_workspace(
+            working_directory,
+            *target,
+            profile,
+            program_arguments,
+            output,
+            error
+          );
         }
 
         return run_workspace(
@@ -625,7 +659,31 @@ namespace forge::cli
 
       if (!recipe.targets.empty() && !target)
       {
+        if (build_first)
+        {
+          return build_and_run_project(
+            working_directory,
+            std::nullopt,
+            profile,
+            program_arguments,
+            output,
+            error
+          );
+        }
+
         return run_project(working_directory, std::nullopt, profile, program_arguments, output, error);
+      }
+
+      if (build_first)
+      {
+        return build_and_run_project(
+          working_directory,
+          target,
+          profile,
+          program_arguments,
+          output,
+          error
+        );
       }
 
       return run_project(

@@ -46,13 +46,13 @@ graph and are forwarded to project builds.
 Run a workspace project, or a named executable target within it:
 
 ```sh
-forge run Termin8or
-forge run Termin8or/examples -- --help
+forge build-and-run Termin8or
+forge build-and-run Termin8or/examples -- --help
 ```
 
-The project selection is mandatory for `forge run` because a workspace may
-contain several executable projects. Use `<project>/<target>` when selecting a
-named target.
+The project selection is mandatory for `forge run` and `forge build-and-run`
+because a workspace may contain several executable projects. Use
+`<project>/<target>` when selecting a named target.
 
 Run every marked test target across the workspace:
 

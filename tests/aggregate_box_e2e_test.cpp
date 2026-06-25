@@ -230,7 +230,7 @@ int main()
     "dynamic_math = { box = \"" + relative_box + "\", component = \"dynamic_math\" }\n"
   );
 
-  constexpr std::array run_command { std::string_view { "run" } };
+  constexpr std::array run_command { std::string_view { "build-and-run" } };
 
   if (!run(local_consumer, run_command, "consume local aggregate components"))
   {

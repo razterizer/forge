@@ -148,6 +148,7 @@ namespace
       std::string_view { "box" },
       std::string_view { "new" },
       std::string_view { "build" },
+      std::string_view { "build-and-run" },
       std::string_view { "run" },
       std::string_view { "test" },
       std::string_view { "profile" },
@@ -301,7 +302,7 @@ namespace
     );
     write_file(directory.path() / "tests/unit_tests.cpp", "int main() { return 0; }\n");
     constexpr std::array run_arguments {
-      std::string_view { "run" },
+      std::string_view { "build-and-run" },
       std::string_view { "app" },
       std::string_view { "--" },
       std::string_view { "ok" }
@@ -2692,7 +2693,7 @@ namespace
       std::string_view { "examples" }
     };
     constexpr std::array run_arguments {
-      std::string_view { "run" },
+      std::string_view { "build-and-run" },
       std::string_view { "examples" },
       std::string_view { "--" },
       std::string_view { "--message" }
@@ -3049,7 +3050,7 @@ namespace
       std::string_view { "new" },
       std::string_view { "hello" }
     };
-    constexpr std::array run_arguments { std::string_view { "run" } };
+    constexpr std::array run_arguments { std::string_view { "build-and-run" } };
     std::ostringstream new_output;
     std::ostringstream new_error;
     std::ostringstream run_output;
@@ -4180,7 +4181,7 @@ namespace
       "#include <third/third.h>\n"
       "int main() { return first() + second() + third() == 43 ? 0 : 1; }\n"
     );
-    constexpr std::array run_arguments { std::string_view { "run" } };
+    constexpr std::array run_arguments { std::string_view { "build-and-run" } };
     std::ostringstream run_output;
     std::ostringstream run_error;
 
@@ -4407,7 +4408,7 @@ namespace
       "#include <calculator/calculator.h>\n"
       "int main() { return calculate() == 84 ? 0 : 1; }\n"
     );
-    constexpr std::array run_arguments { std::string_view { "run" } };
+    constexpr std::array run_arguments { std::string_view { "build-and-run" } };
     std::ostringstream output;
     std::ostringstream error;
 
@@ -4547,7 +4548,7 @@ namespace
     );
     write_file(application / "main.cpp", "int main() { return 0; }\n");
 
-    constexpr std::array run_arguments { std::string_view { "run" } };
+    constexpr std::array run_arguments { std::string_view { "build-and-run" } };
     std::ostringstream output;
     std::ostringstream error;
 
@@ -4626,7 +4627,7 @@ namespace
       "#include <answer/answer.h>\n"
       "int main() { return answer() == 42 ? 0 : 1; }\n"
     );
-    constexpr std::array run_arguments { std::string_view { "run" } };
+    constexpr std::array run_arguments { std::string_view { "build-and-run" } };
     std::ostringstream first_output;
     std::ostringstream first_error;
     expect(
@@ -4743,11 +4744,11 @@ namespace
       "answer = { git = \"../answer-pinned\", commit = \"" + commit + "\" }\n"
     );
     constexpr std::array dev_arguments {
-      std::string_view { "run" },
+      std::string_view { "build-and-run" },
       std::string_view { "--profile=dev" }
     };
     constexpr std::array pinned_arguments {
-      std::string_view { "run" },
+      std::string_view { "build-and-run" },
       std::string_view { "--profile=pinned" }
     };
     constexpr std::array missing_arguments {
@@ -4881,7 +4882,7 @@ namespace
       "#include <answer/answer.h>\n"
       "int main() { return answer() == 42 ? 0 : 1; }\n"
     );
-    constexpr std::array run_arguments { std::string_view { "run" } };
+    constexpr std::array run_arguments { std::string_view { "build-and-run" } };
     std::ostringstream output;
     std::ostringstream error;
 
@@ -5001,7 +5002,7 @@ namespace
       "#include <answer/answer.h>\n"
       "int main() { return answer() == 42 ? 0 : 1; }\n"
     );
-    constexpr std::array run_arguments { std::string_view { "run" } };
+    constexpr std::array run_arguments { std::string_view { "build-and-run" } };
     std::ostringstream first_output;
     std::ostringstream first_error;
 
@@ -5108,7 +5109,7 @@ namespace
       "#include <greeting/greeting.h>\n"
       "int main() { return greeting() == 42 ? 0 : 1; }\n"
     );
-    constexpr std::array run_arguments { std::string_view { "run" } };
+    constexpr std::array run_arguments { std::string_view { "build-and-run" } };
     std::ostringstream run_output;
     std::ostringstream run_error;
 

@@ -40,8 +40,9 @@ compilers and build systems rather than replacing them.
   source file.
 - `forge build` generates private CMake infrastructure under `.forge/generated`
   and writes artifacts under `.forge/build`.
-- `forge run` performs an incremental build before launching the executable and
-  forwarding its arguments and exit status.
+- `forge build-and-run` performs an incremental build before launching the
+  executable and forwarding its arguments and exit status.
+- `forge run` launches an already-built executable without rebuilding it.
 - Runtime assets may preserve their project-relative paths or map a source file
   to a different executable-relative destination. Adoption infers only
   high-confidence literal file accesses with adjacent or unique matches.

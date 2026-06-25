@@ -7,6 +7,7 @@ From this directory:
 ```sh
 ../../build/dev/forge build
 ../../build/dev/forge run
+../../build/dev/forge build-and-run
 ../../build/dev/forge release
 ```
 

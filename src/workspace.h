@@ -75,6 +75,21 @@ namespace forge
                     std::ostream& output,
                     std::ostream& error);
 
+  int build_and_run_workspace(const std::filesystem::path& workspace_directory,
+                              std::string_view selection,
+                              const std::optional<std::string>& profile,
+                              std::span<const std::string_view> arguments,
+                              std::ostream& output,
+                              std::ostream& error);
+
+  int build_and_run_workspace(const std::filesystem::path& workspace_directory,
+                              std::string_view selection,
+                              const std::optional<std::string>& profile,
+                              std::span<const std::string_view> arguments,
+                              const ProcessRunner& process_runner,
+                              std::ostream& output,
+                              std::ostream& error);
+
   int test_workspace(const std::filesystem::path& workspace_directory,
                      const std::optional<std::string>& selection,
                      const std::optional<std::string>& profile,

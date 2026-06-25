@@ -19,5 +19,5 @@ For a quick first run:
 
 ```sh
 cd examples/executable
-../../build/dev/forge run
+../../build/dev/forge build-and-run
 ```

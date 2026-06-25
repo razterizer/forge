@@ -124,7 +124,7 @@ namespace forge
     for (const auto& test : tests)
     {
       output << "Testing " << test << '\n';
-      const auto result = run_project(
+      const auto result = build_and_run_project(
         project_directory,
         test,
         profile,

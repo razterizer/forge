@@ -12,7 +12,7 @@ From this directory:
 
 ```sh
 ../../build/dev/forge build
-../../build/dev/forge run answer-app
+../../build/dev/forge build-and-run answer-app
 ../../build/dev/forge build answer
 ```
 

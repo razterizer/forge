@@ -301,7 +301,7 @@ namespace
       ) == 0,
       "workspace runs a selected project"
     );
-    expect(commands.size() == 3, "workspace run configures, builds, and launches");
+    expect(commands.size() == 1, "workspace run launches the existing program without building");
     expect(commands.back().size() == 2 && commands.back()[1] == "--quick", "workspace run forwards arguments");
     expect(contains(output.str(), "Running app"), "workspace run reports the project");
   }

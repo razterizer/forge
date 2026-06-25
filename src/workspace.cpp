@@ -605,6 +605,66 @@ namespace forge
     );
   }
 
+  int build_and_run_workspace(const std::filesystem::path& workspace_directory,
+                              std::string_view selection,
+                              const std::optional<std::string>& profile,
+                              std::span<const std::string_view> arguments,
+                              std::ostream& output,
+                              std::ostream& error)
+  {
+    return build_and_run_workspace(
+      workspace_directory,
+      selection,
+      profile,
+      arguments,
+      run_process,
+      output,
+      error
+    );
+  }
+
+  int build_and_run_workspace(const std::filesystem::path& workspace_directory,
+                              std::string_view selection,
+                              const std::optional<std::string>& profile,
+                              std::span<const std::string_view> arguments,
+                              const ProcessRunner& process_runner,
+                              std::ostream& output,
+                              std::ostream& error)
+  {
+    Workspace workspace;
+    std::map<std::filesystem::path, Recipe> recipes;
+
+    if (!load_workspace(workspace_directory, workspace, recipes, error))
+    {
+      return 2;
+    }
+
+    std::string project_name;
+    std::optional<std::string> target;
+
+    if (!parse_selection(selection, project_name, target, error))
+    {
+      return 2;
+    }
+
+    const auto* project = find_project(workspace, project_name, error);
+
+    if (!project)
+    {
+      return 2;
+    }
+
+    return build_and_run_project(
+      project->path,
+      target,
+      profile,
+      arguments,
+      process_runner,
+      output,
+      error
+    );
+  }
+
   int test_workspace(const std::filesystem::path& workspace_directory,
                      const std::optional<std::string>& selection,
                      const std::optional<std::string>& profile,

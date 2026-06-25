@@ -14,7 +14,7 @@ cross-platform filename used by the app recipe:
 ```sh
 (cd answer && ../../../build/dev/forge box create)
 cp answer/.forge/boxes/*.cbox packages/answer.cbox
-(cd app && ../../../build/dev/forge run)
+(cd app && ../../../build/dev/forge build-and-run)
 ```
 
 The app verifies and installs `packages/answer.cbox`; it does not build the
