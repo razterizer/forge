@@ -3,6 +3,7 @@
 #include "bump.h"
 #include "build.h"
 #include "clean.h"
+#include "cli_support.h"
 #include "github.h"
 #include "init.h"
 #include "new.h"
@@ -13,8 +14,8 @@
 #include "workspace.h"
 
 #include <algorithm>
-#include <array>
 #include <filesystem>
+#include <optional>
 #include <ostream>
 #include <set>
 #include <string>
@@ -26,318 +27,6 @@ namespace forge::cli
 {
   namespace
   {
-
-    constexpr std::array commands {
-      std::string_view { "box" },
-      std::string_view { "adopt" },
-      std::string_view { "init" },
-      std::string_view { "new" },
-      std::string_view { "build" },
-      std::string_view { "build-and-run" },
-      std::string_view { "bump" },
-      std::string_view { "clean" },
-      std::string_view { "profile" },
-      std::string_view { "run" },
-      std::string_view { "test" },
-      std::string_view { "update" },
-      std::string_view { "release" },
-      std::string_view { "workflow" },
-      std::string_view { "prepare-release" },
-      std::string_view { "release-git" },
-      std::string_view { "release-github" },
-    };
-
-    void print_help(std::ostream& output)
-    {
-      output
-        << "Forge - a project workflow system for C++\n\n"
-        << "Usage:\n"
-        << "  forge <command> [options]\n"
-        << "  forge <command> --help\n"
-        << "  forge --help\n"
-        << "  forge --version\n\n"
-        << "Commands:\n"
-        << "  adopt           Discover an existing project and create Forge metadata\n"
-        << "  box             Create, inspect, verify, publish, and extract cboxes\n"
-        << "  init            Alias for adopt\n"
-        << "  new             Create a new Forge C++ project\n"
-        << "  build           Build a project, target, or workspace selection\n"
-        << "  build-and-run   Build and run an executable project or target\n"
-        << "  bump            Bump the project version and prepare release notes\n"
-        << "  clean           Remove generated Forge state for a project or workspace\n"
-        << "  profile         List recipe dependency and build profiles\n"
-        << "  run             Run an already-built executable project or target\n"
-        << "  test            Build and run marked test targets\n"
-        << "  update          Resolve and lock GitHub cbox dependencies\n"
-        << "  release         Build and package a local executable release\n"
-        << "  workflow        Run or extend hosted CI workflows\n"
-        << "  release-git     Create and push a tag that triggers hosted releases\n\n"
-        << "Run 'forge <command> --help' for command-specific usage and examples.\n";
-    }
-
-    bool print_command_help(std::string_view command, std::ostream& output)
-    {
-      if (command == "adopt" || command == "init")
-      {
-        output
-          << "Discover an existing C++ project and create Forge metadata.\n\n"
-          << "Usage:\n"
-          << "  forge adopt [--dependency-style=<style>] [--library-type=<type>]\n"
-          << "              [--init-version=<ver>] [--version-header-path=<path>]\n\n"
-          << "Options:\n"
-          << "  --dependency-style=<style>\n"
-          << "                         Dependency style: local or git\n"
-          << "                         local keeps verified sibling dependencies as paths;\n"
-          << "                         git verifies inferred GitHub source dependencies\n"
-          << "  --github               Alias for --dependency-style=git\n"
-          << "  --library-type=<type>  Resolve an ambiguous library as header_only,\n"
-          << "                         static_library, or dynamic_library\n"
-          << "                         Use imported_library in the recipe for\n"
-          << "                         prebuilt binaries with import profiles\n\n"
-          << "  --init-version=<ver>   Override the initial version; a fourth dotted\n"
-          << "                         component initializes build.number\n"
-          << "  --version-header-path=<path>\n"
-          << "                         Use or create a Forge-managed version header\n\n"
-          << "Adoption inspects existing sources, CMake, Visual Studio, and Xcode\n"
-          << "metadata, then creates Forge recipes, workspaces, and missing release\n"
-          << "support without overwriting existing Forge files. It does not rewrite\n"
-          << "or remove the project's existing build infrastructure.\n\n"
-          << "Examples:\n"
-          << "  forge adopt\n"
-          << "  forge adopt --library-type=static_library\n"
-          << "  forge adopt --dependency-style=git\n";
-        return true;
-      }
-
-      if (command == "box")
-      {
-        output
-          << "Create and operate on verified Forge cbox packages.\n\n"
-          << "Usage:\n"
-          << "  forge box list\n"
-          << "  forge box create [target]\n"
-          << "  forge box <inspect|verify|extract|publish> <path-or-filename>\n\n"
-          << "Commands:\n"
-          << "  list     List local and published boxes with package/component summaries\n"
-          << "  create   Build and package the project or selected target\n"
-          << "  inspect  Summarize a verified cbox, then print its manifest\n"
-          << "  verify   Validate a cbox without installing it\n"
-          << "  extract  Validate and extract a cbox\n"
-          << "  publish  Copy a verified cbox and checksum into boxes/\n\n"
-          << "Bare filenames are resolved from .forge/boxes/ and then boxes/.\n";
-        return true;
-      }
-
-      if (command == "new")
-      {
-        output
-          << "Create a new Forge C++ executable project.\n\n"
-          << "Usage:\n"
-          << "  forge new <name> [--init-version=<ver>] [--version-header-path=<path>]\n\n"
-          << "Creates a new directory containing a starter source, recipe, release\n"
-          << "notes, GitHub release workflows, and generated-file ignore rules.\n";
-        return true;
-      }
-
-      if (command == "build")
-      {
-        output
-          << "Build the current project, selected target, or workspace selection.\n\n"
-          << "Usage:\n"
-          << "  forge build [target] [--profile=<name>] [--define=<symbol> ...]\n\n"
-          << "Options:\n"
-          << "  --profile=<name>   Select matching dependency and build profiles\n"
-          << "  --define=<symbol>  Add a temporary NAME or NAME=value definition\n";
-        return true;
-      }
-
-      if (command == "run")
-      {
-        output
-          << "Run an already-built executable project or target.\n\n"
-          << "Usage:\n"
-          << "  forge run [target|project[/target]] [-- arguments...]\n\n"
-          << "Arguments after '--' are forwarded to the executable. Workspace runs\n"
-          << "require a project or project/target selection. Use 'forge build' first,\n"
-          << "or use 'forge build-and-run' to build before launching.\n";
-        return true;
-      }
-
-      if (command == "build-and-run")
-      {
-        output
-          << "Build and run an executable project or target.\n\n"
-          << "Usage:\n"
-          << "  forge build-and-run [target|project[/target]] [--profile=<name>] [-- arguments...]\n\n"
-          << "Arguments after '--' are forwarded to the executable. Workspace runs\n"
-          << "require a project or project/target selection.\n";
-        return true;
-      }
-
-      if (command == "profile")
-      {
-        output
-          << "List profiles declared by the current Forge recipe.\n\n"
-          << "Usage:\n"
-          << "  forge profile list\n\n"
-          << "Shows each `[profile.<name>.dependencies]` and `[profile.<name>.build]`\n"
-          << "profile, including whether it is referenced by release or cbox variants.\n";
-        return true;
-      }
-
-      if (command == "test")
-      {
-        output
-          << "Build and run marked test targets.\n\n"
-          << "Usage:\n"
-          << "  forge test [target|project[/target]] [--profile=<name>] [-- arguments...]\n\n"
-          << "Without a selection, runs every executable target marked test = true.\n"
-          << "Arguments after '--' are forwarded to each selected test executable.\n";
-        return true;
-      }
-
-      if (command == "update")
-      {
-        output
-          << "Resolve and lock GitHub cbox dependencies for the current target.\n\n"
-          << "Usage:\n"
-          << "  forge update [dependency] [--profile=<name>] [--target=<os-arch>]\n\n"
-          << "Options:\n"
-          << "  --profile=<name>   Select a dependency profile before resolving\n"
-          << "  --target=<os-arch> Resolve dependencies for another platform target\n\n"
-          << "Writes exact package identities, selected components, URLs, targets,\n"
-          << "and checksums to forge.lock.toml without building the current project.\n"
-          << "Existing entries for other targets are preserved.\n";
-        return true;
-      }
-
-      if (command == "bump")
-      {
-        output
-          << "Bump the semantic project version and prepare release notes.\n\n"
-          << "Usage:\n"
-          << "  forge bump <major|minor|patch>\n\n"
-          << "Updates forge.recipe.toml, increments the build number, and adds a new\n"
-          << "topmost section to RELEASE_NOTES.md. A configured version header is\n"
-          << "regenerated from the new version and build number.\n";
-        return true;
-      }
-
-      if (command == "clean")
-      {
-        output
-          << "Remove generated Forge state for the current project or workspace.\n\n"
-          << "Usage:\n"
-          << "  forge clean\n\n"
-          << "Removes .forge/ build output, generated files, dependency installs,\n"
-          << "boxes, release artifacts, and caches. In a workspace root, removes\n"
-          << "that state from every workspace project. Source files are preserved.\n";
-        return true;
-      }
-
-      if (command == "release")
-      {
-        output
-          << "Build and package a local executable release.\n\n"
-          << "Usage:\n"
-          << "  forge release [target]\n\n"
-          << "Creates a local ZIP under .forge/release/. This command does not create\n"
-          << "a Git tag or publish a GitHub Release.\n";
-        return true;
-      }
-
-      if (command == "release-git" || command == "release-github")
-      {
-        output
-          << "Create and push a Git tag that triggers generated hosted workflows.\n\n"
-          << "Usage:\n"
-          << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n\n"
-          << "Options:\n"
-          << "  --tag=<format>        Use a custom release tag format\n"
-          << "  --tag-force[=<format>] Replace an existing local and remote tag\n\n"
-          << "The generated workflows run 'forge workflow prepare-release' on each\n"
-          << "platform and publish their assets. A normal hosted release requires\n"
-          << "only this command.\n";
-        return true;
-      }
-
-      if (command == "workflow")
-      {
-        output
-          << "Run CI workflow steps locally and manage Forge-owned workflow features.\n\n"
-          << "Usage:\n"
-          << "  forge workflow prepare-release [target] [--skip-unsupported]\n"
-          << "  forge workflow list-features\n"
-          << "  forge workflow status --file=<workflow>\n"
-          << "  forge workflow add-feature release-boxes --file=<workflow> [--apply]\n"
-          << "  forge workflow update-feature release-boxes --file=<workflow> [--apply]\n"
-          << "  forge workflow remove-feature release-boxes --file=<workflow> [--apply]\n\n"
-          << "Commands:\n"
-          << "  prepare-release  Build hosted release assets locally\n"
-          << "  list-features    List available managed workflow features\n"
-          << "  status           Inspect managed feature state in one workflow\n"
-          << "  add-feature      Preview or inject a managed feature\n"
-          << "  update-feature   Preview or replace an outdated managed feature\n"
-          << "  remove-feature   Preview or remove a managed feature\n\n"
-          << "prepare-release builds the hosted assets and focused release notes that\n"
-          << "generated platform workflows upload. Run it locally only to inspect or\n"
-          << "debug those assets before using 'forge release-git'.\n\n"
-          << "Feature changes preview by default. Pass --apply to write the selected\n"
-          << "workflow. Forge updates or removes only jobs carrying matching\n"
-          << "forge-managed metadata.\n";
-        return true;
-      }
-
-      if (command == "prepare-release")
-      {
-        output
-          << "'forge prepare-release' is a deprecated compatibility alias.\n\n"
-          << "Use:\n"
-          << "  forge workflow prepare-release [target] [--skip-unsupported]\n";
-        return true;
-      }
-
-      return false;
-    }
-
-    bool is_command(std::string_view candidate)
-    {
-      for (const auto command : commands)
-      {
-        if (candidate == command)
-        {
-          return true;
-        }
-      }
-
-      return false;
-    }
-
-    bool read_profile_option(std::string_view argument,
-                             std::optional<std::string>& profile,
-                             std::ostream& error)
-    {
-      if (!argument.starts_with("--profile="))
-      {
-        return false;
-      }
-
-      if (profile)
-      {
-        error << "forge: dependency profile may only be specified once\n";
-        return false;
-      }
-
-      profile = std::string { argument.substr(std::string_view { "--profile=" }.size()) };
-
-      if (profile->empty())
-      {
-        error << "forge: dependency profile cannot be empty\n";
-        return false;
-      }
-
-      return true;
-    }
 
     int list_profiles(const std::filesystem::path& project_directory,
                       std::ostream& output,
@@ -503,17 +192,13 @@ namespace forge::cli
 
       for (const auto argument : arguments.subspan(1))
       {
-        if (argument.starts_with("--init-version=") && !options.initial_version)
+        if (const auto value = option_value(argument, "--init-version=");
+            value && set_once(options.initial_version, *value))
         {
-          options.initial_version =
-            std::string { argument.substr(std::string_view { "--init-version=" }.size()) };
         }
-        else if (argument.starts_with("--version-header-path=") && !options.version_header_path)
+        else if (const auto value = option_value(argument, "--version-header-path=");
+                 value && set_once(options.version_header_path, *value))
         {
-          options.version_header_path =
-            std::filesystem::path {
-              argument.substr(std::string_view { "--version-header-path=" }.size())
-            };
         }
         else if (!argument.starts_with("-") && !name)
         {
@@ -521,18 +206,14 @@ namespace forge::cli
         }
         else
         {
-          error
-            << "forge: usage: forge new <name> [--init-version=<ver>] "
-            << "[--version-header-path=<path>]\n";
+          print_new_usage(error);
           return 2;
         }
       }
 
       if (!name)
       {
-        error
-          << "forge: usage: forge new <name> [--init-version=<ver>] "
-          << "[--version-header-path=<path>]\n";
+        print_new_usage(error);
         return 2;
       }
 
@@ -783,11 +464,10 @@ namespace forge::cli
         }
         else if (argument.starts_with("--target="))
         {
-          const auto value = argument.substr(std::string_view { "--target=" }.size());
+          const auto value = *option_value(argument, "--target=");
 
-          if (value.empty())
+          if (!read_required_option(value, "forge: --target requires a value", error))
           {
-            error << "forge: --target requires a value\n";
             return 2;
           }
 
@@ -799,7 +479,7 @@ namespace forge::cli
         }
         else
         {
-          error << "forge: usage: forge update [dependency] [--profile=<name>] [--target=<os-arch>]\n";
+          print_update_usage(error);
           return 2;
         }
       }
@@ -816,11 +496,11 @@ namespace forge::cli
       {
         options.force_tag = true;
       }
-      else if (arguments.size() == 2 && arguments[1].starts_with("--tag="))
+      else if (const auto value = arguments.size() == 2
+                                    ? option_value(arguments[1], "--tag=")
+                                    : std::nullopt)
       {
-        options.tag_format = std::string {
-          arguments[1].substr(std::string_view { "--tag=" }.size())
-        };
+        options.tag_format = std::string { *value };
 
         if (options.tag_format->empty())
         {
@@ -828,11 +508,11 @@ namespace forge::cli
           return 2;
         }
       }
-      else if (arguments.size() == 2 && arguments[1].starts_with("--tag-force="))
+      else if (const auto value = arguments.size() == 2
+                                    ? option_value(arguments[1], "--tag-force=")
+                                    : std::nullopt)
       {
-        options.tag_format = std::string {
-          arguments[1].substr(std::string_view { "--tag-force=" }.size())
-        };
+        options.tag_format = std::string { *value };
         options.force_tag = true;
 
         if (options.tag_format->empty())
@@ -843,9 +523,7 @@ namespace forge::cli
       }
       else if (arguments.size() != 1)
       {
-        error
-          << "forge: usage: forge release-git "
-          << "[--tag=<format> | --tag-force[=<format>]]\n";
+        print_release_git_usage(error);
         return 2;
       }
 
@@ -867,7 +545,7 @@ namespace forge::cli
         }
         else if (argument.starts_with("--define="))
         {
-          const auto definition = argument.substr(std::string_view { "--define=" }.size());
+          const auto definition = *option_value(argument, "--define=");
 
           if (!is_valid_compile_definition(definition))
           {
@@ -883,7 +561,7 @@ namespace forge::cli
         }
         else
         {
-          error << "forge: usage: forge build [target] [--profile=<name>] [--define=<symbol> ...]\n";
+          print_build_usage(error);
           return 2;
         }
       }
@@ -922,9 +600,7 @@ namespace forge::cli
 
       if (workflow_feature_operation && arguments.size() < 3)
       {
-        error
-          << "forge: usage: forge workflow " << arguments[1] << " release-boxes "
-          << "--file=<workflow> [--apply]\n";
+        print_workflow_feature_usage(arguments[1], error);
         return 2;
       }
 
@@ -940,32 +616,24 @@ namespace forge::cli
           {
             apply = true;
           }
-          else if (argument.starts_with("--file=") && !workflow_file)
+          else if (const auto value = option_value(argument, "--file=");
+                   value && set_once(workflow_file, *value))
           {
-            const auto value = argument.substr(std::string_view { "--file=" }.size());
-
-            if (value.empty())
+            if (!read_required_option(*value, "forge: workflow file cannot be empty", error))
             {
-              error << "forge: workflow file cannot be empty\n";
               return 2;
             }
-
-            workflow_file = std::filesystem::path { value };
           }
           else
           {
-            error
-              << "forge: usage: forge workflow " << arguments[1] << " release-boxes "
-              << "--file=<workflow> [--apply]\n";
+            print_workflow_feature_usage(arguments[1], error);
             return 2;
           }
         }
 
         if (!workflow_file)
         {
-          error
-            << "forge: usage: forge workflow " << arguments[1] << " release-boxes "
-            << "--file=<workflow> [--apply]\n";
+          print_workflow_feature_usage(arguments[1], error);
           return 2;
         }
 
@@ -988,11 +656,10 @@ namespace forge::cli
           return 2;
         }
 
-        const auto value = arguments[2].substr(std::string_view { "--file=" }.size());
+        const auto value = *option_value(arguments[2], "--file=");
 
-        if (value.empty())
+        if (!read_required_option(value, "forge: workflow file cannot be empty", error))
         {
-          error << "forge: workflow file cannot be empty\n";
           return 2;
         }
 
@@ -1006,7 +673,7 @@ namespace forge::cli
 
       if (arguments.size() < 2 || arguments[1] != "prepare-release")
       {
-        error << "forge: usage: forge workflow prepare-release [target] [--skip-unsupported]\n";
+        print_prepare_release_usage(error);
         return 2;
       }
 
@@ -1030,7 +697,7 @@ namespace forge::cli
         }
         else
         {
-          error << "forge: usage: forge workflow prepare-release [target] [--skip-unsupported]\n";
+          print_prepare_release_usage(error);
           return 2;
         }
       }
@@ -1085,7 +752,7 @@ namespace forge::cli
           options.dependency_style = DependencyStyle::git;
           dependency_style_set = true;
         }
-        else if (argument.starts_with("--dependency-style="))
+        else if (const auto style = option_value(argument, "--dependency-style="))
         {
           if (dependency_style_set)
           {
@@ -1093,14 +760,11 @@ namespace forge::cli
             return 2;
           }
 
-          const auto style =
-            argument.substr(std::string_view { "--dependency-style=" }.size());
-
-          if (style == "local")
+          if (*style == "local")
           {
             options.dependency_style = DependencyStyle::local;
           }
-          else if (style == "git")
+          else if (*style == "git")
           {
             options.dependency_style = DependencyStyle::git;
           }
@@ -1112,14 +776,12 @@ namespace forge::cli
 
           dependency_style_set = true;
         }
-        else if (argument.starts_with("--library-type="))
+        else if (const auto type = option_value(argument, "--library-type="))
         {
-          const auto type = argument.substr(std::string_view { "--library-type=" }.size());
-
           if (options.library_type
-              || (type != "header_only"
-                  && type != "static_library"
-                  && type != "dynamic_library"))
+              || (*type != "header_only"
+                  && *type != "static_library"
+                  && *type != "dynamic_library"))
           {
             error
               << "forge: library type must be header_only, static_library, or dynamic_library; "
@@ -1127,26 +789,19 @@ namespace forge::cli
             return 2;
           }
 
-          options.library_type = std::string { type };
+          options.library_type = std::string { *type };
         }
-        else if (argument.starts_with("--init-version=") && !options.initial_version)
+        else if (const auto value = option_value(argument, "--init-version=");
+                 value && set_once(options.initial_version, *value))
         {
-          options.initial_version =
-            std::string { argument.substr(std::string_view { "--init-version=" }.size()) };
         }
-        else if (argument.starts_with("--version-header-path=") && !options.version_header_path)
+        else if (const auto value = option_value(argument, "--version-header-path=");
+                 value && set_once(options.version_header_path, *value))
         {
-          options.version_header_path =
-            std::filesystem::path {
-              argument.substr(std::string_view { "--version-header-path=" }.size())
-            };
         }
         else
         {
-          error
-            << "forge: usage: forge adopt [--dependency-style=<style>] "
-            << "[--library-type=<type>] [--init-version=<ver>] "
-            << "[--version-header-path=<path>]\n";
+          print_adopt_usage(error);
           return 2;
         }
       }

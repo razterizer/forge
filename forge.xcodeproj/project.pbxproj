@@ -25,6 +25,7 @@
 		100000000000000000000010 /* runtime_assets.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000021 /* runtime_assets.cpp */; };
 		100000000000000000000011 /* test.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000023 /* test.cpp */; };
 		100000000000000000000012 /* workspace.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000025 /* workspace.cpp */; };
+		100000000000000000000013 /* cli_support.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000027 /* cli_support.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -66,6 +67,8 @@
 		200000000000000000000024 /* test.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = test.h; sourceTree = "<group>"; };
 		200000000000000000000025 /* workspace.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = workspace.cpp; sourceTree = "<group>"; };
 		200000000000000000000026 /* workspace.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = workspace.h; sourceTree = "<group>"; };
+		200000000000000000000027 /* cli_support.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cli_support.cpp; sourceTree = "<group>"; };
+		200000000000000000000028 /* cli_support.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = cli_support.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -102,6 +105,8 @@
 				20000000000000000000001E /* clean.h */,
 				200000000000000000000003 /* cli.cpp */,
 				200000000000000000000004 /* cli.h */,
+				200000000000000000000027 /* cli_support.cpp */,
+				200000000000000000000028 /* cli_support.h */,
 				20000000000000000000001B /* github.cpp */,
 				20000000000000000000001C /* github.h */,
 				200000000000000000000005 /* init.cpp */,
@@ -210,6 +215,7 @@
 				100000000000000000000001 /* build.cpp in Sources */,
 				10000000000000000000000F /* bump.cpp in Sources */,
 				100000000000000000000002 /* cli.cpp in Sources */,
+				100000000000000000000013 /* cli_support.cpp in Sources */,
 				10000000000000000000000D /* github.cpp in Sources */,
 				10000000000000000000000E /* clean.cpp in Sources */,
 				100000000000000000000003 /* init.cpp in Sources */,
