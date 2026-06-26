@@ -30,9 +30,7 @@ namespace forge
       value = trim(value);
 
       if (value.size() < 2 || value.front() != '"' || value.back() != '"')
-      {
         return false;
-      }
 
       result.clear();
 
@@ -43,9 +41,7 @@ namespace forge
           ++index;
 
           if (index + 1 >= value.size())
-          {
             return false;
-          }
         }
 
         result += value[index];
@@ -95,9 +91,7 @@ namespace forge
       value = trim(value);
 
       if (value.size() < 2 || value.front() != '[' || value.back() != ']')
-      {
         return false;
-      }
 
       value = trim(value.substr(1, value.size() - 2));
       sources.clear();
@@ -105,46 +99,34 @@ namespace forge
       while (!value.empty())
       {
         if (value.front() != '"')
-        {
           return false;
-        }
 
         std::size_t end = 1;
 
         while (end < value.size() && value[end] != '"')
         {
           if (value[end] == '\\')
-          {
             ++end;
-          }
 
           ++end;
         }
 
         if (end >= value.size())
-        {
           return false;
-        }
 
         std::string source;
 
         if (!parse_string(value.substr(0, end + 1), source))
-        {
           return false;
-        }
 
         sources.emplace_back(source);
         value = trim(value.substr(end + 1));
 
         if (value.empty())
-        {
           break;
-        }
 
         if (value.front() != ',')
-        {
           return false;
-        }
 
         value = trim(value.substr(1));
       }
@@ -157,9 +139,7 @@ namespace forge
       value = trim(value);
 
       if (value.size() < 2 || value.front() != '{' || value.back() != '}')
-      {
         return false;
-      }
 
       value = trim(value.substr(1, value.size() - 2));
       bool has_source = false;
@@ -170,26 +150,20 @@ namespace forge
         const auto equals = value.find('=');
 
         if (equals == std::string_view::npos)
-        {
           return false;
-        }
 
         const auto key = trim(value.substr(0, equals));
         value = trim(value.substr(equals + 1));
 
         if (value.empty() || value.front() != '"')
-        {
           return false;
-        }
 
         std::size_t end = 1;
 
         while (end < value.size() && value[end] != '"')
         {
           if (value[end] == '\\')
-          {
             ++end;
-          }
 
           ++end;
         }
@@ -197,9 +171,7 @@ namespace forge
         std::string parsed;
 
         if (end >= value.size() || !parse_string(value.substr(0, end + 1), parsed))
-        {
           return false;
-        }
 
         if (key == "source" && !has_source)
         {
@@ -212,21 +184,15 @@ namespace forge
           has_destination = true;
         }
         else
-        {
           return false;
-        }
 
         value = trim(value.substr(end + 1));
 
         if (value.empty())
-        {
           break;
-        }
 
         if (value.front() != ',')
-        {
           return false;
-        }
 
         value = trim(value.substr(1));
       }
@@ -239,9 +205,7 @@ namespace forge
       value = trim(value);
 
       if (value.size() < 2 || value.front() != '[' || value.back() != ']')
-      {
         return false;
-      }
 
       value = trim(value.substr(1, value.size() - 2));
       runtime_files.clear();
@@ -258,9 +222,7 @@ namespace forge
           while (end < value.size() && value[end] != '"')
           {
             if (value[end] == '\\')
-            {
               ++end;
-            }
 
             ++end;
           }
@@ -268,9 +230,7 @@ namespace forge
           std::string path;
 
           if (end >= value.size() || !parse_string(value.substr(0, end + 1), path))
-          {
             return false;
-          }
 
           runtime_file.source = path;
           runtime_file.destination = path;
@@ -286,22 +246,16 @@ namespace forge
           }
         }
         else
-        {
           return false;
-        }
 
         runtime_files.push_back(std::move(runtime_file));
         value = trim(value.substr(end + 1));
 
         if (value.empty())
-        {
           break;
-        }
 
         if (value.front() != ',')
-        {
           return false;
-        }
 
         value = trim(value.substr(1));
       }
@@ -314,9 +268,7 @@ namespace forge
       value = trim(value);
 
       if (value.size() < 2 || value.front() != '{' || value.back() != '}')
-      {
         return false;
-      }
 
       value = trim(value.substr(1, value.size() - 2));
       bool has_profile = false;
@@ -327,26 +279,20 @@ namespace forge
         const auto equals = value.find('=');
 
         if (equals == std::string_view::npos)
-        {
           return false;
-        }
 
         const auto key = trim(value.substr(0, equals));
         value = trim(value.substr(equals + 1));
 
         if (value.empty() || value.front() != '"')
-        {
           return false;
-        }
 
         std::size_t end = 1;
 
         while (end < value.size() && value[end] != '"')
         {
           if (value[end] == '\\')
-          {
             ++end;
-          }
 
           ++end;
         }
@@ -354,9 +300,7 @@ namespace forge
         std::string parsed;
 
         if (end >= value.size() || !parse_string(value.substr(0, end + 1), parsed))
-        {
           return false;
-        }
 
         if (key == "profile" && !has_profile)
         {
@@ -369,34 +313,24 @@ namespace forge
           has_suffix = true;
         }
         else
-        {
           return false;
-        }
 
         value = trim(value.substr(end + 1));
 
         if (value.empty())
-        {
           break;
-        }
 
         if (value.front() != ',')
-        {
           return false;
-        }
 
         value = trim(value.substr(1));
       }
 
       if (!has_profile || variant.profile.empty())
-      {
         return false;
-      }
 
       if (!has_suffix)
-      {
         variant.suffix = variant.profile;
-      }
 
       return is_safe_name(variant.profile) && is_safe_name(variant.suffix);
     }
@@ -406,9 +340,7 @@ namespace forge
       value = trim(value);
 
       if (value.size() < 2 || value.front() != '[' || value.back() != ']')
-      {
         return false;
-      }
 
       value = trim(value.substr(1, value.size() - 2));
       variants.clear();
@@ -416,36 +348,26 @@ namespace forge
       while (!value.empty())
       {
         if (value.front() != '{')
-        {
           return false;
-        }
 
         const auto end = value.find('}');
 
         if (end == std::string_view::npos)
-        {
           return false;
-        }
 
         ReleaseVariant variant;
 
         if (!parse_release_variant(value.substr(0, end + 1), variant))
-        {
           return false;
-        }
 
         variants.push_back(std::move(variant));
         value = trim(value.substr(end + 1));
 
         if (value.empty())
-        {
           break;
-        }
 
         if (value.front() != ',')
-        {
           return false;
-        }
 
         value = trim(value.substr(1));
       }
@@ -458,9 +380,7 @@ namespace forge
       value = trim(value);
 
       if (value.size() < 2 || value.front() != '{' || value.back() != '}')
-      {
         return false;
-      }
 
       value = trim(value.substr(1, value.size() - 2));
       bool saw_entry = false;
@@ -470,26 +390,20 @@ namespace forge
         const auto equals = value.find('=');
 
         if (equals == std::string_view::npos)
-        {
           return false;
-        }
 
         const auto key = trim(value.substr(0, equals));
         value = trim(value.substr(equals + 1));
 
         if (value.empty() || value.front() != '"')
-        {
           return false;
-        }
 
         std::size_t end = 1;
 
         while (end < value.size() && value[end] != '"')
         {
           if (value[end] == '\\')
-          {
             ++end;
-          }
 
           ++end;
         }
@@ -497,39 +411,25 @@ namespace forge
         std::string parsed;
 
         if (end >= value.size() || !parse_string(value.substr(0, end + 1), parsed))
-        {
           return false;
-        }
 
         if (key == "linux" && readme.linux_path.empty())
-        {
           readme.linux_path = parsed;
-        }
         else if (key == "macos" && readme.macos_path.empty())
-        {
           readme.macos_path = parsed;
-        }
         else if (key == "windows" && readme.windows_path.empty())
-        {
           readme.windows_path = parsed;
-        }
         else
-        {
           return false;
-        }
 
         saw_entry = true;
         value = trim(value.substr(end + 1));
 
         if (value.empty())
-        {
           break;
-        }
 
         if (value.front() != ',')
-        {
           return false;
-        }
 
         value = trim(value.substr(1));
       }
@@ -542,9 +442,7 @@ namespace forge
       std::vector<std::filesystem::path> paths;
 
       if (!parse_sources(value, paths))
-      {
         return false;
-      }
 
       names.clear();
 
@@ -553,9 +451,7 @@ namespace forge
         const auto name = path.string();
 
         if (!is_safe_name(name))
-        {
           return false;
-        }
 
         names.push_back(name);
       }
@@ -566,9 +462,7 @@ namespace forge
     bool parse_link_names(std::string_view value, std::vector<std::string>& names)
     {
       if (!parse_names(value, names))
-      {
         return false;
-      }
 
       return std::ranges::all_of(
         names,
@@ -594,16 +488,12 @@ namespace forge
       std::vector<std::filesystem::path> paths;
 
       if (!parse_sources(value, paths))
-      {
         return false;
-      }
 
       definitions.clear();
 
       for (const auto& path : paths)
-      {
         definitions.push_back(path.string());
-      }
 
       return std::all_of(
         definitions.begin(),
@@ -617,9 +507,7 @@ namespace forge
       value = trim(value);
 
       if (value.size() < 2 || value.front() != '{' || value.back() != '}')
-      {
         return false;
-      }
 
       value = trim(value.substr(1, value.size() - 2));
       std::size_t fields = 0;
@@ -629,9 +517,7 @@ namespace forge
         const auto equals = value.find('=');
 
         if (equals == std::string_view::npos)
-        {
           return false;
-        }
 
         const auto kind = trim(value.substr(0, equals));
         value = trim(value.substr(equals + 1));
@@ -650,109 +536,69 @@ namespace forge
           value = trim(value.substr(end + 1));
 
           if (value.empty())
-          {
             break;
-          }
 
           if (value.front() != ',')
-          {
             return false;
-          }
 
           value = trim(value.substr(1));
           continue;
         }
 
         if (value.empty() || value.front() != '"')
-        {
           return false;
-        }
 
         std::size_t end = 1;
 
         while (end < value.size() && value[end] != '"')
         {
           if (value[end] == '\\')
-          {
             ++end;
-          }
 
           ++end;
         }
 
         if (end >= value.size())
-        {
           return false;
-        }
 
         std::string parsed_value;
 
         if (!parse_string(value.substr(0, end + 1), parsed_value))
-        {
           return false;
-        }
 
         if (kind == "path" && dependency.path.empty())
-        {
           dependency.path = parsed_value;
-        }
         else if (kind == "box" && dependency.box.empty())
-        {
           dependency.box = parsed_value;
-        }
         else if (kind == "url" && dependency.url.empty())
-        {
           dependency.url = parsed_value;
-        }
         else if (kind == "sha256" && dependency.sha256.empty())
-        {
           dependency.sha256 = parsed_value;
-        }
         else if (kind == "github" && dependency.github.empty())
-        {
           dependency.github = parsed_value;
-        }
         else if (kind == "package" && dependency.package.empty())
-        {
           dependency.package = parsed_value;
-        }
         else if (kind == "version" && dependency.version.empty())
-        {
           dependency.version = parsed_value;
-        }
         else if (kind == "git" && dependency.git.empty())
-        {
           dependency.git = parsed_value;
-        }
         else if (kind == "commit" && dependency.commit.empty())
-        {
           dependency.commit = parsed_value;
-        }
         else if (kind == "component" && dependency.component.empty())
-        {
           dependency.component = parsed_value;
-        }
         else if (kind == "variant" && dependency.variant.empty())
-        {
           dependency.variant = parsed_value;
-        }
         else
-        {
           return false;
-        }
 
         ++fields;
         value = trim(value.substr(end + 1));
 
         if (value.empty())
-        {
           break;
-        }
 
         if (value.front() != ',')
-        {
           return false;
-        }
 
         value = trim(value.substr(1));
       }
@@ -862,9 +708,7 @@ namespace forge
       auto content = trim(line);
 
       if (content.empty() || content.front() == '#')
-      {
         continue;
-      }
 
       if (content.front() == '[' && content.back() == ']')
       {
@@ -885,92 +729,54 @@ namespace forge
       bool valid = true;
 
       if (section == "project" && key == "name")
-      {
         valid = parse_string(value, recipe.name);
-      }
       else if (section == "project" && key == "version")
-      {
         valid = parse_string(value, recipe.version);
-      }
       else if (section == "project" && key == "type")
       {
         valid = parse_string(value, recipe.type);
 
         if (recipe.type == "shared_library")
-        {
           recipe.type = "dynamic_library";
-        }
       }
       else if (section == "project" && key == "cpp_std")
-      {
         valid = parse_integer(value, recipe.cpp_standard);
-      }
       else if (section == "build" && key == "number")
       {
         int build_number = 0;
         valid = parse_integer(value, build_number) && build_number >= 0;
 
         if (valid)
-        {
           recipe.build_number = build_number;
-        }
       }
       else if (section == "build" && key == "defines")
-      {
         valid = parse_definitions(value, recipe.compile_definitions);
-      }
       else if (section == "build" && key == "macos_system_include_dirs")
-      {
         valid = parse_sources(value, recipe.macos_system_include_directories);
-      }
       else if (section == "build" && key == "linux_system_include_dirs")
-      {
         valid = parse_sources(value, recipe.linux_system_include_directories);
-      }
       else if (section == "build" && key == "windows_system_include_dirs")
-      {
         valid = parse_sources(value, recipe.windows_system_include_directories);
-      }
       else if (section == "build" && key == "macos_system_library_dirs")
-      {
         valid = parse_sources(value, recipe.macos_system_library_directories);
-      }
       else if (section == "build" && key == "linux_system_library_dirs")
-      {
         valid = parse_sources(value, recipe.linux_system_library_directories);
-      }
       else if (section == "build" && key == "windows_system_library_dirs")
-      {
         valid = parse_sources(value, recipe.windows_system_library_directories);
-      }
       else if (section == "build" && key == "macos_frameworks")
-      {
         valid = parse_link_names(value, recipe.macos_frameworks);
-      }
       else if (section == "build" && key == "macos_libraries")
-      {
         valid = parse_link_names(value, recipe.macos_libraries);
-      }
       else if (section == "build" && key == "linux_libraries")
-      {
         valid = parse_link_names(value, recipe.linux_libraries);
-      }
       else if (section == "build" && key == "windows_libraries")
-      {
         valid = parse_link_names(value, recipe.windows_libraries);
-      }
       else if (section == "sources" && key == "paths")
-      {
         valid = parse_sources(value, recipe.sources);
-      }
       else if (section == "sources" && key == "public_headers")
-      {
         valid = parse_sources(value, recipe.public_headers);
-      }
       else if (section == "sources" && key == "include_dirs")
-      {
         valid = parse_sources(value, recipe.include_directories);
-      }
       else if (section.starts_with("target."))
       {
         const auto name = section.substr(std::string_view { "target." }.size());
@@ -996,86 +802,46 @@ namespace forge
           valid = parse_string(value, target->type);
 
           if (target->type == "shared_library")
-          {
             target->type = "dynamic_library";
-          }
         }
         else if (key == "cpp_std")
-        {
           valid = parse_integer(value, target->cpp_standard);
-        }
         else if (key == "sources")
-        {
           valid = parse_sources(value, target->sources);
-        }
         else if (key == "public_headers")
-        {
           valid = parse_sources(value, target->public_headers);
-        }
         else if (key == "include_dirs")
-        {
           valid = parse_sources(value, target->include_directories);
-        }
         else if (key == "macos_system_include_dirs")
-        {
           valid = parse_sources(value, target->macos_system_include_directories);
-        }
         else if (key == "linux_system_include_dirs")
-        {
           valid = parse_sources(value, target->linux_system_include_directories);
-        }
         else if (key == "windows_system_include_dirs")
-        {
           valid = parse_sources(value, target->windows_system_include_directories);
-        }
         else if (key == "macos_system_library_dirs")
-        {
           valid = parse_sources(value, target->macos_system_library_directories);
-        }
         else if (key == "linux_system_library_dirs")
-        {
           valid = parse_sources(value, target->linux_system_library_directories);
-        }
         else if (key == "windows_system_library_dirs")
-        {
           valid = parse_sources(value, target->windows_system_library_directories);
-        }
         else if (key == "defines")
-        {
           valid = parse_definitions(value, target->compile_definitions);
-        }
         else if (key == "runtime_files")
-        {
           valid = parse_runtime_files(value, target->runtime_files);
-        }
         else if (key == "dependencies")
-        {
           valid = parse_names(value, target->dependencies);
-        }
         else if (key == "macos_frameworks")
-        {
           valid = parse_link_names(value, target->macos_frameworks);
-        }
         else if (key == "macos_libraries")
-        {
           valid = parse_link_names(value, target->macos_libraries);
-        }
         else if (key == "linux_libraries")
-        {
           valid = parse_link_names(value, target->linux_libraries);
-        }
         else if (key == "windows_libraries")
-        {
           valid = parse_link_names(value, target->windows_libraries);
-        }
         else if (key == "test")
-        {
           valid = parse_boolean(value, target->test);
-        }
         else
-        {
           valid = false;
-        }
       }
       else if (section.starts_with("import."))
       {
@@ -1098,45 +864,25 @@ namespace forge
         }
 
         if (key == "public_headers")
-        {
           valid = parse_sources(value, profile->public_headers);
-        }
         else if (key == "compiler")
-        {
           valid = parse_string(value, profile->compiler);
-        }
         else if (key == "compiler_version")
-        {
           valid = parse_string(value, profile->compiler_version);
-        }
         else if (key == "configuration")
-        {
           valid = parse_string(value, profile->configuration);
-        }
         else if (key == "runtime")
-        {
           valid = parse_string(value, profile->runtime);
-        }
         else if (key == "cpp_std")
-        {
           valid = parse_integer(value, profile->cpp_standard);
-        }
         else if (key == "static_libraries")
-        {
           valid = parse_sources(value, profile->static_libraries);
-        }
         else if (key == "dynamic_libraries")
-        {
           valid = parse_sources(value, profile->dynamic_libraries);
-        }
         else if (key == "import_libraries")
-        {
           valid = parse_sources(value, profile->import_libraries);
-        }
         else
-        {
           valid = false;
-        }
       }
       else if (section == "dependencies" || section.starts_with("profile."))
       {
@@ -1173,49 +919,27 @@ namespace forge
               auto& build = recipe.build_profiles[std::string { profile }];
 
               if (key == "configuration")
-              {
                 valid = parse_string(value, build.configuration);
-              }
               else if (key == "cpp_std")
-              {
                 valid = parse_integer(value, build.cpp_standard);
-              }
               else if (key == "include_dirs")
-              {
                 valid = parse_sources(value, build.include_directories);
-              }
               else if (key == "macos_system_include_dirs")
-              {
                 valid = parse_sources(value, build.macos_system_include_directories);
-              }
               else if (key == "linux_system_include_dirs")
-              {
                 valid = parse_sources(value, build.linux_system_include_directories);
-              }
               else if (key == "windows_system_include_dirs")
-              {
                 valid = parse_sources(value, build.windows_system_include_directories);
-              }
               else if (key == "macos_system_library_dirs")
-              {
                 valid = parse_sources(value, build.macos_system_library_directories);
-              }
               else if (key == "linux_system_library_dirs")
-              {
                 valid = parse_sources(value, build.linux_system_library_directories);
-              }
               else if (key == "windows_system_library_dirs")
-              {
                 valid = parse_sources(value, build.windows_system_library_directories);
-              }
               else if (key == "defines")
-              {
                 valid = parse_definitions(value, build.compile_definitions);
-              }
               else
-              {
                 valid = false;
-              }
             }
           }
           else if (is_profile)
@@ -1227,55 +951,37 @@ namespace forge
             valid = is_safe_name(profile);
 
             if (valid)
-            {
               recipe.dependency_profiles[profile].push_back(std::move(dependency));
-            }
           }
           else
-          {
             recipe.dependencies.push_back(std::move(dependency));
-          }
         }
       }
       else if (section == "runtime" && key == "files")
-      {
         valid = parse_runtime_files(value, recipe.runtime_files);
-      }
       else if (section == "release" && key == "files")
-      {
         valid = parse_sources(value, recipe.release_files);
-      }
       else if (section == "release" && key == "bundle_name")
       {
         std::string name;
         valid = parse_string(value, name) && is_safe_name(name);
 
         if (valid)
-        {
           recipe.release_bundle_name = std::move(name);
-        }
       }
       else if (section == "release" && key == "variants")
-      {
         valid = parse_release_variants(value, recipe.release_variants);
-      }
       else if (section == "box" && key == "variants")
-      {
         valid = parse_release_variants(value, recipe.box_variants);
-      }
       else if (section == "release" && key == "readme")
-      {
         valid = parse_release_readme(value, recipe.release_readme);
-      }
       else if (section == "release" && key == "build_number_format")
       {
         std::string format;
         valid = parse_string(value, format) && (format == "semver" || format == "dotted");
 
         if (valid)
-        {
           recipe.release_notes_build_number_format = std::move(format);
-        }
       }
       else if (section == "version_header" && key == "path")
       {
@@ -1283,9 +989,7 @@ namespace forge
         valid = parse_string(value, path);
 
         if (valid)
-        {
           recipe.version_header_path = std::move(path);
-        }
       }
       else if (section == "version_header" && key == "prefix")
       {
@@ -1394,9 +1098,7 @@ namespace forge
       error << "forge: recipe contains multiple targets; specify one of:";
 
       for (const auto& target : recipe.targets)
-      {
         error << ' ' << target.name;
-      }
 
       error << '\n';
       return false;
@@ -1431,9 +1133,7 @@ namespace forge
       }
 
       if (std::find(resolved.begin(), resolved.end(), target.name) != resolved.end())
-      {
         return true;
-      }
 
       active.push_back(target.name);
 
@@ -1463,26 +1163,20 @@ namespace forge
         }
 
         if (!self(self, *dependency))
-        {
           return false;
-        }
       }
 
       active.pop_back();
       resolved.push_back(target.name);
 
       if (target.name != selected->name)
-      {
         recipe.internal_targets.push_back(target);
-      }
 
       return true;
     };
 
     if (!resolve(resolve, *selected))
-    {
       return false;
-    }
 
     recipe.selected_target = selected->name;
     recipe.selected_internal_dependencies = selected->dependencies;
@@ -1513,9 +1207,7 @@ namespace forge
                                  std::ostream& error)
   {
     if (!requested)
-    {
       return true;
-    }
 
     const auto profile = recipe.dependency_profiles.find(*requested);
 
@@ -1541,9 +1233,7 @@ namespace forge
                             std::ostream& error)
   {
     if (!requested)
-    {
       return true;
-    }
 
     const auto profile = recipe.build_profiles.find(*requested);
 
@@ -1601,14 +1291,10 @@ namespace forge
     );
 
     if (build.cpp_standard != 0)
-    {
       recipe.cpp_standard = build.cpp_standard;
-    }
 
     if (!build.configuration.empty())
-    {
       configuration = build.configuration;
-    }
 
     return true;
   }

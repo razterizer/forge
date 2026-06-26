@@ -119,9 +119,7 @@ namespace
     auto build_directory = directory / ".forge/build";
 
     if (!target.empty())
-    {
       build_directory /= target;
-    }
 
     std::filesystem::create_directories(build_directory);
 #ifdef _WIN32
@@ -359,9 +357,7 @@ namespace
                   std::ostream&)
       {
         if (!command.empty() && command.front().find("unit_tests") != std::string::npos)
-        {
           launched.push_back(command.front());
-        }
 
         return 0;
       };
@@ -402,9 +398,7 @@ namespace
                   std::ostream&)
       {
         if (!command.empty() && command.front().find("unit_tests") != std::string::npos)
-        {
           launched = command;
-        }
 
         return 0;
       };

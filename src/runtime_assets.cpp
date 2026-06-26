@@ -14,16 +14,12 @@ namespace forge
     bool is_safe_project_path(const std::filesystem::path& path)
     {
       if (path.empty() || path.is_absolute() || path.has_root_path())
-      {
         return false;
-      }
 
       for (const auto& component : path)
       {
         if (component == "." || component == ".." || component.empty())
-        {
           return false;
-        }
       }
 
       const auto first = path.begin()->string();
@@ -76,9 +72,7 @@ namespace forge
       if (std::filesystem::is_regular_file(source, filesystem_error))
       {
         if (!add_asset(source, file.destination, paths, assets, error))
-        {
           return false;
-        }
 
         continue;
       }
@@ -101,9 +95,7 @@ namespace forge
         }
 
         if (entry.is_directory())
-        {
           continue;
-        }
 
         if (!entry.is_regular_file())
         {
@@ -115,9 +107,7 @@ namespace forge
           file.destination / entry.path().lexically_relative(source);
 
         if (!add_asset(entry.path(), relative, paths, assets, error))
-        {
           return false;
-        }
       }
 
       if (filesystem_error)
@@ -224,9 +214,7 @@ namespace forge
     }
 
     for (const auto& asset : assets)
-    {
       output << asset.path.generic_string() << '\n';
-    }
 
     return true;
   }

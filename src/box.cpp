@@ -91,9 +91,7 @@ namespace forge
       value = trim(value);
 
       if (value.size() < 2 || value.front() != '"' || value.back() != '"')
-      {
         return false;
-      }
 
       result = std::string { value.substr(1, value.size() - 2) };
       return result.find('"') == std::string::npos && result.find('\\') == std::string::npos;
@@ -111,9 +109,7 @@ namespace forge
       value = trim(value);
 
       if (value.size() < 2 || value.front() != '[' || value.back() != ']')
-      {
         return false;
-      }
 
       value = trim(value.substr(1, value.size() - 2));
       strings.clear();
@@ -121,18 +117,14 @@ namespace forge
       while (!value.empty())
       {
         if (value.front() != '"')
-        {
           return false;
-        }
 
         std::size_t end = 1;
 
         while (end < value.size() && value[end] != '"')
         {
           if (value[end] == '\\')
-          {
             ++end;
-          }
 
           ++end;
         }
@@ -140,22 +132,16 @@ namespace forge
         std::string parsed;
 
         if (end >= value.size() || !parse_string(value.substr(0, end + 1), parsed))
-        {
           return false;
-        }
 
         strings.push_back(std::move(parsed));
         value = trim(value.substr(end + 1));
 
         if (value.empty())
-        {
           break;
-        }
 
         if (value.front() != ',')
-        {
           return false;
-        }
 
         value = trim(value.substr(1));
       }
@@ -168,16 +154,12 @@ namespace forge
       std::vector<std::string> strings;
 
       if (!parse_strings(value, strings))
-      {
         return false;
-      }
 
       paths.clear();
 
       for (const auto& string : strings)
-      {
         paths.emplace_back(string);
-      }
 
       return true;
     }
@@ -187,16 +169,12 @@ namespace forge
                             const std::vector<std::string>& values)
     {
       if (values.empty())
-      {
         return;
-      }
 
       output << name << " = [";
 
       for (std::size_t index = 0; index < values.size(); ++index)
-      {
         output << (index == 0 ? "\"" : ", \"") << values[index] << "\"";
-      }
 
       output << "]\n";
     }
@@ -206,16 +184,12 @@ namespace forge
                           const std::vector<std::filesystem::path>& values)
     {
       if (values.empty())
-      {
         return;
-      }
 
       output << name << " = [";
 
       for (std::size_t index = 0; index < values.size(); ++index)
-      {
         output << (index == 0 ? "\"" : ", \"") << values[index].generic_string() << "\"";
-      }
 
       output << "]\n";
     }
@@ -240,38 +214,24 @@ namespace forge
         const auto equals = content.find('=');
 
         if (content.empty() || content.front() == '#' || equals == std::string_view::npos)
-        {
           continue;
-        }
 
         const auto key = trim(content.substr(0, equals));
         const auto value = trim(content.substr(equals + 1));
         bool valid = true;
 
         if (key == "compiler")
-        {
           valid = parse_string(value, toolchain.compiler);
-        }
         else if (key == "compiler_version")
-        {
           valid = parse_string(value, toolchain.compiler_version);
-        }
         else if (key == "cpp_std")
-        {
           valid = parse_integer(value, toolchain.cpp_standard);
-        }
         else if (key == "configuration")
-        {
           valid = parse_string(value, toolchain.configuration);
-        }
         else if (key == "runtime")
-        {
           valid = parse_string(value, toolchain.runtime);
-        }
         else
-        {
           valid = false;
-        }
 
         if (!valid)
         {
@@ -368,16 +328,12 @@ namespace forge
     bool is_safe_archive_path(const std::filesystem::path& path)
     {
       if (path.empty() || path.is_absolute() || path.has_root_path())
-      {
         return false;
-      }
 
       for (const auto& component : path)
       {
         if (component == "." || component == ".." || component.empty())
-        {
           return false;
-        }
       }
 
       return true;
@@ -427,9 +383,7 @@ namespace forge
       std::string checksum;
 
       if (!copy_file(source, destination, error) || !sha256_file(destination, checksum, error))
-      {
         return false;
-      }
 
       artifacts.push_back(BoxArtifact
         {
@@ -443,16 +397,12 @@ namespace forge
     bool is_safe_project_path(const std::filesystem::path& path)
     {
       if (path.empty() || path.is_absolute() || path.has_root_path())
-      {
         return false;
-      }
 
       for (const auto& component : path)
       {
         if (component == "..")
-        {
           return false;
-        }
       }
 
       return true;
@@ -539,9 +489,7 @@ namespace forge
         }
 
         if (entry.is_directory())
-        {
           continue;
-        }
 
         if (!entry.is_regular_file())
         {
@@ -618,9 +566,7 @@ namespace forge
         << "version = \"" << recipe.version << "\"\n";
 
       if (recipe.build_number)
-      {
         manifest << "build = " << *recipe.build_number << "\n";
-      }
 
       manifest
         << "type = \"" << recipe.type << "\"\n\n"
@@ -715,9 +661,7 @@ namespace forge
       auto version = recipe.version;
 
       if (recipe.build_number)
-      {
         version += "+build." + std::to_string(*recipe.build_number);
-      }
 
       return version;
     }
@@ -782,9 +726,7 @@ namespace forge
         filename += "-ho";
       }
       else
-      {
         filename += "-" + target_os() + "-" + target_arch();
-      }
 
       return filename + ".cbox";
     }
@@ -800,17 +742,13 @@ namespace forge
       for (const auto& dependency : recipe.dependencies)
       {
         if (!dependency_matches_target(dependency))
-        {
           continue;
-        }
 
         BoxMetadata metadata;
         const auto box = dependency_boxes_directory / (dependency.name + ".cbox");
 
         if (!read_box_metadata(box, project_directory, process_runner, metadata, error))
-        {
           return true;
-        }
 
         if (metadata.type != "header_only"
             || !metadata.macos_system_include_directories.empty()
@@ -835,23 +773,17 @@ namespace forge
                                            const std::filesystem::path& working_directory)
     {
       if (path.is_absolute())
-      {
         return path;
-      }
 
       const auto relative_path = working_directory / path;
 
       if (std::filesystem::is_regular_file(relative_path) || path.has_parent_path())
-      {
         return relative_path;
-      }
 
       const auto generated_box = working_directory / ".forge" / "boxes" / path;
 
       if (std::filesystem::is_regular_file(generated_box))
-      {
         return generated_box;
-      }
 
       const auto published_box = working_directory / "boxes" / path;
       return std::filesystem::is_regular_file(published_box) ? published_box : relative_path;
@@ -895,9 +827,7 @@ namespace forge
         }
 
         if (candidate == candidate.parent_path())
-        {
           break;
-        }
       }
 
       return directory / ".forge" / "cache" / "box-metadata";
@@ -935,9 +865,7 @@ namespace forge
         const auto trimmed = trim(line);
 
         if (trimmed.empty() || trimmed.front() == '#')
-        {
           continue;
-        }
 
         if (trimmed.starts_with("[[") && trimmed.ends_with("]]"))
         {
@@ -1074,119 +1002,75 @@ namespace forge
         bool valid = true;
 
         if (identity == "cbox.format")
-        {
           valid = parse_integer(value, manifest.format);
-        }
         else if (identity == "package.name")
-        {
           valid = parse_string(value, manifest.name);
-        }
         else if (identity == "package.version")
-        {
           valid = parse_string(value, manifest.version);
-        }
         else if (identity == "package.build")
         {
           int build_number = 0;
           valid = parse_integer(value, build_number) && build_number >= 0;
 
           if (valid)
-          {
             manifest.build_number = build_number;
-          }
         }
         else if (identity == "package.type")
-        {
           valid = parse_string(value, manifest.type);
-        }
         else if (identity == "target.os")
-        {
           valid = parse_string(value, manifest.os);
-        }
         else if (identity == "target.arch")
-        {
           valid = parse_string(value, manifest.arch);
-        }
         else if (identity == "toolchain.compiler")
         {
           if (!manifest.toolchain)
-          {
             manifest.toolchain.emplace();
-          }
           valid = parse_string(value, manifest.toolchain->compiler);
         }
         else if (identity == "toolchain.compiler_version")
         {
           if (!manifest.toolchain)
-          {
             manifest.toolchain.emplace();
-          }
           valid = parse_string(value, manifest.toolchain->compiler_version);
         }
         else if (identity == "toolchain.cpp_std")
         {
           if (!manifest.toolchain)
-          {
             manifest.toolchain.emplace();
-          }
           valid = parse_integer(value, manifest.toolchain->cpp_standard);
         }
         else if (identity == "toolchain.configuration")
         {
           if (!manifest.toolchain)
-          {
             manifest.toolchain.emplace();
-          }
           valid = parse_string(value, manifest.toolchain->configuration);
         }
         else if (identity == "toolchain.runtime")
         {
           if (!manifest.toolchain)
-          {
             manifest.toolchain.emplace();
-          }
           valid = parse_string(value, manifest.toolchain->runtime);
         }
         else if (identity == "requirements.macos_system_include_dirs")
-        {
           valid = parse_paths(value, manifest.macos_system_include_directories);
-        }
         else if (identity == "requirements.linux_system_include_dirs")
-        {
           valid = parse_paths(value, manifest.linux_system_include_directories);
-        }
         else if (identity == "requirements.windows_system_include_dirs")
-        {
           valid = parse_paths(value, manifest.windows_system_include_directories);
-        }
         else if (identity == "requirements.macos_system_library_dirs")
-        {
           valid = parse_paths(value, manifest.macos_system_library_directories);
-        }
         else if (identity == "requirements.linux_system_library_dirs")
-        {
           valid = parse_paths(value, manifest.linux_system_library_directories);
-        }
         else if (identity == "requirements.windows_system_library_dirs")
-        {
           valid = parse_paths(value, manifest.windows_system_library_directories);
-        }
         else if (identity == "requirements.macos_frameworks")
-        {
           valid = parse_strings(value, manifest.macos_frameworks);
-        }
         else if (identity == "requirements.macos_libraries")
-        {
           valid = parse_strings(value, manifest.macos_libraries);
-        }
         else if (identity == "requirements.linux_libraries")
-        {
           valid = parse_strings(value, manifest.linux_libraries);
-        }
         else if (identity == "requirements.windows_libraries")
-        {
           valid = parse_strings(value, manifest.windows_libraries);
-        }
         else if (section == "artifact" && artifact_index && key == "path")
         {
           std::string artifact_path;
@@ -1195,25 +1079,15 @@ namespace forge
           manifest.artifacts[*artifact_index].path = artifact_path;
         }
         else if (section == "artifact" && artifact_index && key == "kind")
-        {
           valid = parse_string(value, manifest.artifacts[*artifact_index].kind);
-        }
         else if (section == "artifact" && artifact_index && key == "sha256")
-        {
           valid = parse_string(value, manifest.artifacts[*artifact_index].sha256);
-        }
         else if (section == "dependency" && dependency_index && key == "name")
-        {
           valid = parse_string(value, manifest.dependencies[*dependency_index].name);
-        }
         else if (section == "dependency" && dependency_index && key == "version")
-        {
           valid = parse_string(value, manifest.dependencies[*dependency_index].version);
-        }
         else if (section == "dependency" && dependency_index && key == "type")
-        {
           valid = parse_string(value, manifest.dependencies[*dependency_index].type);
-        }
         else if (section == "dependency" && dependency_index && key == "path")
         {
           std::string dependency_path;
@@ -1222,17 +1096,11 @@ namespace forge
           manifest.dependencies[*dependency_index].path = dependency_path;
         }
         else if (section == "dependency" && dependency_index && key == "sha256")
-        {
           valid = parse_string(value, manifest.dependencies[*dependency_index].sha256);
-        }
         else if (section == "component" && component_index && key == "name")
-        {
           valid = parse_string(value, manifest.components[*component_index].name);
-        }
         else if (section == "component" && component_index && key == "type")
-        {
           valid = parse_string(value, manifest.components[*component_index].type);
-        }
         else if (section == "component" && component_index && key == "path")
         {
           std::string component_path;
@@ -1241,13 +1109,9 @@ namespace forge
           manifest.components[*component_index].path = component_path;
         }
         else if (section == "component" && component_index && key == "sha256")
-        {
           valid = parse_string(value, manifest.components[*component_index].sha256);
-        }
         else
-        {
           valid = false;
-        }
 
         if (!valid)
         {
@@ -1280,24 +1144,18 @@ namespace forge
       }
 
       if (manifest.type == "shared_library")
-      {
         manifest.type = "dynamic_library";
-      }
 
       for (auto& artifact : manifest.artifacts)
       {
         if (artifact.kind == "shared_library")
-        {
           artifact.kind = "dynamic_library";
-        }
       }
 
       for (auto& dependency : manifest.dependencies)
       {
         if (dependency.type == "shared_library")
-        {
           dependency.type = "dynamic_library";
-        }
       }
 
       if (manifest.format != 1 && manifest.format != 2 && manifest.format != 3)
@@ -1360,29 +1218,17 @@ namespace forge
         }
 
         if (artifact.kind == "executable" && prefix == "bin")
-        {
           ++executable_count;
-        }
         else if (artifact.kind == "static_library" && prefix == "lib")
-        {
           ++library_count;
-        }
         else if (artifact.kind == "dynamic_library" && prefix == "runtime")
-        {
           ++dynamic_library_count;
-        }
         else if (artifact.kind == "import_library" && prefix == "lib")
-        {
           ++import_library_count;
-        }
         else if (artifact.kind == "public_header" && prefix == "include")
-        {
           ++header_count;
-        }
         else if (artifact.kind == "runtime_asset" && prefix == "runtime-assets")
-        {
           ++runtime_asset_count;
-        }
         else
         {
           error << "forge: box manifest contains invalid package or artifact values\n";
@@ -1502,9 +1348,7 @@ namespace forge
                                 std::ostream& error)
     {
       if (!read_manifest(directory / "cbox.toml", manifest, manifest_content, error))
-      {
         return false;
-      }
 
       std::set<std::filesystem::path> expected_files { std::filesystem::path { "cbox.toml" } };
       std::set<std::filesystem::path> expected_directories;
@@ -1566,24 +1410,16 @@ namespace forge
       std::set<std::string> expected_archive_entries { "cbox.toml" };
 
       for (const auto& artifact : manifest.artifacts)
-      {
         expected_archive_entries.insert(artifact.path.generic_string());
-      }
 
       for (const auto& dependency : manifest.dependencies)
-      {
         expected_archive_entries.insert(dependency.path.generic_string());
-      }
 
       for (const auto& component : manifest.components)
-      {
         expected_archive_entries.insert(component.path.generic_string());
-      }
 
       for (const auto& directory_path : expected_directories)
-      {
         expected_archive_entries.insert(directory_path.generic_string() + "/");
-      }
 
       for (const auto& entry : archive_entries)
       {
@@ -1637,9 +1473,7 @@ namespace forge
         std::string checksum;
 
         if (!sha256_file(directory / artifact.path, checksum, error))
-        {
           return false;
-        }
 
         if (checksum != artifact.sha256)
         {
@@ -1653,9 +1487,7 @@ namespace forge
         std::string checksum;
 
         if (!sha256_file(directory / dependency.path, checksum, error))
-        {
           return false;
-        }
 
         if (checksum != dependency.sha256)
         {
@@ -1669,9 +1501,7 @@ namespace forge
         std::string checksum;
 
         if (!sha256_file(directory / component.path, checksum, error))
-        {
           return false;
-        }
 
         if (checksum != component.sha256)
         {
@@ -1691,16 +1521,12 @@ namespace forge
                                  std::ostream& error)
     {
       if (!prepare_empty_directory(validation_directory, error))
-      {
         return false;
-      }
 
       std::vector<std::string> archive_entries;
 
       if (!read_zip_entries(resolved_box, archive_entries, error))
-      {
         return false;
-      }
 
       const std::vector<std::string> extract_arguments {
         "cmake",
@@ -1759,9 +1585,7 @@ namespace forge
       const auto archive_path = boxes_directory / (box_name + ".cbox");
 
       if (!prepare_empty_directory(staging_directory, error))
-      {
         return 2;
-      }
 
       std::vector<BoxComponent> components;
 
@@ -1782,9 +1606,7 @@ namespace forge
         Recipe selected = recipe;
 
         if (!select_recipe_target(selected, target.name, error))
-        {
           return 2;
-        }
 
         const auto source = boxes_directory / box_filename(selected);
         const auto component_path =
@@ -1821,9 +1643,7 @@ namespace forge
         << "version = \"" << recipe.version << "\"\n";
 
       if (recipe.build_number)
-      {
         manifest << "build = " << *recipe.build_number << "\n";
-      }
 
       manifest
         << "\n[target]\n"
@@ -1912,38 +1732,26 @@ namespace forge
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
-    {
       return 2;
-    }
 
     if (!target && recipe.targets.size() > 1)
-    {
       return create_container_box(project_directory, recipe, profile, process_runner, output, error);
-    }
 
     if (!select_recipe_target(recipe, target, error))
-    {
       return 2;
-    }
 
     if (!select_dependency_profile(recipe, profile, true, error))
-    {
       return 2;
-    }
 
     BuildOptions options;
     options.target = target;
     options.profile = profile;
 
     if (profile == workflow_release_profile)
-    {
       options.configuration = "Release";
-    }
 
     if (build_project(project_directory, options, process_runner, output, error) != 0)
-    {
       return 2;
-    }
 
     if (!is_safe_path_component(recipe.name) || !is_safe_path_component(recipe.version))
     {
@@ -1954,36 +1762,26 @@ namespace forge
     auto build_directory = project_directory / ".forge" / "build";
 
     if (recipe.selected_target)
-    {
       build_directory /= *recipe.selected_target;
-    }
 
     auto built_artifact = build_directory / recipe.name;
     std::optional<std::filesystem::path> built_import_library;
 
 #ifdef _WIN32
     if (recipe.type == "static_library")
-    {
       built_artifact += ".lib";
-    }
     else if (recipe.type == "dynamic_library")
     {
       built_artifact = build_directory / dynamic_library_filename(recipe.name);
       built_import_library = build_directory / import_library_filename(recipe.name);
     }
     else
-    {
       built_artifact += ".exe";
-    }
 #else
     if (recipe.type == "static_library")
-    {
       built_artifact = build_directory / ("lib" + recipe.name + ".a");
-    }
     else if (recipe.type == "dynamic_library")
-    {
       built_artifact = build_directory / dynamic_library_filename(recipe.name);
-    }
 #endif
 
     if (recipe.type != "header_only"
@@ -2021,9 +1819,7 @@ namespace forge
     const auto archive_path = boxes_directory / archive_filename;
 
     if (!prepare_empty_directory(staging_directory, error))
-    {
       return 2;
-    }
 
     std::vector<BoxArtifact> artifacts;
     std::vector<RuntimeAsset> runtime_assets;
@@ -2070,9 +1866,7 @@ namespace forge
       }
 
       if (!stage_runtime_asset_artifacts())
-      {
         return 2;
-      }
     }
     else if (recipe.type == "static_library")
     {
@@ -2104,9 +1898,7 @@ namespace forge
       }
 
       if (!stage_runtime_asset_artifacts())
-      {
         return 2;
-      }
     }
     else if (recipe.type == "dynamic_library")
     {
@@ -2151,9 +1943,7 @@ namespace forge
       }
 
       if (!stage_runtime_asset_artifacts())
-      {
         return 2;
-      }
     }
     else if (recipe.type == "header_only")
     {
@@ -2173,9 +1963,7 @@ namespace forge
       }
 
       if (!stage_runtime_asset_artifacts())
-      {
         return 2;
-      }
     }
     else if (recipe.type == "imported_library")
     {
@@ -2322,24 +2110,18 @@ namespace forge
         / box_filename(dependency_recipe);
 
       if (!stage_dependency(source, dependency_name))
-      {
         return 2;
-      }
     }
 
     for (const auto& dependency : recipe.dependencies)
     {
       if (!dependency_matches_target(dependency))
-      {
         continue;
-      }
 
       const auto source = project_directory / ".forge" / "dependency-boxes" / (dependency.name + ".cbox");
 
       if (!stage_dependency(source, dependency.name))
-      {
         return 2;
-      }
     }
 
     std::optional<ToolchainIdentity> toolchain;
@@ -2417,9 +2199,7 @@ namespace forge
     };
 
     if (recipe.type == "executable")
-    {
       archive_arguments.push_back("bin");
-    }
     else if (recipe.type == "static_library")
     {
       archive_arguments.push_back("include");
@@ -2429,9 +2209,7 @@ namespace forge
     {
       archive_arguments.push_back("include");
       if (built_import_library)
-      {
         archive_arguments.push_back("lib");
-      }
       archive_arguments.push_back("runtime");
     }
     else if (recipe.type == "imported_library")
@@ -2439,29 +2217,19 @@ namespace forge
       archive_arguments.push_back("include");
 
       if (std::filesystem::is_directory(staging_directory / "lib"))
-      {
         archive_arguments.push_back("lib");
-      }
 
       if (std::filesystem::is_directory(staging_directory / "runtime"))
-      {
         archive_arguments.push_back("runtime");
-      }
     }
     else
-    {
       archive_arguments.push_back("include");
-    }
 
     if (std::filesystem::is_directory(staging_directory / "runtime-assets"))
-    {
       archive_arguments.push_back("runtime-assets");
-    }
 
     if (!dependencies.empty())
-    {
       archive_arguments.push_back("dependencies");
-    }
 
     if (process_runner(archive_arguments, staging_directory, error) != 0)
     {
@@ -2489,9 +2257,7 @@ namespace forge
         auto result = metadata.version;
 
         if (metadata.build_number)
-        {
           result += "+build." + std::to_string(*metadata.build_number);
-        }
 
         return result;
       };
@@ -2510,14 +2276,10 @@ namespace forge
           for (const auto& entry : std::filesystem::directory_iterator { directory, filesystem_error })
           {
             if (filesystem_error)
-            {
               break;
-            }
 
             if (entry.is_regular_file() && entry.path().extension() == ".cbox")
-            {
               boxes.push_back(entry.path().filename());
-            }
           }
         }
 
@@ -2547,30 +2309,20 @@ namespace forge
                    << ' ' << version(metadata);
 
             if (metadata.type == "header_only" && is_portable_header_only_filename(box))
-            {
               output << " [any]";
-            }
             else if (!metadata.os.empty() && !metadata.arch.empty())
-            {
               output << " [" << metadata.os << '-' << metadata.arch << ']';
-            }
             else
-            {
               output << " [portable]";
-            }
 
             if (metadata.components.empty())
-            {
               output << "  " << metadata.type;
-            }
             else
             {
               output << "  components:";
 
               for (const auto& component : metadata.components)
-              {
                 output << ' ' << component.name << " (" << component.type << ')';
-              }
             }
 
             output << '\n';
@@ -2591,14 +2343,10 @@ namespace forge
       : 0;
 
     if (!valid)
-    {
       return 2;
-    }
 
     if (generated + published == 0)
-    {
       output << "No boxes found\n";
-    }
 
     return 0;
   }
@@ -2620,9 +2368,7 @@ namespace forge
     const auto resolved_box = resolve_box_path(box_path, working_directory);
 
     if (!validate_box_path(resolved_box, error))
-    {
       return 2;
-    }
 
     const auto inspect_directory = working_directory / ".forge" / "cache" / "box-inspect";
     BoxManifest manifest;
@@ -2644,37 +2390,25 @@ namespace forge
            << "Package: " << manifest.name << ' ' << manifest.version;
 
     if (manifest.build_number)
-    {
       output << "+build." << *manifest.build_number;
-    }
 
     output << '\n';
 
     if (manifest.type == "header_only" && is_portable_header_only_filename(resolved_box))
-    {
       output << "Target: any\n";
-    }
     else if (!manifest.os.empty() && !manifest.arch.empty())
-    {
       output << "Target: " << manifest.os << '-' << manifest.arch << '\n';
-    }
     else
-    {
       output << "Target: portable\n";
-    }
 
     if (manifest.components.empty())
-    {
       output << "Type: " << manifest.type << '\n';
-    }
     else
     {
       output << "Components:\n";
 
       for (const auto& component : manifest.components)
-      {
         output << "  " << component.name << " (" << component.type << ")\n";
-      }
     }
 
     output << "\nManifest:\n" << manifest_content;
@@ -2698,16 +2432,12 @@ namespace forge
     const auto resolved_box = resolve_box_path(box_path, working_directory);
 
     if (!validate_box_path(resolved_box, error))
-    {
       return 2;
-    }
 
     BoxMetadata metadata;
 
     if (!read_box_metadata(resolved_box, working_directory, process_runner, metadata, error))
-    {
       return 2;
-    }
 
     output << "Verified " << resolved_box.string() << '\n';
     return 0;
@@ -2737,9 +2467,7 @@ namespace forge
     BoxMetadata metadata;
 
     if (!read_box_metadata(resolved_box, project_directory, process_runner, metadata, error))
-    {
       return 2;
-    }
 
     const auto boxes_directory = project_directory / "boxes";
     const auto published_box = boxes_directory / resolved_box.filename();
@@ -2747,9 +2475,7 @@ namespace forge
     std::string source_checksum;
 
     if (!sha256_file(resolved_box, source_checksum, error))
-    {
       return 2;
-    }
 
     std::error_code filesystem_error;
     std::filesystem::create_directories(boxes_directory, filesystem_error);
@@ -2765,9 +2491,7 @@ namespace forge
       std::string published_checksum;
 
       if (!sha256_file(published_box, published_checksum, error))
-      {
         return 2;
-      }
 
       if (published_checksum != source_checksum)
       {
@@ -2826,9 +2550,7 @@ namespace forge
     const auto resolved_box = resolve_box_path(box_path, working_directory);
 
     if (!validate_box_path(resolved_box, error))
-    {
       return 2;
-    }
 
     const auto destination = working_directory / resolved_box.stem();
 
@@ -2930,16 +2652,12 @@ namespace forge
     const auto resolved_box = resolve_box_path(box_path, working_directory);
 
     if (!validate_box_path(resolved_box, error))
-    {
       return false;
-    }
 
     std::string box_checksum;
 
     if (!sha256_file(resolved_box, box_checksum, error))
-    {
       return false;
-    }
 
     const auto validation_directory =
       box_metadata_cache_root(working_directory) / box_checksum;
@@ -3071,14 +2789,10 @@ namespace forge
     BoxMetadata container;
 
     if (!read_box_metadata(resolved_box, working_directory, process_runner, container, error))
-    {
       return false;
-    }
 
     if (container_metadata != nullptr)
-    {
       *container_metadata = container;
-    }
 
     if (container.components.empty())
     {
@@ -3113,9 +2827,7 @@ namespace forge
       for (const auto& candidate : container.components)
       {
         if (candidate.type != "executable")
-        {
           error << ' ' << candidate.name;
-        }
       }
 
       error << '\n';
@@ -3125,9 +2837,7 @@ namespace forge
     std::string checksum;
 
     if (!sha256_file(resolved_box, checksum, error))
-    {
       return false;
-    }
 
     const auto validation_directory =
       box_metadata_cache_root(working_directory) / checksum;

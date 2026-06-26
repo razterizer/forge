@@ -76,9 +76,7 @@ namespace
     const auto result = forge::cli::run(arguments, directory, output, error);
 
     if (result == 0)
-    {
       return true;
-    }
 
     std::cerr << "FAIL: " << description << " (exit " << result << ")\n"
               << output.str() << error.str();
@@ -91,21 +89,15 @@ namespace
     std::error_code error;
 
     if (!std::filesystem::is_directory(root))
-    {
       return false;
-    }
 
     for (const auto& entry : std::filesystem::recursive_directory_iterator { root, error })
     {
       if (error)
-      {
         return true;
-      }
 
       if (entry.is_directory() && entry.path().filename() == ".forge")
-      {
         return true;
-      }
     }
 
     return false;
@@ -198,9 +190,7 @@ int main()
   constexpr std::array create_box { std::string_view { "box" }, std::string_view { "create" } };
 
   if (!run(producer, create_box, "create aggregate format-3 box"))
-  {
     return 1;
-  }
 
   if (has_nested_metadata_cache(producer))
   {
@@ -233,9 +223,7 @@ int main()
   constexpr std::array run_command { std::string_view { "build-and-run" } };
 
   if (!run(local_consumer, run_command, "consume local aggregate components"))
-  {
     return 1;
-  }
 
   std::string checksum;
   std::ostringstream checksum_error;
@@ -284,9 +272,7 @@ int main()
   write_file(github_consumer / "forge.lock.toml", lock.str());
 
   if (!run(github_consumer, run_command, "consume locked GitHub aggregate components"))
-  {
     return 1;
-  }
 
   std::cout << "Verified aggregate format-3 publication and component consumption for "
             << current_target() << '\n';

@@ -35,31 +35,21 @@ namespace forge::cli
       Recipe recipe;
 
       if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
-      {
         return 2;
-      }
 
       std::set<std::string> profiles;
 
       for (const auto& [name, _] : recipe.dependency_profiles)
-      {
         profiles.insert(name);
-      }
 
       for (const auto& [name, _] : recipe.build_profiles)
-      {
         profiles.insert(name);
-      }
 
       for (const auto& variant : recipe.release_variants)
-      {
         profiles.insert(variant.profile);
-      }
 
       for (const auto& variant : recipe.box_variants)
-      {
         profiles.insert(variant.profile);
-      }
 
       if (profiles.empty())
       {
@@ -70,9 +60,7 @@ namespace forge::cli
       std::size_t profile_width = std::string_view { "Profile" }.size();
 
       for (const auto& profile : profiles)
-      {
         profile_width = std::max(profile_width, profile.size());
-      }
 
       output << "Profiles:\n";
       output << "  Profile" << std::string(profile_width - std::string_view { "Profile" }.size(), ' ')
@@ -90,29 +78,21 @@ namespace forge::cli
           };
 
         if (recipe.dependency_profiles.contains(profile))
-        {
           add_role("dependencies");
-        }
 
         if (recipe.build_profiles.contains(profile))
-        {
           add_role("build");
-        }
 
         for (const auto& variant : recipe.release_variants)
         {
           if (variant.profile == profile)
-          {
             add_role("release variant '" + variant.suffix + "'");
-          }
         }
 
         for (const auto& variant : recipe.box_variants)
         {
           if (variant.profile == profile)
-          {
             add_role("box variant '" + variant.suffix + "'");
-          }
         }
 
         output << "  " << profile << std::string(profile_width - profile.size(), ' ') << "  ";
@@ -120,9 +100,7 @@ namespace forge::cli
         for (std::size_t index = 0; index < roles.size(); ++index)
         {
           if (index > 0)
-          {
             output << ", ";
-          }
 
           output << roles[index];
         }
@@ -201,9 +179,7 @@ namespace forge::cli
         {
         }
         else if (!argument.starts_with("-") && !name)
-        {
           name = argument;
-        }
         else
         {
           print_new_usage(error);
@@ -223,9 +199,7 @@ namespace forge::cli
     if (arguments.front() == "box")
     {
       if (arguments.size() == 2 && arguments[1] == "list")
-      {
         return list_boxes(working_directory, output, error);
-      }
 
       if ((arguments.size() == 2 || arguments.size() == 3) && arguments[1] == "create")
       {
@@ -236,24 +210,16 @@ namespace forge::cli
       }
 
       if (arguments.size() == 3 && arguments[1] == "inspect")
-      {
         return inspect_box(arguments[2], working_directory, output, error);
-      }
 
       if (arguments.size() == 3 && arguments[1] == "verify")
-      {
         return verify_box(arguments[2], working_directory, output, error);
-      }
 
       if (arguments.size() == 3 && arguments[1] == "extract")
-      {
         return extract_box(arguments[2], working_directory, output, error);
-      }
 
       if (arguments.size() == 3 && arguments[1] == "publish")
-      {
         return publish_box(arguments[2], working_directory, output, error);
-      }
 
       error << "forge: usage: forge box list\n";
       error << "forge: usage: forge box create [target]\n";
@@ -270,9 +236,7 @@ namespace forge::cli
       Recipe recipe;
 
       if (!workspace && !read_recipe(working_directory / "forge.recipe.toml", recipe, error))
-      {
         return 2;
-      }
 
       std::optional<std::string> profile;
       std::optional<std::string> target;
@@ -282,9 +246,7 @@ namespace forge::cli
       for (const auto argument : arguments.subspan(1))
       {
         if (!forwarding && argument == "--")
-        {
           forwarding = true;
-        }
         else if (!forwarding && argument.starts_with("--profile="))
         {
           if (!build_first)
@@ -294,18 +256,14 @@ namespace forge::cli
           }
 
           if (!read_profile_option(argument, profile, error))
-          {
             return 2;
-          }
         }
         else if (!forwarding && (workspace || !recipe.targets.empty()) && !target)
         {
           target = std::string { argument };
         }
         else
-        {
           program_arguments.push_back(argument);
-        }
       }
 
       if (workspace)
@@ -388,24 +346,18 @@ namespace forge::cli
       for (const auto argument : arguments.subspan(1))
       {
         if (!forwarding && argument == "--")
-        {
           forwarding = true;
-        }
         else if (!forwarding && argument.starts_with("--profile="))
         {
           if (!read_profile_option(argument, profile, error))
-          {
             return 2;
-          }
         }
         else if (!forwarding && !target)
         {
           target = std::string { argument };
         }
         else
-        {
           test_arguments.push_back(argument);
-        }
       }
 
       if (!std::filesystem::exists(working_directory / "forge.recipe.toml")
@@ -439,9 +391,7 @@ namespace forge::cli
     if (arguments.front() == "profile")
     {
       if (arguments.size() == 2 && arguments[1] == "list")
-      {
         return list_profiles(working_directory, output, error);
-      }
 
       error << "forge: usage: forge profile list\n";
       return 2;
@@ -458,18 +408,14 @@ namespace forge::cli
         if (argument.starts_with("--profile="))
         {
           if (!read_profile_option(argument, options.profile, error))
-          {
             return 2;
-          }
         }
         else if (argument.starts_with("--target="))
         {
           const auto value = *option_value(argument, "--target=");
 
           if (!read_required_option(value, "forge: --target requires a value", error))
-          {
             return 2;
-          }
 
           options.update_target = std::string { value };
         }
@@ -493,9 +439,7 @@ namespace forge::cli
       options.tag_format = "release-<version>";
 
       if (arguments.size() == 2 && arguments[1] == "--tag-force")
-      {
         options.force_tag = true;
-      }
       else if (const auto value = arguments.size() == 2
                                     ? option_value(arguments[1], "--tag=")
                                     : std::nullopt)
@@ -539,9 +483,7 @@ namespace forge::cli
         if (argument.starts_with("--profile="))
         {
           if (!read_profile_option(argument, options.profile, error))
-          {
             return 2;
-          }
         }
         else if (argument.starts_with("--define="))
         {
@@ -585,9 +527,7 @@ namespace forge::cli
     if (arguments.front() == "workflow")
     {
       if (arguments.size() == 2 && arguments[1] == "list-features")
-      {
         return list_github_workflow_features(output);
-      }
 
       const auto workflow_feature_operation =
         arguments.size() >= 2 && arguments[1] == "add-feature"
@@ -613,16 +553,12 @@ namespace forge::cli
         for (const auto argument : arguments.subspan(3))
         {
           if (argument == "--apply" && !apply)
-          {
             apply = true;
-          }
           else if (const auto value = option_value(argument, "--file=");
                    value && set_once(workflow_file, *value))
           {
             if (!read_required_option(*value, "forge: workflow file cannot be empty", error))
-            {
               return 2;
-            }
           }
           else
           {
@@ -659,9 +595,7 @@ namespace forge::cli
         const auto value = *option_value(arguments[2], "--file=");
 
         if (!read_required_option(value, "forge: workflow file cannot be empty", error))
-        {
           return 2;
-        }
 
         return status_github_workflow_features(
           working_directory,
@@ -724,9 +658,7 @@ namespace forge::cli
         : std::nullopt;
 
       if (arguments.front() == "release")
-      {
         return release_project(working_directory, target, output, error);
-      }
 
       error
         << "forge: warning: 'prepare-release' is deprecated; "
@@ -761,13 +693,9 @@ namespace forge::cli
           }
 
           if (*style == "local")
-          {
             options.dependency_style = DependencyStyle::local;
-          }
           else if (*style == "git")
-          {
             options.dependency_style = DependencyStyle::git;
-          }
           else
           {
             error << "forge: dependency style must be local or git\n";
@@ -816,9 +744,7 @@ namespace forge::cli
     }
 
     if (arguments.front() == "init")
-    {
       return init_project(working_directory, output, error);
-    }
 
     if (arguments.front() == "clean")
     {

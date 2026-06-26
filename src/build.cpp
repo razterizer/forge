@@ -89,9 +89,7 @@ namespace forge
                          const std::filesystem::path& path)
     {
       if (std::find(paths.begin(), paths.end(), path) == paths.end())
-      {
         paths.push_back(path);
-      }
     }
 
     void add_dependency_include_directories(ResolvedDependency& dependency,
@@ -100,16 +98,12 @@ namespace forge
       add_unique_path(dependency.include_directories, dependency.root / "include");
 
       if (!metadata)
-      {
         return;
-      }
 
       for (const auto& artifact : metadata->artifacts)
       {
         if (artifact.kind != "public_header")
-        {
           continue;
-        }
 
         std::filesystem::path prefix;
         bool first = true;
@@ -125,9 +119,7 @@ namespace forge
           }
 
           if (component == std::filesystem::path { "include" })
-          {
             add_unique_path(dependency.include_directories, dependency.root / prefix);
-          }
         }
       }
     }
@@ -162,9 +154,7 @@ namespace forge
       ~DependencySessionScope()
       {
         if (owns_session_)
-        {
           dependency_session = nullptr;
-        }
       }
 
     private:
@@ -184,9 +174,7 @@ namespace forge
       ~ActiveProjectScope()
       {
         if (inserted_)
-        {
           dependency_session->active_projects.erase(project_);
-        }
       }
 
       bool inserted() const
@@ -212,9 +200,7 @@ namespace forge
         }
 
         if (character == '"' || character == '$')
-        {
           escaped += '\\';
-        }
 
         escaped += character;
       }
@@ -295,9 +281,7 @@ namespace forge
     std::string dependency_target()
     {
       if (dependency_session != nullptr && dependency_session->options.update_target)
-      {
         return *dependency_session->options.update_target;
-      }
 
       return current_target();
     }
@@ -387,9 +371,7 @@ namespace forge
       if (build != std::string_view::npos)
       {
         if (!is_numeric_identifier(value.substr(build + std::string_view { "+build." }.size())))
-        {
           return false;
-        }
 
         value = value.substr(0, build);
       }
@@ -424,9 +406,7 @@ namespace forge
                        std::ostream& error)
     {
       if (!always_download && std::filesystem::is_regular_file(destination))
-      {
         return true;
-      }
 
       const auto script = destination.parent_path() / "download.cmake";
       auto status_path = destination;
@@ -467,9 +447,7 @@ namespace forge
       );
 
       if (result != 0)
-      {
         return false;
-      }
 
       std::ifstream status_file { status_path };
       int status = 0;
@@ -477,9 +455,7 @@ namespace forge
       if (status_file)
       {
         if (!(status_file >> status))
-        {
           return false;
-        }
 
         std::filesystem::remove(status_path, filesystem_error);
       }
@@ -609,9 +585,7 @@ namespace forge
         tag_versions.push_back(version);
       }
       else
-      {
         tag_versions.push_back(dependency.version);
-      }
 
       const auto release_base =
         "https://github.com/" + dependency.github + "/releases/download/release-";
@@ -636,15 +610,11 @@ namespace forge
         output << " from package " << package;
 
         if (!dependency.component.empty())
-        {
           output << " component " << dependency.component;
-        }
       }
 
       if (!dependency.variant.empty())
-      {
         output << " variant " << dependency.variant;
-      }
 
       output << '\n' << std::flush;
 
@@ -711,9 +681,7 @@ namespace forge
       value = trim(value);
 
       if (value.size() < 2 || value.front() != '"' || value.back() != '"')
-      {
         return false;
-      }
 
       result = std::string { value.substr(1, value.size() - 2) };
       return result.find('"') == std::string::npos;
@@ -733,9 +701,7 @@ namespace forge
       auto version = metadata.version;
 
       if (metadata.build_number)
-      {
         version += "+build." + std::to_string(*metadata.build_number);
-      }
 
       return version;
     }
@@ -745,9 +711,7 @@ namespace forge
       auto version = recipe.version;
 
       if (recipe.build_number)
-      {
         version += "+build." + std::to_string(*recipe.build_number);
-      }
 
       return version;
     }
@@ -755,16 +719,12 @@ namespace forge
     bool is_safe_project_path(const std::filesystem::path& path)
     {
       if (path.empty() || path.is_absolute() || path.has_root_path())
-      {
         return false;
-      }
 
       for (const auto& component : path)
       {
         if (component == "..")
-        {
           return false;
-        }
       }
 
       return true;
@@ -860,17 +820,13 @@ namespace forge
                        std::ostream& error)
     {
       if (dependency_session->lock_loaded)
-      {
         return true;
-      }
 
       dependency_session->lock_loaded = true;
       const auto path = project_directory / "forge.lock.toml";
 
       if (!std::filesystem::is_regular_file(path))
-      {
         return true;
-      }
 
       std::ifstream file { path };
       std::optional<LockedDependency> dependency;
@@ -882,9 +838,7 @@ namespace forge
         [&dependency, &error]() -> bool
         {
           if (!dependency)
-          {
             return true;
-          }
 
           if (dependency->name.empty()
               || dependency->github.empty()
@@ -901,9 +855,7 @@ namespace forge
           }
 
           if (dependency->package.empty())
-          {
             dependency->package = dependency->name;
-          }
 
           const auto key = lock_key(dependency->name, dependency->variant, dependency->target);
 
@@ -923,16 +875,12 @@ namespace forge
         const auto content = trim(line);
 
         if (content.empty() || content.front() == '#')
-        {
           continue;
-        }
 
         if (content == "[[dependency]]")
         {
           if (!store_dependency())
-          {
             return false;
-          }
 
           dependency.emplace();
           continue;
@@ -974,49 +922,29 @@ namespace forge
         }
 
         if (key == "name")
-        {
           dependency->name = std::move(parsed);
-        }
         else if (key == "github")
-        {
           dependency->github = std::move(parsed);
-        }
         else if (key == "package")
-        {
           dependency->package = std::move(parsed);
-        }
         else if (key == "component")
-        {
           dependency->component = std::move(parsed);
-        }
         else if (key == "variant")
-        {
           dependency->variant = std::move(parsed);
-        }
         else if (key == "version")
-        {
           dependency->version = std::move(parsed);
-        }
         else if (key == "target")
-        {
           dependency->target = std::move(parsed);
-        }
         else if (key == "url")
-        {
           dependency->url = std::move(parsed);
-        }
         else
-        {
           dependency->sha256 = std::move(parsed);
-        }
       }
 
       if (!store_dependency() || format == 0)
       {
         if (format == 0)
-        {
           error << "forge: forge.lock.toml has an unsupported or missing format\n";
-        }
 
         return false;
       }
@@ -1027,9 +955,7 @@ namespace forge
     bool write_lockfile(std::ostream& error)
     {
       if (!dependency_session->lock_dirty)
-      {
         return true;
-      }
 
       const auto lock_path = dependency_session->root_project / "forge.lock.toml";
       const auto temporary_path = dependency_session->root_project / "forge.lock.toml.tmp";
@@ -1053,14 +979,10 @@ namespace forge
           << "package = \"" << dependency.package << "\"\n";
 
         if (!dependency.component.empty())
-        {
           lock << "component = \"" << dependency.component << "\"\n";
-        }
 
         if (!dependency.variant.empty())
-        {
           lock << "variant = \"" << dependency.variant << "\"\n";
-        }
 
         lock
           << "version = \"" << dependency.version << "\"\n"
@@ -1147,9 +1069,7 @@ namespace forge
             entry = dependency_session->locked_dependencies.erase(entry);
           }
           else
-          {
             ++entry;
-          }
         }
 
         dependency_session->locked_dependencies[
@@ -1187,9 +1107,7 @@ namespace forge
               << target << "; run forge update " << dependency.name;
 
         if (dependency_session->options.profile)
-        {
           error << " --profile=" << *dependency_session->options.profile;
-        }
 
         error << '\n';
         return false;
@@ -1206,9 +1124,7 @@ namespace forge
               << dependency.name;
 
         if (dependency_session->options.profile)
-        {
           error << " --profile=" << *dependency_session->options.profile;
-        }
 
         error << '\n';
         return false;
@@ -1219,14 +1135,10 @@ namespace forge
       output << "Using locked dependency " << dependency.name;
 
       if (!dependency.component.empty())
-      {
         output << " component " << dependency.component;
-      }
 
       if (!dependency.variant.empty())
-      {
         output << " variant " << dependency.variant;
-      }
 
       output << " for " << locked->second.target << '\n';
       return true;
@@ -1336,9 +1248,7 @@ namespace forge
                                     const std::vector<std::filesystem::path>& directories)
         {
           if (directories.empty())
-          {
             return;
-          }
 
           file << "if(" << condition << ")\n";
 
@@ -1369,9 +1279,7 @@ namespace forge
                                     const std::vector<std::filesystem::path>& directories)
         {
           if (directories.empty())
-          {
             return;
-          }
 
           file << "if(" << condition << ")\n";
 
@@ -1443,9 +1351,7 @@ namespace forge
         const auto& target_name = internal_target_names.at(target.name);
 
         if (target.type == "header_only")
-        {
           file << "add_library(" << target_name << " INTERFACE)\n";
-        }
         else
         {
           file
@@ -1537,13 +1443,9 @@ namespace forge
       }
 
       if (recipe.type == "static_library")
-      {
         file << "add_library(forge_project STATIC\n";
-      }
       else if (recipe.type == "dynamic_library")
-      {
         file << "add_library(forge_project SHARED\n";
-      }
       else if (recipe.type == "header_only")
       {
         file << "add_library(forge_project OBJECT\n";
@@ -1555,9 +1457,7 @@ namespace forge
         }
       }
       else
-      {
         file << "add_executable(forge_project\n";
-      }
 
       for (const auto& source : recipe.sources)
       {
@@ -1768,14 +1668,10 @@ namespace forge
       std::vector<std::filesystem::path> files { dependency_directory / "forge.recipe.toml" };
 
       for (const auto& source : recipe.sources)
-      {
         files.push_back(dependency_directory / source);
-      }
 
       for (const auto& header : recipe.public_headers)
-      {
         files.push_back(dependency_directory / header);
-      }
 
       for (const auto& include_directory : recipe.include_directories)
       {
@@ -1827,15 +1723,11 @@ namespace forge
           for (const auto& entry : std::filesystem::recursive_directory_iterator { path })
           {
             if (entry.is_regular_file())
-            {
               files.push_back(entry.path());
-            }
           }
         }
         else
-        {
           files.push_back(path);
-        }
       }
 
       for (const auto& profile : recipe.imports)
@@ -1858,15 +1750,11 @@ namespace forge
               for (const auto& entry : std::filesystem::recursive_directory_iterator { path })
               {
                 if (entry.is_regular_file())
-                {
                   files.push_back(entry.path());
-                }
               }
             }
             else
-            {
               files.push_back(path);
-            }
           }
         }
       }
@@ -1876,9 +1764,7 @@ namespace forge
         const auto modified = std::filesystem::last_write_time(file, filesystem_error);
 
         if (filesystem_error || modified > box_time)
-        {
           return false;
-        }
       }
 
       return true;
@@ -1893,38 +1779,28 @@ namespace forge
       for (const auto& dependency : recipe.dependencies)
       {
         if (dependency_matches_target(dependency))
-        {
           active_dependencies.emplace_back(dependency);
-        }
       }
 
       if (active_dependencies.size() != metadata.dependencies.size())
-      {
         return false;
-      }
 
       for (const auto& dependency : active_dependencies)
       {
         const auto child_path = dependency_session->names.find(dependency.get().name);
 
         if (child_path == dependency_session->names.end())
-        {
           return false;
-        }
 
         const auto child = dependency_session->nodes.find(child_path->second);
 
         if (child == dependency_session->nodes.end() || child->second.box.empty())
-        {
           return false;
-        }
 
         std::string checksum;
 
         if (!sha256_file(child->second.box, checksum, error))
-        {
           return false;
-        }
 
         const auto declared = std::find_if(
           metadata.dependencies.begin(),
@@ -1958,16 +1834,12 @@ namespace forge
       std::error_code filesystem_error;
 
       if (!std::filesystem::is_directory(boxes_directory))
-      {
         return true;
-      }
 
       for (const auto& entry : std::filesystem::directory_iterator { boxes_directory, filesystem_error })
       {
         if (filesystem_error)
-        {
           break;
-        }
 
         const auto filename = entry.path().filename().string();
         const auto platform_independent_filename = prefix + ".cbox";
@@ -1986,9 +1858,7 @@ namespace forge
         const auto modified = entry.last_write_time(filesystem_error);
 
         if (filesystem_error)
-        {
           break;
-        }
 
         BoxMetadata metadata;
         std::ostringstream metadata_error;
@@ -2014,9 +1884,7 @@ namespace forge
           node.box_metadata = std::move(metadata);
 
           if (report_reuse)
-          {
             output << "Using cached dependency " << node.recipe.name << '\n';
-          }
 
           return true;
         }
@@ -2245,13 +2113,9 @@ namespace forge
           Recipe requested_recipe;
 
           if (read_recipe(directory / "forge.recipe.toml", requested_recipe, error))
-          {
             requested_version = package_version(requested_recipe);
-          }
           else
-          {
             return false;
-          }
         }
 
         if (!existing_version.empty()
@@ -2388,9 +2252,7 @@ namespace forge
           box_metadata = std::move(metadata);
         }
         else if (!read_recipe(directory / "forge.recipe.toml", dependency_recipe, error))
-        {
           return false;
-        }
 
         const auto selected_dependency_profile =
           !is_box
@@ -2433,9 +2295,7 @@ namespace forge
           }
 
           if (!select_recipe_target(dependency_recipe, preferred->name, error))
-          {
             return false;
-          }
 
           dependency_target = preferred->name;
         }
@@ -2496,19 +2356,13 @@ namespace forge
                                std::ostream& error)
     {
       if (!node.box.empty())
-      {
         return true;
-      }
 
       if (!find_compatible_dependency_box(node, process_runner, true, output, error))
-      {
         return false;
-      }
 
       if (!node.box.empty())
-      {
         return true;
-      }
 
       output << "Resolving dependency " << node.recipe.name << '\n';
 
@@ -2548,9 +2402,7 @@ namespace forge
       DependencyNode* node = nullptr;
 
       if (!read_dependency_node(parent_directory, dependency, process_runner, node, output, error))
-      {
         return false;
-      }
 
       if (active.contains(node->directory))
       {
@@ -2559,18 +2411,14 @@ namespace forge
       }
 
       if (!collected.insert(node->directory).second)
-      {
         return true;
-      }
 
       active.insert(node->directory);
 
       for (const auto& child : node->recipe.dependencies)
       {
         if (!dependency_matches_target(child))
-        {
           continue;
-        }
 
         if (!collect_dependency(
           node->directory,
@@ -2591,9 +2439,7 @@ namespace forge
       active.erase(node->directory);
 
       if (!ensure_dependency_box(*node, process_runner, output, error))
-      {
         return false;
-      }
 
       ordered.push_back(node);
       return true;
@@ -2624,9 +2470,7 @@ namespace forge
       filesystem_error.clear();
 
       if (extract_box(node.box, dependencies_directory, process_runner, output, error) != 0)
-      {
         return false;
-      }
 
       std::filesystem::rename(extracted, destination, filesystem_error);
 
@@ -2735,9 +2579,7 @@ namespace forge
           for (const auto& artifact : node.box_metadata->artifacts)
           {
             if (artifact.kind == "dynamic_library")
-            {
               resolved.runtimes.push_back(destination / artifact.path);
-            }
             else if (artifact.kind == "import_library")
             {
               resolved.libraries.push_back({ destination / artifact.path, std::nullopt });
@@ -2772,9 +2614,7 @@ namespace forge
 
 #ifdef _WIN32
         if (!resolved.libraries.empty() && !resolved.runtimes.empty())
-        {
           resolved.libraries.front().runtime = resolved.runtimes.front();
-        }
 #endif
       }
       else if (node.recipe.type == "imported_library" && node.box_metadata)
@@ -2788,9 +2628,7 @@ namespace forge
             resolved.libraries.push_back({ path, std::nullopt });
 
             if (artifact.kind == "static_library")
-            {
               resolved.has_static_library = true;
-            }
           }
           else if (artifact.kind == "dynamic_library")
           {
@@ -2814,9 +2652,7 @@ namespace forge
           );
 
           if (runtime != resolved.runtimes.end())
-          {
             library.runtime = *runtime;
-          }
         }
 #endif
       }
@@ -2853,9 +2689,7 @@ namespace forge
       );
 
       if (!has_compiled_dependency)
-      {
         return true;
-      }
 
       ToolchainIdentity project;
       std::ifstream file { build_directory / "forge-toolchain.toml" };
@@ -2867,9 +2701,7 @@ namespace forge
         const auto equals = content.find('=');
 
         if (equals == std::string_view::npos)
-        {
           continue;
-        }
 
         const auto key = trim(content.substr(0, equals));
         std::string value;
@@ -2886,9 +2718,7 @@ namespace forge
             );
 
             if (parsed.ec == std::errc {} && parsed.ptr == number.data() + number.size())
-            {
               continue;
-            }
           }
 
           error << "forge: could not read configured toolchain identity\n";
@@ -2896,21 +2726,13 @@ namespace forge
         }
 
         if (key == "compiler")
-        {
           project.compiler = std::move(value);
-        }
         else if (key == "compiler_version")
-        {
           project.compiler_version = std::move(value);
-        }
         else if (key == "configuration")
-        {
           project.configuration = std::move(value);
-        }
         else if (key == "runtime")
-        {
           project.runtime = std::move(value);
-        }
       }
 
       if (project.compiler.empty()
@@ -2926,14 +2748,10 @@ namespace forge
       for (const auto& dependency : dependencies)
       {
         if (dependency.libraries.empty())
-        {
           continue;
-        }
 
         if (dependency.type == "imported_library" && !dependency.has_static_library)
-        {
           continue;
-        }
 
         if (!dependency.toolchain)
         {
@@ -3016,9 +2834,7 @@ namespace forge
       for (std::size_t index = 0; index < targets.size(); ++index)
       {
         if (targets[index].type != "dynamic_library")
-        {
           continue;
-        }
 
         const auto runtime =
           build_directory / dynamic_library_filename("forge_internal_" + std::to_string(index));
@@ -3068,9 +2884,7 @@ namespace forge
       for (const auto& dependency : recipe.dependencies)
       {
         if (!dependency_matches_target(dependency))
-        {
           continue;
-        }
 
         if (!direct_names.insert(dependency.name).second)
         {
@@ -3174,9 +2988,7 @@ namespace forge
       }
 
       if (!load_lockfile(canonical_project, error))
-      {
         return 2;
-      }
     }
 
     ActiveProjectScope active_project { canonical_project };
@@ -3190,9 +3002,7 @@ namespace forge
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
-    {
       return 2;
-    }
 
     if (!select_dependency_profile(
       recipe,
@@ -3219,9 +3029,7 @@ namespace forge
     }
 
     if (!select_recipe_target(recipe, requested_target, error))
-    {
       return 2;
-    }
 
     auto configuration = dependency_session->options.configuration;
 
@@ -3325,9 +3133,7 @@ namespace forge
     }
 
     if (recipe.type == "imported_library")
-    {
       return validate_imported_project(project_directory, recipe, output, error) ? 0 : 2;
-    }
 
     if (recipe.sources.empty() && recipe.type != "header_only")
     {
@@ -3404,9 +3210,7 @@ namespace forge
     std::vector<RuntimeAsset> runtime_assets;
 
     if (!collect_runtime_assets(project_directory, recipe.runtime_files, runtime_assets, error))
-    {
       return 2;
-    }
 
     const auto forge_directory = project_directory / ".forge";
     auto generated_directory = forge_directory / "generated";
@@ -3422,9 +3226,7 @@ namespace forge
     std::vector<ResolvedDependency> dependencies;
 
     if (!clean_runtime_assets(build_directory, runtime_asset_manifest, error))
-    {
       return 2;
-    }
 
     if (!resolve_dependencies(
       project_directory,
@@ -3450,18 +3252,14 @@ namespace forge
     if (is_root_project && dependency_session->options.dependencies_only)
     {
       if (!write_lockfile(error))
-      {
         return 2;
-      }
 
       output << "Updated locked dependencies for " << dependency_target() << '\n';
       return 0;
     }
 
     if (!stage_runtime_dependencies(build_directory / "runtime", dependencies, error))
-    {
       return 2;
-    }
 
     collect_dependency_runtime_assets(dependencies, runtime_assets);
 
@@ -3532,9 +3330,7 @@ namespace forge
     }
 
     if (!validate_dependency_toolchains(build_directory, dependencies, error))
-    {
       return 2;
-    }
 
     output << "Building " << recipe.name << '\n' << std::flush;
 
@@ -3553,9 +3349,7 @@ namespace forge
     }
 
     if (!stage_internal_runtime_dependencies(build_directory, recipe.internal_targets, error))
-    {
       return 2;
-    }
 
     if (!runtime_assets.empty()
         && !stage_runtime_assets(
@@ -3573,16 +3367,12 @@ namespace forge
       output << "Validated " << recipe.public_headers.size() << " public header";
 
       if (recipe.public_headers.size() != 1)
-      {
         output << 's';
-      }
 
       output << '\n';
 
       if (is_root_project && !write_lockfile(error))
-      {
         return 2;
-      }
 
       return 0;
     }
@@ -3598,16 +3388,12 @@ namespace forge
 #endif
     }
     else if (recipe.type == "dynamic_library")
-    {
       artifact = build_directory / dynamic_library_filename(recipe.name);
-    }
 
     output << "Built " << artifact.string() << '\n';
 
     if (is_root_project && !write_lockfile(error))
-    {
       return 2;
-    }
 
     return 0;
   }

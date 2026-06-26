@@ -32,13 +32,9 @@ namespace forge
     }
 
     if (removed == 0)
-    {
       output << "Already clean\n";
-    }
     else
-    {
       output << "Cleaned " << forge_directory.string() << '\n';
-    }
 
     return 0;
   }

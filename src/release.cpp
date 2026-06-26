@@ -38,16 +38,12 @@ namespace forge
       std::vector<std::string> profiles;
 
       for (const auto& variant : recipe.release_variants)
-      {
         profiles.push_back(variant.profile);
-      }
 
       if (profiles.empty())
       {
         if (const auto profile = selected_workflow_release_profile(recipe))
-        {
           profiles.push_back(*profile);
-        }
       }
 
       return profiles;
@@ -126,25 +122,19 @@ namespace forge
       const auto profiles = selected_workflow_release_profiles(recipe);
 
       if (profiles.empty())
-      {
         return true;
-      }
 
       for (const auto& profile : profiles)
       {
         Recipe profiled = recipe;
 
         if (!select_dependency_profile(profiled, profile, true, error))
-        {
           return false;
-        }
 
         for (const auto& dependency : profiled.dependencies)
         {
           if (!dependency_matches_current_target(dependency))
-          {
             continue;
-          }
 
           const auto local_git =
             !dependency.git.empty()
@@ -207,9 +197,7 @@ namespace forge
                                    std::ostream& error)
     {
       if (!std::filesystem::is_directory(source))
-      {
         return true;
-      }
 
       std::error_code filesystem_error;
       std::filesystem::create_directories(destination, filesystem_error);
@@ -243,16 +231,12 @@ namespace forge
       assets.clear();
 
       if (!input)
-      {
         return true;
-      }
 
       while (std::getline(input, line))
       {
         if (line.empty())
-        {
           continue;
-        }
 
         const auto path = std::filesystem::path { line };
 
@@ -282,9 +266,7 @@ namespace forge
                             std::ostream& error)
     {
       if (source.filename() == ".forge" || source.filename() == ".git")
-      {
         return true;
-      }
 
       std::error_code filesystem_error;
 
@@ -355,19 +337,13 @@ namespace forge
       const auto platform = hosted_platform();
 
       if (platform == "linux")
-      {
         return recipe.release_readme.linux_path;
-      }
 
       if (platform == "macos")
-      {
         return recipe.release_readme.macos_path;
-      }
 
       if (platform == "windows")
-      {
         return recipe.release_readme.windows_path;
-      }
 
       return {};
     }
@@ -389,9 +365,7 @@ namespace forge
       line = trim(line);
 
       if (!line.starts_with("##"))
-      {
         return false;
-      }
 
       line.remove_prefix(2);
       return trim(line) == version;
@@ -422,9 +396,7 @@ namespace forge
       auto version = recipe.version;
 
       if (recipe.build_number)
-      {
         version += "+build." + std::to_string(*recipe.build_number);
-      }
 
       return version;
     }
@@ -451,9 +423,7 @@ namespace forge
       }
 
       while (!slug.empty() && slug.back() == '-')
-      {
         slug.pop_back();
-      }
 
       return slug.empty() ? "release" : slug;
     }
@@ -461,9 +431,7 @@ namespace forge
     std::string release_bundle_base(const Recipe& recipe)
     {
       if (recipe.release_bundle_name)
-      {
         return *recipe.release_bundle_name;
-      }
 
       for (const auto& target : recipe.targets)
       {
@@ -535,17 +503,13 @@ namespace forge
       for (const auto& dependency : recipe.dependencies)
       {
         if (!dependency_matches_current_target(dependency))
-        {
           continue;
-        }
 
         BoxMetadata metadata;
         const auto box = dependency_boxes_directory / (dependency.name + ".cbox");
 
         if (!read_box_metadata(box, project_directory, process_runner, metadata, error))
-        {
           return true;
-        }
 
         if (metadata.type != "header_only"
             || !metadata.macos_system_include_directories.empty()
@@ -592,9 +556,7 @@ namespace forge
         filename += "-ho";
       }
       else
-      {
         filename += "-" + hosted_target();
-      }
 
       return filename + ".cbox";
     }
@@ -605,9 +567,7 @@ namespace forge
                                std::ostream& error)
     {
       if (!std::filesystem::is_regular_file(source))
-      {
         return true;
-      }
 
       std::ifstream input { source };
 
@@ -630,9 +590,7 @@ namespace forge
         }
 
         if (is_section_heading(line))
-        {
           break;
-        }
 
         extracted << line << '\n';
       }
@@ -832,9 +790,7 @@ namespace forge
       std::vector<std::string> tag_arguments { "git", "tag" };
 
       if (force_tag)
-      {
         tag_arguments.push_back("--force");
-      }
 
       tag_arguments.insert(tag_arguments.end(), { "-a", std::string { tag } });
 
@@ -856,9 +812,7 @@ namespace forge
       std::vector<std::string> push_arguments { "git", "push" };
 
       if (force_tag)
-      {
         push_arguments.push_back("--force");
-      }
 
       push_arguments.insert(
         push_arguments.end(),
@@ -927,14 +881,10 @@ namespace forge
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
-    {
       return 2;
-    }
 
     if (!select_recipe_target(recipe, target, error))
-    {
       return 2;
-    }
 
     if (recipe.type != "executable")
     {
@@ -947,14 +897,10 @@ namespace forge
     options.profile = profile;
 
     if (profile == workflow_release_profile)
-    {
       options.configuration = "Release";
-    }
 
     if (build_project(project_directory, options, process_runner, output, error) != 0)
-    {
       return 2;
-    }
 
     if (!is_safe_path_component(recipe.name) || !is_safe_path_component(recipe.version))
     {
@@ -965,9 +911,7 @@ namespace forge
     auto build_directory = project_directory / ".forge" / "build";
 
     if (recipe.selected_target)
-    {
       build_directory /= *recipe.selected_target;
-    }
 
     auto executable = build_directory / recipe.name;
 
@@ -1022,9 +966,7 @@ namespace forge
     }
 
     if (!copy_file(executable, staging_directory / staged_executable_name, error))
-    {
       return 2;
-    }
 
     if (!copy_runtime_dependencies(
       build_directory / "runtime",
@@ -1102,9 +1044,7 @@ namespace forge
       }
 
       if (!copy_file(project_directory / release_readme, staging_directory / "README.txt", error))
-      {
         return 2;
-      }
     }
 
     std::optional<std::string> release_notes;
@@ -1187,15 +1127,11 @@ namespace forge
       for (const auto& target : recipe.targets)
       {
         if (!target.test && target.type == "executable")
-        {
           executable_targets.push_back(target.name);
-        }
       }
 
       if (executable_targets.size() < 2)
-      {
         return 0;
-      }
 
       const auto release_directory = project_directory / ".forge" / "release";
       const auto bundle_name = release_bundle_base(recipe)
@@ -1317,14 +1253,10 @@ namespace forge
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
-    {
       return 2;
-    }
 
     if (!validate_workflow_release_dependencies(recipe, error))
-    {
       return 2;
-    }
 
     const auto workflow_profile = options.profile ? options.profile : selected_workflow_release_profile(recipe);
 
@@ -1333,9 +1265,7 @@ namespace forge
       for (const auto& release_target : recipe.targets)
       {
         if (release_target.test)
-        {
           continue;
-        }
 
         if (release_target.type == "executable" && !recipe.release_variants.empty())
         {
@@ -1360,9 +1290,7 @@ namespace forge
             }
 
             if (prepare_release(project_directory, target_options, process_runner, output, error) != 0)
-            {
               return 2;
-            }
 
             first_variant = false;
           }
@@ -1373,24 +1301,18 @@ namespace forge
           target_options.target = release_target.name;
 
           if (prepare_release(project_directory, target_options, process_runner, output, error) != 0)
-          {
             return 2;
-          }
         }
       }
 
       if (create_hosted_executable_bundle(project_directory, recipe, process_runner, output, error) != 0)
-      {
         return 2;
-      }
 
       return 0;
     }
 
     if (!select_recipe_target(recipe, options.target, error))
-    {
       return 2;
-    }
 
     if (!options.profile
         && (recipe.type == "static_library"
@@ -1405,18 +1327,14 @@ namespace forge
         target_options.profile = variant.profile;
 
         if (prepare_release(project_directory, target_options, process_runner, output, error) != 0)
-        {
           return 2;
-        }
       }
 
       return 0;
     }
 
     if (!select_dependency_profile(recipe, workflow_profile, true, error))
-    {
       return 2;
-    }
 
     if (options.skip_unsupported
         && recipe.type == "imported_library"
@@ -1454,9 +1372,7 @@ namespace forge
       }
 
       if (options.merge_executable_release)
-      {
         return 0;
-      }
 
       const auto archive = release_directory / (recipe.name + "-" + package_version(recipe) + ".zip");
       const auto hosted_archive =
@@ -1505,9 +1421,7 @@ namespace forge
       }
 
       if (publish_box(box, project_directory, process_runner, output, error) != 0)
-      {
         return 2;
-      }
     }
     else
     {
@@ -1558,9 +1472,7 @@ namespace forge
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
-    {
       return 2;
-    }
 
     std::string tag;
 

@@ -170,9 +170,7 @@ namespace
     expect(launched_command.size() == 2, "test launches only the selected target with arguments");
 
     if (launched_command.size() == 2)
-    {
       expect(launched_command[1] == "--quick", "test forwards arguments to the selected target");
-    }
 
     expect(contains(output.str(), "1 passed, 0 failed"), "selected test reports its summary");
   }

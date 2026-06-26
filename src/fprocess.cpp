@@ -30,9 +30,7 @@ namespace forge
     native_arguments.reserve(arguments.size() + 1);
 
     for (const auto& argument : arguments)
-    {
       native_arguments.push_back(const_cast<char*>(argument.c_str()));
-    }
 
     native_arguments.push_back(nullptr);
 
@@ -61,9 +59,7 @@ namespace forge
     if (child == 0)
     {
       if (chdir(working_directory.c_str()) != 0)
-      {
         _exit(126);
-      }
 
       execvp(native_arguments.front(), native_arguments.data());
       _exit(127);
@@ -78,9 +74,7 @@ namespace forge
     }
 
     if (WIFEXITED(status))
-    {
       return WEXITSTATUS(status);
-    }
 
     return 2;
 #endif

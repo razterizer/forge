@@ -42,9 +42,7 @@ namespace forge
       }
 
       if (entry.back() == '/')
-      {
         entry.remove_suffix(1);
-      }
 
       while (!entry.empty())
       {
@@ -52,14 +50,10 @@ namespace forge
         const auto component = entry.substr(0, slash);
 
         if (component.empty() || component == "." || component == "..")
-        {
           return false;
-        }
 
         if (slash == std::string_view::npos)
-        {
           break;
-        }
 
         entry.remove_prefix(slash + 1);
       }
@@ -111,9 +105,7 @@ namespace forge
       }
 
       if (index == 0)
-      {
         break;
-      }
     }
 
     if (end_offset == std::string::npos)

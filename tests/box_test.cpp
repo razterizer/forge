@@ -186,9 +186,7 @@ namespace
     std::filesystem::path manifest;
 
     for (const auto& entry : std::filesystem::directory_iterator { staging_root })
-    {
       manifest = entry.path() / "cbox.toml";
-    }
 
     expect(std::filesystem::exists(manifest), "box create stages a manifest");
     expect(!contains(read_file(manifest), "build ="), "box manifest omits an unspecified build number");
@@ -361,9 +359,7 @@ namespace
         }
 
         if (command.size() > 2 && command[1] == "-E" && command[2] == "tar")
-        {
           return forge::run_process(command, working_directory, process_error);
-        }
 
         return 0;
       };
@@ -377,9 +373,7 @@ namespace
     std::filesystem::path manifest;
 
     for (const auto& entry : std::filesystem::directory_iterator { staging_root })
-    {
       manifest = entry.path() / "cbox.toml";
-    }
 
     expect(
       contains(read_file(manifest), "path = \"runtime-assets/hello/fonts/font.txt\""),

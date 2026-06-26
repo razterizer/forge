@@ -3643,9 +3643,7 @@ namespace
     for (const auto& entry : std::filesystem::directory_iterator { project_directory / ".forge/boxes" })
     {
       if (entry.path().extension() == ".cbox")
-      {
         box_path = entry.path();
-      }
     }
 
     expect(!box_path.empty(), "box create produces a cbox archive");
@@ -3816,9 +3814,7 @@ namespace
     for (const auto& entry : std::filesystem::directory_iterator { project_directory / ".forge/boxes" })
     {
       if (entry.path().extension() == ".cbox")
-      {
         box_path = entry.path();
-      }
     }
 
     expect(!box_path.empty(), "static library box create produces a cbox archive");
@@ -3938,9 +3934,7 @@ namespace
     for (const auto& entry : std::filesystem::directory_iterator { project_directory / ".forge/boxes" })
     {
       if (entry.path().extension() == ".cbox")
-      {
         box_path = entry.path();
-      }
     }
 
     expect(!box_path.empty(), "header-only box create produces a cbox archive");
@@ -4109,9 +4103,7 @@ namespace
     for (const auto& entry : std::filesystem::directory_iterator { project / ".forge/boxes" })
     {
       if (entry.path().extension() == ".cbox")
-      {
         box = entry.path();
-      }
     }
 
     expect(!box.empty(), "imported-library box creation produces a cbox archive");
@@ -4702,9 +4694,7 @@ namespace
     auto commit = read_file(answer / ".git/refs/heads/main");
 
     if (!commit.empty() && commit.back() == '\n')
-    {
       commit.pop_back();
-    }
 
     write_file(
       application / "forge.recipe.toml",
@@ -4821,9 +4811,7 @@ namespace
     auto commit = read_file(pinned / ".git/refs/heads/main");
 
     if (!commit.empty() && commit.back() == '\n')
-    {
       commit.pop_back();
-    }
 
     write_file(
       application / "forge.recipe.toml",
@@ -5062,9 +5050,7 @@ namespace
     for (const auto& entry : std::filesystem::directory_iterator { answer / ".forge/boxes" })
     {
       if (entry.path().extension() == ".cbox")
-      {
         box_path = entry.path();
-      }
     }
 
     std::string checksum;

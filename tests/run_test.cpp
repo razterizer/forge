@@ -143,14 +143,10 @@ namespace
         working_directories.push_back(working_directory);
 
         if (command.size() > 1 && command[1] == "--build")
-        {
           write_executable(directory.path());
-        }
 
         if (commands.size() == 3)
-        {
           return 7;
-        }
 
         return 0;
       };
@@ -194,9 +190,7 @@ namespace
                    std::ostream&)
       {
         if (command.size() > 1 && command[1] == "--build")
-        {
           write_executable(directory.path());
-        }
 
         return 0;
       };

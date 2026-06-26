@@ -20,9 +20,7 @@ namespace forge
                         std::ostream& error)
     {
       if (std::filesystem::exists(path))
-      {
         return true;
-      }
 
       std::ofstream file { path };
 
@@ -47,9 +45,7 @@ namespace forge
                                 std::ostream& error)
     {
       if (!std::filesystem::exists(path))
-      {
         return write_new_file(path, "**/.forge/\n/build/\n/out/\n", error);
-      }
 
       std::ifstream existing { path };
 
@@ -71,9 +67,7 @@ namespace forge
         const auto rule = trim(line);
 
         if (rule == ".forge/" || rule == "/.forge/" || rule == "**/.forge/")
-        {
           return true;
-        }
       }
 
       std::ofstream file { path, std::ios::app };
@@ -85,9 +79,7 @@ namespace forge
       }
 
       if (!contents.empty() && contents.back() != '\n')
-      {
         file << '\n';
-      }
 
       file << "**/.forge/\n";
 
@@ -115,16 +107,12 @@ namespace forge
     bool is_safe_project_path(const std::filesystem::path& path)
     {
       if (path.empty() || path.is_absolute())
-      {
         return false;
-      }
 
       for (const auto& component : path)
       {
         if (component == ".." || component.empty())
-        {
           return false;
-        }
       }
 
       return true;
@@ -137,16 +125,12 @@ namespace forge
       const auto project = std::filesystem::weakly_canonical(project_directory, filesystem_error);
 
       if (filesystem_error)
-      {
         return false;
-      }
 
       const auto candidate = std::filesystem::weakly_canonical(path, filesystem_error);
 
       if (filesystem_error)
-      {
         return false;
-      }
 
       auto project_component = project.begin();
       auto candidate_component = candidate.begin();
@@ -154,9 +138,7 @@ namespace forge
       for (; project_component != project.end(); ++project_component, ++candidate_component)
       {
         if (candidate_component == candidate.end() || *candidate_component != *project_component)
-        {
           return false;
-        }
       }
 
       return candidate_component != candidate.end();
@@ -257,9 +239,7 @@ namespace forge
       for (const auto& feature : workflow_features)
       {
         if (feature.name == name)
-        {
           return &feature;
-        }
       }
 
       return nullptr;
@@ -268,9 +248,7 @@ namespace forge
     bool is_job_key(std::string_view line, std::string_view job_id)
     {
       if (!line.starts_with("  ") || line.starts_with("    "))
-      {
         return false;
-      }
 
       const auto key = trim(line.substr(2));
       return key == std::string { job_id } + ":"
@@ -281,9 +259,7 @@ namespace forge
     bool is_any_job_key(std::string_view line)
     {
       if (!line.starts_with("  ") || line.starts_with("    "))
-      {
         return false;
-      }
 
       const auto key = trim(line.substr(2));
       return !key.empty() && !key.starts_with('#') && key.ends_with(':');
@@ -346,9 +322,7 @@ namespace forge
           inspection.insertion = offset;
 
           if (inside_job)
-          {
             inspection.job_end = offset;
-          }
 
           break;
         }
@@ -381,9 +355,7 @@ namespace forge
         }
 
         if (newline == std::string_view::npos)
-        {
           break;
-        }
 
         offset = newline + 1;
       }
@@ -395,9 +367,7 @@ namespace forge
       }
 
       if (inside_job)
-      {
         inspection.job_end = inspection.insertion;
-      }
 
       if (inspection.job_start != std::string_view::npos)
       {
@@ -407,16 +377,12 @@ namespace forge
         );
 
         while (existing.ends_with('\n'))
-        {
           existing.remove_suffix(1);
-        }
 
         auto expected = current_job;
 
         while (expected.ends_with('\n'))
-        {
           expected.remove_suffix(1);
-        }
 
         inspection.current_contents = existing == expected;
       }
@@ -490,9 +456,7 @@ namespace forge
       if (updated.size() > inspection.jobs_content && !updated.ends_with("\n\n"))
       {
         if (!updated.ends_with('\n'))
-        {
           updated += '\n';
-        }
 
         updated += '\n';
       }
@@ -567,9 +531,7 @@ namespace forge
         "          -DCMAKE_BUILD_TYPE=Release -DFORGE_BUILD_TESTS=OFF";
 
       if (platform == "windows")
-      {
         workflow += " -DCMAKE_CXX_COMPILER=cl";
-      }
 
       workflow +=
         "\n"
@@ -741,9 +703,7 @@ namespace forge
     output << "Available workflow features:\n";
 
     for (const auto& feature : workflow_features)
-    {
       output << "  " << feature.name << "  " << feature.description << '\n';
-    }
 
     return 0;
   }
@@ -756,16 +716,12 @@ namespace forge
     std::filesystem::path path;
 
     if (!validate_workflow_path(project_directory, workflow_file, path, error))
-    {
       return 2;
-    }
 
     const auto workflow = read_workflow(path, workflow_file, error);
 
     if (!workflow)
-    {
       return 2;
-    }
 
     output << "Workflow feature status for " << workflow_file.string() << ":\n";
 
@@ -789,21 +745,13 @@ namespace forge
       output << "  " << feature.name << "  ";
 
       if (inspection.job_start == std::string_view::npos)
-      {
         output << "missing\n";
-      }
       else if (!inspection.managed)
-      {
         output << "unmanaged collision\n";
-      }
       else if (inspection.current_marker && inspection.current_contents)
-      {
         output << "current\n";
-      }
       else
-      {
         output << "outdated\n";
-      }
     }
 
     return 0;
@@ -828,16 +776,12 @@ namespace forge
     std::filesystem::path path;
 
     if (!validate_workflow_path(project_directory, workflow_file, path, error))
-    {
       return 2;
-    }
 
     const auto workflow = read_workflow(path, workflow_file, error);
 
     if (!workflow)
-    {
       return 2;
-    }
 
     const auto job = definition->job(*workflow);
     WorkflowInspection inspection;
@@ -872,9 +816,7 @@ namespace forge
                << workflow_file.string();
 
         if (!inspection.current_marker || !inspection.current_contents)
-        {
           output << " but is outdated; use workflow update-feature " << feature;
-        }
 
         output << '\n';
         return 0;
@@ -909,9 +851,7 @@ namespace forge
       updated += job;
 
       if (inspection.job_end < workflow->size())
-      {
         updated += '\n';
-      }
 
       updated += workflow->substr(inspection.job_end);
     }
@@ -955,18 +895,14 @@ namespace forge
              << workflow_file.string() << '\n';
 
       if (operation != GithubWorkflowFeatureOperation::remove)
-      {
         output << '\n' << job;
-      }
 
       output << "\nRun again with --apply to update the workflow.\n";
       return 0;
     }
 
     if (!write_workflow(path, workflow_file, updated, error))
-    {
       return 2;
-    }
 
     const auto preposition =
       operation == GithubWorkflowFeatureOperation::add ? "to "
@@ -1019,9 +955,7 @@ namespace forge
     for (const auto& [filename, contents] : workflows)
     {
       if (!write_new_file(workflows_directory / filename, contents, error))
-      {
         return false;
-      }
     }
 
     const std::string release_notes =

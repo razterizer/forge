@@ -87,9 +87,7 @@ namespace forge
       }
 
       for (std::size_t index = 0; index < state.size(); ++index)
-      {
         state[index] += working[index];
-      }
     }
 
   } // namespace
@@ -140,16 +138,12 @@ namespace forge
         block.fill(0);
       }
       else
-      {
         std::fill(block.begin() + count + 1, block.end(), 0);
-      }
 
       const auto bit_count = byte_count * 8;
 
       for (std::size_t index = 0; index < 8; ++index)
-      {
         block[63 - index] = static_cast<std::uint8_t>(bit_count >> (index * 8));
-      }
 
       process_block(block, state);
       break;
@@ -159,9 +153,7 @@ namespace forge
     result << std::hex << std::setfill('0');
 
     for (const auto value : state)
-    {
       result << std::setw(8) << value;
-    }
 
     checksum = result.str();
     return true;

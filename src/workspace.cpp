@@ -33,9 +33,7 @@ namespace forge
       value = trim(value);
 
       if (value.size() < 2 || value.front() != '"' || value.back() != '"')
-      {
         return false;
-      }
 
       result = value.substr(1, value.size() - 2);
       return result.find('"') == std::string::npos;
@@ -46,38 +44,28 @@ namespace forge
       value = trim(value);
 
       if (value.size() < 2 || value.front() != '[' || value.back() != ']')
-      {
         return false;
-      }
 
       value = trim(value.substr(1, value.size() - 2));
 
       while (!value.empty())
       {
         if (value.front() != '"')
-        {
           return false;
-        }
 
         const auto end = value.find('"', 1);
 
         if (end == std::string_view::npos)
-        {
           return false;
-        }
 
         paths.emplace_back(value.substr(1, end - 1));
         value = trim(value.substr(end + 1));
 
         if (value.empty())
-        {
           break;
-        }
 
         if (value.front() != ',')
-        {
           return false;
-        }
 
         value = trim(value.substr(1));
       }
@@ -130,9 +118,7 @@ namespace forge
         Recipe recipe;
 
         if (!read_recipe(directory / "forge.recipe.toml", recipe, error))
-        {
           return false;
-        }
 
         if (!names.insert(recipe.name).second)
         {
@@ -165,9 +151,7 @@ namespace forge
       std::map<std::filesystem::path, const WorkspaceProject*> projects;
 
       for (const auto& project : workspace.projects)
-      {
         projects.emplace(project.path, &project);
-      }
 
       std::set<std::filesystem::path> active;
       std::set<std::filesystem::path> resolved;
@@ -175,9 +159,7 @@ namespace forge
       const auto visit = [&](const auto& self, const WorkspaceProject& project) -> bool
       {
         if (resolved.contains(project.path))
-        {
           return true;
-        }
 
         if (!active.insert(project.path).second)
         {
@@ -188,25 +170,19 @@ namespace forge
         auto recipe = recipes.at(project.path);
 
         if (!select_dependency_profile(recipe, profile, false, error))
-        {
           return false;
-        }
 
         for (const auto& dependency : recipe.dependencies)
         {
           if (dependency.path.empty())
-          {
             continue;
-          }
 
           std::error_code filesystem_error;
           const auto dependency_path =
             std::filesystem::weakly_canonical(project.path / dependency.path, filesystem_error);
 
           if (filesystem_error)
-          {
             continue;
-          }
 
           const auto workspace_dependency = projects.find(dependency_path);
 
@@ -246,9 +222,7 @@ namespace forge
       for (const auto& project : workspace.projects)
       {
         if (!visit(visit, project))
-        {
           return false;
-        }
       }
 
       return true;
@@ -271,9 +245,7 @@ namespace forge
       const auto slash = selection.find('/');
 
       if (slash == std::string_view::npos)
-      {
         project = selection;
-      }
       else
       {
         project = selection.substr(0, slash);
@@ -350,9 +322,7 @@ namespace forge
       auto content = trim(line);
 
       if (content.empty() || content.front() == '#')
-      {
         continue;
-      }
 
       if (content.front() == '[' && content.back() == ']')
       {
@@ -461,16 +431,12 @@ namespace forge
     std::map<std::filesystem::path, Recipe> recipes;
 
     if (!load_workspace(workspace_directory, workspace, recipes, error))
-    {
       return 2;
-    }
 
     std::vector<const WorkspaceProject*> ordered;
 
     if (!order_projects(workspace, recipes, project, profile, ordered, error))
-    {
       return 2;
-    }
 
     std::set<std::filesystem::path> dependency_projects;
 
@@ -479,25 +445,19 @@ namespace forge
       auto recipe = recipes.at(current->path);
 
       if (!select_dependency_profile(recipe, profile, false, error))
-      {
         return 2;
-      }
 
       for (const auto& dependency : recipe.dependencies)
       {
         if (dependency.path.empty())
-        {
           continue;
-        }
 
         std::error_code filesystem_error;
         const auto dependency_path =
           std::filesystem::weakly_canonical(current->path / dependency.path, filesystem_error);
 
         if (!filesystem_error && recipes.contains(dependency_path))
-        {
           dependency_projects.insert(dependency_path);
-        }
       }
     }
 
@@ -520,9 +480,7 @@ namespace forge
         options.compile_definitions = compile_definitions;
 
         if (build_project(current->path, options, process_runner, output, error) != 0)
-        {
           return 2;
-        }
       }
       else
       {
@@ -534,9 +492,7 @@ namespace forge
           options.compile_definitions = compile_definitions;
 
           if (build_project(current->path, options, process_runner, output, error) != 0)
-          {
             return 2;
-          }
         }
       }
     }
@@ -575,24 +531,18 @@ namespace forge
     std::map<std::filesystem::path, Recipe> recipes;
 
     if (!load_workspace(workspace_directory, workspace, recipes, error))
-    {
       return 2;
-    }
 
     std::string project_name;
     std::optional<std::string> target;
 
     if (!parse_selection(selection, project_name, target, error))
-    {
       return 2;
-    }
 
     const auto* project = find_project(workspace, project_name, error);
 
     if (!project)
-    {
       return 2;
-    }
 
     return run_project(
       project->path,
@@ -635,24 +585,18 @@ namespace forge
     std::map<std::filesystem::path, Recipe> recipes;
 
     if (!load_workspace(workspace_directory, workspace, recipes, error))
-    {
       return 2;
-    }
 
     std::string project_name;
     std::optional<std::string> target;
 
     if (!parse_selection(selection, project_name, target, error))
-    {
       return 2;
-    }
 
     const auto* project = find_project(workspace, project_name, error);
 
     if (!project)
-    {
       return 2;
-    }
 
     return build_and_run_project(
       project->path,
@@ -695,9 +639,7 @@ namespace forge
     std::map<std::filesystem::path, Recipe> recipes;
 
     if (!load_workspace(workspace_directory, workspace, recipes, error))
-    {
       return 2;
-    }
 
     if (selection)
     {
@@ -705,16 +647,12 @@ namespace forge
       std::optional<std::string> target;
 
       if (!parse_selection(*selection, project_name, target, error))
-      {
         return 2;
-      }
 
       const auto* project = find_project(workspace, project_name, error);
 
       if (!project)
-      {
         return 2;
-      }
 
       return test_project(
         project->path,
@@ -734,9 +672,7 @@ namespace forge
     for (const auto& project : workspace.projects)
     {
       if (!has_tests(recipes.at(project.path)))
-      {
         continue;
-      }
 
       output << "Testing project " << project.name << '\n';
       const auto result = test_project(
@@ -750,9 +686,7 @@ namespace forge
       );
 
       if (result == 0)
-      {
         ++passed;
-      }
       else
       {
         ++failed;
@@ -769,17 +703,13 @@ namespace forge
     output << "Workspace tests: " << passed << " project";
 
     if (passed != 1)
-    {
       output << 's';
-    }
 
     output << " passed, "
            << failed << " failed\n";
 
     if (failed == 0)
-    {
       return 0;
-    }
 
     return command_failed ? 2 : 1;
   }
@@ -792,9 +722,7 @@ namespace forge
     std::map<std::filesystem::path, Recipe> recipes;
 
     if (!load_workspace(workspace_directory, workspace, recipes, error))
-    {
       return 2;
-    }
 
     std::error_code filesystem_error;
     const auto workspace_forge_directory = workspace_directory / ".forge";
@@ -825,19 +753,13 @@ namespace forge
       }
 
       if (removed != 0)
-      {
         ++cleaned_projects;
-      }
     }
 
     if (cleaned_projects == 0)
-    {
       output << "Workspace " << workspace.name << " is already clean\n";
-    }
     else
-    {
       output << "Cleaned workspace " << workspace.name << '\n';
-    }
 
     return 0;
   }

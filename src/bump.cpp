@@ -61,9 +61,7 @@ namespace forge
     bool increment(int& value)
     {
       if (value == std::numeric_limits<int>::max())
-      {
         return false;
-      }
 
       ++value;
       return true;
@@ -88,9 +86,7 @@ namespace forge
         next.patch = 0;
       }
       else if (component == "patch")
-      {
         valid = increment(next.patch);
-      }
 
       if (!valid)
       {
@@ -161,14 +157,10 @@ namespace forge
           replaced_build = true;
         }
         else
-        {
           updated += line;
-        }
 
         if (newline == std::string_view::npos)
-        {
           break;
-        }
 
         updated += '\n';
         remaining.remove_prefix(newline + 1);
@@ -188,9 +180,7 @@ namespace forge
       line = trim(line);
 
       if (!line.starts_with("##") || line.starts_with("###"))
-      {
         return false;
-      }
 
       return trim(line.substr(2)) == version;
     }
@@ -235,9 +225,7 @@ namespace forge
         }
 
         if (newline == std::string_view::npos)
-        {
           break;
-        }
 
         remaining.remove_prefix(newline + 1);
       }
@@ -245,14 +233,10 @@ namespace forge
       updated = existing->substr(0, insertion);
 
       if (!updated.empty() && updated.back() != '\n')
-      {
         updated += '\n';
-      }
 
       if (!updated.empty() && !updated.ends_with("\n\n"))
-      {
         updated += '\n';
-      }
 
       updated += section;
       updated += existing->substr(insertion);
@@ -287,16 +271,12 @@ namespace forge
     bool is_safe_project_path(const std::filesystem::path& path)
     {
       if (path.empty() || path.is_absolute())
-      {
         return false;
-      }
 
       for (const auto& component : path)
       {
         if (component == "..")
-        {
           return false;
-        }
       }
 
       return true;
@@ -357,9 +337,7 @@ namespace forge
       const auto had_notes = std::filesystem::is_regular_file(notes_path);
 
       if (had_notes)
-      {
         std::filesystem::rename(notes_path, notes_backup, filesystem_error);
-      }
 
       if (filesystem_error)
       {
@@ -371,9 +349,7 @@ namespace forge
       std::filesystem::rename(recipe_temporary, recipe_path, filesystem_error);
 
       if (!filesystem_error)
-      {
         std::filesystem::rename(notes_temporary, notes_path, filesystem_error);
-      }
 
       if (filesystem_error)
       {
@@ -383,9 +359,7 @@ namespace forge
         std::filesystem::remove(notes_path, rollback_error);
 
         if (had_notes)
-        {
           std::filesystem::rename(notes_backup, notes_path, rollback_error);
-        }
 
         error << "forge: could not replace project version files\n";
         return false;
@@ -408,9 +382,7 @@ namespace forge
     Recipe recipe;
 
     if (!read_recipe(recipe_path, recipe, error))
-    {
       return 2;
-    }
 
     Version current;
 
@@ -429,9 +401,7 @@ namespace forge
     const auto version = bumped_version(current, component, error);
 
     if (version.empty())
-    {
       return 2;
-    }
 
     std::optional<int> build_number = recipe.build_number;
 
@@ -457,9 +427,7 @@ namespace forge
       notes_content.emplace();
 
       if (!read_file(notes_path, *notes_content, error))
-      {
         return 2;
-      }
     }
 
     std::string updated_notes;
@@ -497,16 +465,12 @@ namespace forge
     output << "Bumped " << recipe.version << " to " << version;
 
     if (build_number)
-    {
       output << " (build " << *build_number << ')';
-    }
 
     output << '\n' << "Prepared RELEASE_NOTES.md section " << release_heading << '\n';
 
     if (!recipe.version_header_path.empty())
-    {
       output << "Generated " << recipe.version_header_path.generic_string() << '\n';
-    }
 
     return 0;
   }

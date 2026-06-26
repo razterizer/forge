@@ -23,9 +23,7 @@ namespace forge
                                 std::ostream& error)
     {
       if (profile)
-      {
         launch_profile.name = *profile;
-      }
 
       return select_dependency_profile(recipe, profile, true, error)
         && select_build_profile(recipe, profile, true, launch_profile.configuration, error);
@@ -42,20 +40,14 @@ namespace forge
       Recipe recipe;
 
       if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
-      {
         return 2;
-      }
 
       if (!select_recipe_target(recipe, target, error))
-      {
         return 2;
-      }
 
       LaunchProfile launch_profile;
       if (!resolve_launch_profile(recipe, profile, launch_profile, error))
-      {
         return 2;
-      }
 
       if (recipe.type != "executable")
       {
@@ -66,9 +58,7 @@ namespace forge
       auto build_directory = project_directory / ".forge" / "build";
 
       if (recipe.selected_target)
-      {
         build_directory /= *recipe.selected_target;
-      }
 
       auto executable = build_directory / recipe.name;
 
@@ -90,9 +80,7 @@ namespace forge
       process_arguments.push_back(executable.string());
 
       for (const auto argument : arguments)
-      {
         process_arguments.emplace_back(argument);
-      }
 
       output << "Running " << recipe.name << " with profile " << launch_profile.name
              << " (" << launch_profile.configuration << ")\n" << std::flush;
@@ -250,9 +238,7 @@ namespace forge
     options.profile = profile;
 
     if (build_project(project_directory, options, process_runner, output, error) != 0)
-    {
       return 2;
-    }
 
     return launch_project(project_directory, target, profile, arguments, process_runner, output, error);
   }

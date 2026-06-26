@@ -57,9 +57,7 @@ namespace forge
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
-    {
       return 2;
-    }
 
     std::vector<std::string> tests;
 
@@ -150,9 +148,7 @@ namespace forge
     output << "Tests: " << passed << " passed, " << failed << " failed\n";
 
     if (failed == 0)
-    {
       return 0;
-    }
 
     return command_failed ? 2 : 1;
   }

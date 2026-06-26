@@ -32,9 +32,7 @@ namespace forge
       for (const char character : value)
       {
         if (character == '\\' || character == '"')
-        {
           escaped += '\\';
-        }
 
         escaped += character;
       }
@@ -209,9 +207,7 @@ namespace forge
       << "  " << main_path.string() << '\n';
 
     if (options.version_header_path)
-    {
       output << "  " << version_header_path.string() << '\n';
-    }
 
     return 0;
   }

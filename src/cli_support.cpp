@@ -286,9 +286,7 @@ namespace forge::cli
     for (const auto command : commands)
     {
       if (candidate == command)
-      {
         return true;
-      }
     }
 
     return false;
@@ -298,9 +296,7 @@ namespace forge::cli
                                                std::string_view prefix)
   {
     if (!argument.starts_with(prefix))
-    {
       return std::nullopt;
-    }
 
     return argument.substr(prefix.size());
   }
@@ -309,9 +305,7 @@ namespace forge::cli
                 std::string_view value)
   {
     if (target)
-    {
       return false;
-    }
 
     target = std::string { value };
     return true;
@@ -321,9 +315,7 @@ namespace forge::cli
                 std::string_view value)
   {
     if (target)
-    {
       return false;
-    }
 
     target = std::filesystem::path { value };
     return true;
@@ -334,9 +326,7 @@ namespace forge::cli
                             std::ostream& error)
   {
     if (!value.empty())
-    {
       return true;
-    }
 
     error << empty_message << '\n';
     return false;
@@ -349,9 +339,7 @@ namespace forge::cli
     const auto value = option_value(argument, "--profile=");
 
     if (!value)
-    {
       return false;
-    }
 
     if (profile)
     {

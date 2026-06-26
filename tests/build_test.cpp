@@ -731,15 +731,11 @@ namespace
           }
 
           if (working_directory == dependency)
-          {
             return 0;
-          }
         }
 
         if (arguments.size() > 2 && arguments[1] == "-E" && arguments[2] == "tar")
-        {
           return forge::run_process(arguments, working_directory, process_error);
-        }
 
         return 0;
       };
@@ -1038,9 +1034,7 @@ namespace
         }
 
         if (arguments.size() > 2 && arguments[1] == "-E" && arguments[2] == "tar")
-        {
           return forge::run_process(arguments, working_directory, process_error);
-        }
 
         return 0;
       };

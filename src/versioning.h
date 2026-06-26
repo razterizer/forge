@@ -26,17 +26,13 @@ namespace forge
       components.push_back(value.substr(0, separator));
 
       if (separator == std::string_view::npos)
-      {
         break;
-      }
 
       value.remove_prefix(separator + 1);
     }
 
     if (components.size() != 3 && components.size() != 4)
-    {
       return std::nullopt;
-    }
 
     std::vector<int> numbers;
 
@@ -64,9 +60,7 @@ namespace forge
       + std::to_string(numbers[2]);
 
     if (numbers.size() == 4)
-    {
       result.build_number = numbers[3];
-    }
 
     return result;
   }
@@ -83,9 +77,7 @@ namespace forge
     }
 
     if (prefix.empty() || std::isdigit(static_cast<unsigned char>(prefix.front())))
-    {
       prefix.insert(prefix.begin(), '_');
-    }
 
     return prefix;
   }

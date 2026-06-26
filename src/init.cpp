@@ -40,9 +40,7 @@ namespace forge
       for (const char character : value)
       {
         if (character == '\\' || character == '"')
-        {
           escaped += '\\';
-        }
 
         escaped += character;
       }
@@ -139,16 +137,12 @@ namespace forge
         const auto open_end = xml.find('>', position + opening.size());
 
         if (open_end == std::string_view::npos)
-        {
           break;
-        }
 
         const auto close = xml.find(closing, open_end + 1);
 
         if (close == std::string_view::npos)
-        {
           break;
-        }
 
         values.push_back(
           decode_xml(std::string { trim(xml.substr(open_end + 1, close - open_end - 1)) })
@@ -173,9 +167,7 @@ namespace forge
         const auto open_end = xml.find('>', position + opening.size());
 
         if (open_end == std::string_view::npos)
-        {
           break;
-        }
 
         const auto attribute_position = xml.find(needle, position + opening.size());
 
@@ -216,16 +208,12 @@ namespace forge
         const auto open_end = xml.find('>', position + opening.size());
 
         if (open_end == std::string_view::npos)
-        {
           break;
-        }
 
         const auto close = xml.find(closing, open_end + 1);
 
         if (close == std::string_view::npos)
-        {
           break;
-        }
 
         elements.push_back({
           std::string { xml.substr(position, open_end - position + 1) },
@@ -248,9 +236,7 @@ namespace forge
         const auto open_end = xml.find('>', position + opening.size());
 
         if (open_end == std::string_view::npos)
-        {
           break;
-        }
 
         openings.push_back(std::string { xml.substr(position, open_end - position + 1) });
         position = open_end + 1;
@@ -266,9 +252,7 @@ namespace forge
       const auto position = opening.find(needle);
 
       if (position == std::string_view::npos)
-      {
         return std::nullopt;
-      }
 
       const auto begin = position + needle.size();
       const auto end = opening.find('"', begin);
@@ -282,16 +266,12 @@ namespace forge
     std::optional<std::string> msbuild_configuration(std::string_view condition)
     {
       if (condition.find("$(Configuration)") == std::string_view::npos)
-      {
         return std::nullopt;
-      }
 
       const auto equals = condition.find("==");
 
       if (equals == std::string_view::npos)
-      {
         return std::nullopt;
-      }
 
       auto value = trim(condition.substr(equals + 2));
 
@@ -349,9 +329,7 @@ namespace forge
       const auto normalized = path.lexically_normal();
 
       if (!active.insert(normalized).second)
-      {
         return true;
-      }
 
       std::ifstream file { normalized };
 
@@ -426,9 +404,7 @@ namespace forge
         const auto imported = xml_attribute(opening, "Project");
 
         if (!imported)
-        {
           continue;
-        }
 
         if (const auto grouped = grouped_imports.find(*imported); grouped != grouped_imports.end())
         {
@@ -498,9 +474,7 @@ namespace forge
           }
 
           if (separator == std::string_view::npos)
-          {
             break;
-          }
 
           remaining.remove_prefix(separator + 1);
         }
@@ -517,9 +491,7 @@ namespace forge
       std::replace(normalized_path.begin(), normalized_path.end(), '\\', '/');
 
       if (normalized_path.empty() || normalized_path.find("$(") != std::string::npos)
-      {
         return std::nullopt;
-      }
 
       const auto normalized =
         (std::filesystem::path { normalized_path }.is_absolute()
@@ -528,9 +500,7 @@ namespace forge
       const auto relative = normalized.lexically_relative(project_directory);
 
       if (relative.empty() || relative.is_absolute() || *relative.begin() == "..")
-      {
         return std::nullopt;
-      }
 
       return relative.generic_string();
     }
@@ -577,31 +547,21 @@ namespace forge
         if (quote != '\0')
         {
           if (character == '\\' && index + 1 < value.size())
-          {
             argument += value[++index];
-          }
           else if (character == quote)
-          {
             quote = '\0';
-          }
           else
-          {
             argument += character;
-          }
 
           continue;
         }
 
         if (character == '"' || character == '\'')
-        {
           quote = character;
-        }
         else if (character == '#')
         {
           while (index < value.size() && value[index] != '\n')
-          {
             ++index;
-          }
         }
         else if (std::isspace(static_cast<unsigned char>(character)) || character == ';')
         {
@@ -612,15 +572,11 @@ namespace forge
           }
         }
         else
-        {
           argument += character;
-        }
       }
 
       if (!argument.empty())
-      {
         arguments.push_back(std::move(argument));
-      }
 
       return arguments;
     }
@@ -635,9 +591,7 @@ namespace forge
         if (contents[position] == '#')
         {
           while (position < contents.size() && contents[position] != '\n')
-          {
             ++position;
-          }
 
           continue;
         }
@@ -649,14 +603,10 @@ namespace forge
           if (contents[position] == '#')
           {
             while (position < contents.size() && contents[position] != '\n')
-            {
               ++position;
-            }
           }
           else
-          {
             ++position;
-          }
         }
 
         const auto name_begin = position;
@@ -677,9 +627,7 @@ namespace forge
         }
 
         if (name.empty() || position >= contents.size() || contents[position] != '(')
-        {
           continue;
-        }
 
         const auto arguments_begin = ++position;
         std::size_t depth = 1;
@@ -692,26 +640,16 @@ namespace forge
           if (quote != '\0')
           {
             if (character == '\\')
-            {
               ++position;
-            }
             else if (character == quote)
-            {
               quote = '\0';
-            }
           }
           else if (character == '"' || character == '\'')
-          {
             quote = character;
-          }
           else if (character == '(')
-          {
             ++depth;
-          }
           else if (character == ')')
-          {
             --depth;
-          }
 
           ++position;
         }
@@ -774,9 +712,7 @@ namespace forge
       constexpr std::string_view prefix { "$<BUILD_INTERFACE:" };
 
       if (!value.starts_with(prefix) || !value.ends_with('>'))
-      {
         return std::nullopt;
-      }
 
       return std::string { value.substr(prefix.size(), value.size() - prefix.size() - 1) };
     }
@@ -826,17 +762,11 @@ namespace forge
             : "";
         }
         else if (command.name == "endif")
-        {
           platform.clear();
-        }
         else if (command.name == "find_library" && command.arguments.size() > 1)
-        {
           frameworks[command.arguments[0]] = command.arguments[1];
-        }
         else if (command.name == "pkg_check_modules" && command.arguments.size() > 1)
-        {
           pkg_config_targets["PkgConfig::" + command.arguments[0]] = command.arguments.back();
-        }
         else if (command.name == "target_link_libraries" && command.arguments.size() > 1)
         {
           for (std::size_t index = 1; index < command.arguments.size(); ++index)
@@ -844,23 +774,17 @@ namespace forge
             const auto& argument = command.arguments[index];
 
             if (is_cmake_scope(argument))
-            {
               continue;
-            }
 
             if (argument.starts_with("${") && argument.ends_with('}'))
             {
               const auto variable = argument.substr(2, argument.size() - 3);
 
               if (platform == "macos" && frameworks.contains(variable))
-              {
                 project.macos_frameworks.push_back(frameworks.at(variable));
-              }
             }
             else if (pkg_config_targets.contains(argument) && platform == "linux")
-            {
               project.linux_libraries.push_back(pkg_config_targets.at(argument));
-            }
             else if (argument.find('$') == std::string::npos
                      && argument.find("::") == std::string::npos)
             {
@@ -871,9 +795,7 @@ namespace forge
                 : nullptr;
 
               if (libraries)
-              {
                 libraries->push_back(argument);
-              }
             }
           }
         }
@@ -910,13 +832,9 @@ namespace forge
             if (command.name == "add_library" && command.arguments.size() > 1)
             {
               if (command.arguments[1] == "SHARED" || command.arguments[1] == "MODULE")
-              {
                 project.type = "dynamic_library";
-              }
               else if (command.arguments[1] == "INTERFACE")
-              {
                 project.type = "header_only";
-              }
             }
           }
 
@@ -939,21 +857,15 @@ namespace forge
             const auto expanded = replace_cmake_paths(argument, directory);
 
             if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
-            {
               project.unresolved_properties.push_back(argument);
-            }
             else if (const auto relative = project_relative_path(directory, expanded))
             {
               const auto extension = std::filesystem::path { *relative }.extension().string();
 
               if (extension == ".cpp" || extension == ".cc" || extension == ".cxx")
-              {
                 project.sources.push_back(*relative);
-              }
               else if (extension == ".h" || extension == ".hpp" || extension == ".hh")
-              {
                 project.headers.push_back(*relative);
-              }
             }
           }
         }
@@ -962,9 +874,7 @@ namespace forge
           for (const auto& argument : command.arguments)
           {
             if (argument.starts_with("cxx_std_"))
-            {
               project.cpp_standard = std::stoi(argument.substr(8));
-            }
           }
         }
         else if (command.name == "target_include_directories" && command.arguments.size() > 1)
@@ -984,13 +894,9 @@ namespace forge
             const auto expanded = replace_cmake_paths(argument, directory);
 
             if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
-            {
               project.unresolved_properties.push_back(original_argument);
-            }
             else if (const auto relative = project_relative_path(directory, expanded))
-            {
               project.include_directories.push_back(*relative);
-            }
           }
         }
         else if (command.name == "target_compile_definitions" && command.arguments.size() > 1)
@@ -1000,13 +906,9 @@ namespace forge
             const auto& argument = command.arguments[index];
 
             if (!is_cmake_scope(argument) && is_valid_compile_definition(argument))
-            {
               project.definitions.push_back(argument);
-            }
             else if (argument.find('$') != std::string::npos)
-            {
               project.unresolved_properties.push_back(argument);
-            }
           }
         }
       }
@@ -1097,18 +999,12 @@ namespace forge
         if (quote != '\0')
         {
           if (character == quote)
-          {
             quote = '\0';
-          }
           else
-          {
             current += character;
-          }
         }
         else if (character == '"' || character == '\'')
-        {
           quote = character;
-        }
         else if (character == ',' || std::isspace(static_cast<unsigned char>(character)))
         {
           if (!current.empty())
@@ -1118,15 +1014,11 @@ namespace forge
           }
         }
         else
-        {
           current += character;
-        }
       }
 
       if (!current.empty())
-      {
         values.push_back(std::move(current));
-      }
 
       return values;
     }
@@ -1177,45 +1069,31 @@ namespace forge
           profile.cpp_standard = std::stoi(number);
         }
         else if (!standard.empty())
-        {
           unresolved.push_back(standard);
-        }
       }
 
       for (const auto& include : xcode_setting_values(settings, "HEADER_SEARCH_PATHS"))
       {
         if (include == "$(inherited)")
-        {
           continue;
-        }
 
         const auto expanded = replace_xcode_paths(include, project_directory);
 
         if (expanded.find("$(") != std::string::npos || expanded.find("${") != std::string::npos)
-        {
           unresolved.push_back(include);
-        }
         else if (const auto relative = project_relative_path(project_directory, expanded))
-        {
           profile.include_directories.push_back(*relative);
-        }
       }
 
       for (const auto& definition : xcode_setting_values(settings, "GCC_PREPROCESSOR_DEFINITIONS"))
       {
         if (definition == "$(inherited)")
-        {
           continue;
-        }
 
         if (definition.find('$') != std::string::npos)
-        {
           unresolved.push_back(definition);
-        }
         else if (is_valid_compile_definition(definition))
-        {
           profile.compile_definitions.push_back(definition);
-        }
       }
     }
 
@@ -1268,9 +1146,7 @@ namespace forge
                 : "";
       }
       else if (targets.size() > 1)
-      {
         project.type.clear();
-      }
 
       const std::regex configuration_pattern {
         R"regex(isa\s*=\s*XCBuildConfiguration;[\s\S]*?buildSettings\s*=\s*\{([\s\S]*?)\};[\s\S]*?name\s*=\s*"?([^";\n]+)"?;)regex"
@@ -1355,9 +1231,7 @@ namespace forge
         }
 
         if (!matched)
-        {
           project.unresolved_properties.push_back(relative);
-        }
       }
 
       if (!project.profiles.empty())
@@ -1388,17 +1262,13 @@ namespace forge
           common_definitions = std::move(definitions);
 
           if (profile.cpp_standard != common_standard)
-          {
             common_standard = 0;
-          }
         }
 
         project.cpp_standard = common_standard == 0 ? 20 : common_standard;
 
         for (const auto& include : common_includes)
-        {
           project.include_directories.push_back(include.generic_string());
-        }
 
         project.definitions = common_definitions;
 
@@ -1430,24 +1300,16 @@ namespace forge
     int cpp_standard_from_msbuild(std::string_view standard)
     {
       if (standard == "stdcpp14")
-      {
         return 14;
-      }
 
       if (standard == "stdcpp17")
-      {
         return 17;
-      }
 
       if (standard == "stdcpp20")
-      {
         return 20;
-      }
 
       if (standard == "stdcpp23" || standard == "stdcpplatest")
-      {
         return 23;
-      }
 
       return 0;
     }
@@ -1462,9 +1324,7 @@ namespace forge
       for (const auto& standard : xml_values(xml, "LanguageStandard"))
       {
         if (const auto parsed = cpp_standard_from_msbuild(standard); parsed != 0)
-        {
           settings.cpp_standard = parsed;
-        }
       }
 
       for (const auto& include : split_msbuild_list(xml_values(xml, "AdditionalIncludeDirectories")))
@@ -1476,25 +1336,17 @@ namespace forge
         );
 
         if (expanded.find("$(") != std::string::npos)
-        {
           unresolved.push_back(include);
-        }
         else if (const auto relative = project_relative_path(project_directory, expanded))
-        {
           settings.include_directories.push_back(*relative);
-        }
       }
 
       for (const auto& definition : split_msbuild_list(xml_values(xml, "PreprocessorDefinitions")))
       {
         if (definition.find("$(") != std::string::npos)
-        {
           unresolved.push_back(definition);
-        }
         else if (is_valid_compile_definition(definition))
-        {
           settings.compile_definitions.push_back(definition);
-        }
       }
     }
 
@@ -1589,9 +1441,7 @@ namespace forge
       for (const auto& document : documents)
       {
         if (document.configuration)
-        {
           configurations.insert(*document.configuration);
-        }
 
         for (const auto& group : xml_elements(document.xml, "ItemDefinitionGroup"))
         {
@@ -1602,9 +1452,7 @@ namespace forge
               : document.configuration;
 
           if (configuration)
-          {
             configurations.insert(*configuration);
-          }
         }
       }
 
@@ -1698,9 +1546,7 @@ namespace forge
         project.include_directories.clear();
 
         for (const auto& include : common_includes)
-        {
           project.include_directories.push_back(include.generic_string());
-        }
 
         project.definitions = common_definitions;
 
@@ -1730,17 +1576,13 @@ namespace forge
       for (const auto& source : xml_attributes(xml, "ClCompile", "Include"))
       {
         if (const auto relative = project_relative_path(directory, source))
-        {
           project.sources.push_back(*relative);
-        }
       }
 
       for (const auto& header : xml_attributes(xml, "ClInclude", "Include"))
       {
         if (const auto relative = project_relative_path(directory, header))
-        {
           project.headers.push_back(*relative);
-        }
       }
 
       for (const auto& reference : xml_attributes(xml, "ProjectReference", "Include"))
@@ -1848,19 +1690,13 @@ namespace forge
                                 const VisualStudioProject& additional)
     {
       if (project.name.empty())
-      {
         project.name = additional.name;
-      }
 
       if (project.version.empty())
-      {
         project.version = additional.version;
-      }
 
       if (project.type.empty())
-      {
         project.type = additional.type;
-      }
 
       project.cpp_standard = std::max(project.cpp_standard, additional.cpp_standard);
 
@@ -1901,14 +1737,10 @@ namespace forge
       );
 
       for (const auto& [name, profile] : additional.profiles)
-      {
         project.profiles.try_emplace(name, profile);
-      }
 
       for (auto& [name, profile] : project.profiles)
-      {
         profile.cpp_standard = std::max(profile.cpp_standard, project.cpp_standard);
-      }
 
       for (auto* values : {
         &project.include_directories,
@@ -1961,13 +1793,9 @@ namespace forge
         if (quote != '\0')
         {
           if (character == '\\')
-          {
             ++index;
-          }
           else if (character == quote)
-          {
             quote = '\0';
-          }
 
           continue;
         }
@@ -2009,9 +1837,7 @@ namespace forge
         }
 
         if (position < contents.size() && contents[position] == '(')
-        {
           return true;
-        }
       }
 
       return false;
@@ -2043,18 +1869,14 @@ namespace forge
         const auto& entry = *iterator;
 
         if (entry.is_directory(filesystem_error) && is_ignored_directory(entry.path()))
-        {
           iterator.disable_recursion_pending();
-        }
         else if (!filesystem_error && entry.is_regular_file(filesystem_error) && is_cpp_source(entry.path()))
         {
           const auto relative = entry.path().lexically_relative(project_directory).generic_string();
           sources.push_back(relative);
 
           if (contains_main_function(entry.path()))
-          {
             entry_points.push_back(relative);
-          }
         }
         else if (!filesystem_error
                  && entry.is_regular_file(filesystem_error)
@@ -2064,9 +1886,7 @@ namespace forge
           headers.push_back(relative.generic_string());
 
           if (relative.begin()->string() == "include")
-          {
             public_headers.push_back(relative.generic_string());
-          }
         }
 
         if (filesystem_error)
@@ -2117,9 +1937,7 @@ namespace forge
           std::smatch match;
 
           if (std::regex_search(line, match, definition))
-          {
             definitions[match[1].str()].insert(match[2].str());
-          }
         }
 
         for (const auto& [prefix, suffixes] : definitions)
@@ -2163,24 +1981,18 @@ namespace forge
         const auto first = content.find_first_not_of(" \t");
 
         if (first == std::string_view::npos || content[first] != '#')
-        {
           continue;
-        }
 
         content.remove_prefix(first + 1);
         const auto directive = content.find_first_not_of(" \t");
 
         if (directive == std::string_view::npos)
-        {
           continue;
-        }
 
         content.remove_prefix(directive);
 
         if (!content.starts_with("include"))
-        {
           continue;
-        }
 
         content.remove_prefix(std::string_view { "include" }.size());
         const auto delimiter = content.find_first_not_of(" \t");
@@ -2295,9 +2107,7 @@ namespace forge
         const auto referenced = read_visual_studio_project(reference, ignored_error);
 
         if (!referenced)
-        {
           continue;
-        }
 
         std::error_code filesystem_error;
         const auto relative = std::filesystem::relative(
@@ -2383,9 +2193,7 @@ namespace forge
         const auto generic = header.generic_string();
 
         if (generic.starts_with("include/") && generic.substr(8) == include)
-        {
           return true;
-        }
       }
 
       for (const auto& profile : recipe.imports)
@@ -2395,9 +2203,7 @@ namespace forge
           const auto generic = header.generic_string();
 
           if (generic == include || generic.ends_with('/' + std::string { include }))
-          {
             return true;
-          }
         }
       }
 
@@ -2415,9 +2221,7 @@ namespace forge
       for (const auto& entry : std::filesystem::directory_iterator { parent, filesystem_error })
       {
         if (filesystem_error)
-        {
           break;
-        }
 
         if (!entry.is_directory(filesystem_error)
             || std::filesystem::equivalent(entry.path(), project_directory, filesystem_error)
@@ -2434,9 +2238,7 @@ namespace forge
         std::ostringstream ignored_error;
 
         if (!read_recipe(entry.path() / "forge.recipe.toml", sibling, ignored_error))
-        {
           continue;
-        }
 
         const auto relative =
           std::filesystem::relative(entry.path(), project_directory, filesystem_error);
@@ -2464,9 +2266,7 @@ namespace forge
       for (const auto& [include, candidates] : matches)
       {
         if (candidates.size() == 1)
-        {
           by_name[candidates.front().name].emplace_back(include, candidates.front());
-        }
       }
 
       std::vector<SiblingDependency> result;
@@ -2483,16 +2283,12 @@ namespace forge
         );
 
         if (!same_project)
-        {
           continue;
-        }
 
         result.push_back(candidates.front().second);
 
         for (const auto& [include, dependency] : candidates)
-        {
           unresolved.erase(include);
-        }
       }
 
       return result;
@@ -2518,16 +2314,12 @@ namespace forge
         const auto equals = content.find('=');
 
         if (!origin || equals == std::string_view::npos)
-        {
           continue;
-        }
 
         const auto key = content.substr(0, equals);
 
         if (key.find("url") == std::string_view::npos)
-        {
           continue;
-        }
 
         auto url = std::string { content.substr(equals + 1) };
         const auto first = url.find_first_not_of(" \t");
@@ -2566,9 +2358,7 @@ namespace forge
         const auto extension = name.rfind('.');
 
         if (extension != std::string::npos)
-        {
           name.resize(extension);
-        }
       }
 
       const auto safe =
@@ -2596,18 +2386,14 @@ namespace forge
       const auto owner = github_owner(project_directory);
 
       if (!owner)
-      {
         return suggestions;
-      }
 
       for (const auto& [include, source] : unresolved)
       {
         const auto name = github_repository_name(include);
 
         if (!name.empty())
-        {
           suggestions[*owner + "/" + name].push_back(include);
-        }
       }
 
       return suggestions;
@@ -2630,9 +2416,7 @@ namespace forge
       std::getline(reference_file, commit);
 
       if (!commit.empty())
-      {
         return commit;
-      }
 
       std::ifstream packed { repository / ".git" / "packed-refs" };
       std::string line;
@@ -2642,9 +2426,7 @@ namespace forge
         const auto separator = line.find(' ');
 
         if (separator != std::string::npos && line.substr(separator + 1) == reference)
-        {
           return line.substr(0, separator);
-        }
       }
 
       return std::nullopt;
@@ -2696,9 +2478,7 @@ namespace forge
         std::ostringstream recipe_error;
 
         if (!read_recipe(checkout / "forge.recipe.toml", recipe, recipe_error))
-        {
           continue;
-        }
 
         const auto verified = std::ranges::all_of(
           includes,
@@ -2710,9 +2490,7 @@ namespace forge
         const auto commit = git_head(checkout);
 
         if (!verified || !commit || !is_exact_commit(*commit))
-        {
           continue;
-        }
 
         const GitHubDependency dependency { name, repository, git, *commit };
         const auto existing = dependencies.find(dependency.name);
@@ -2733,9 +2511,7 @@ namespace forge
         if (!conflicting_names.contains(name))
         {
           for (const auto& include : suggestions.at(dependency.repository))
-          {
             unresolved.erase(include);
-          }
 
           output << "Pinned GitHub dependency " << dependency.repository
                  << " at " << dependency.commit << '\n';
@@ -2769,9 +2545,7 @@ namespace forge
                 .generic_string();
 
             if (std::binary_search(headers.begin(), headers.end(), relative))
-            {
               continue;
-            }
           }
 
           std::set<std::string> matching_roots;
@@ -2787,15 +2561,11 @@ namespace forge
             const auto suffix = '/' + include;
 
             if (header.size() > suffix.size() && header.ends_with(suffix))
-            {
               matching_roots.insert(header.substr(0, header.size() - suffix.size()));
-            }
           }
 
           if (matching_roots.size() == 1 && *matching_roots.begin() != "include")
-          {
             include_directories.insert(*matching_roots.begin());
-          }
         }
       }
 
@@ -2814,29 +2584,21 @@ namespace forge
           .generic_string();
 
       if (std::binary_search(headers.begin(), headers.end(), relative))
-      {
         matches.insert(relative);
-      }
 
       if (std::binary_search(headers.begin(), headers.end(), include))
-      {
         matches.insert(include);
-      }
 
       const auto suffix = '/' + include;
 
       for (const auto& header : headers)
       {
         if (header.size() > suffix.size() && header.ends_with(suffix))
-        {
           matches.insert(header);
-        }
       }
 
       if (matches.size() == 1)
-      {
         return *matches.begin();
-      }
 
       return std::nullopt;
     }
@@ -2860,9 +2622,7 @@ namespace forge
           const auto resolved = resolve_local_header(file, include, headers);
 
           if (resolved && reachable.insert(*resolved).second)
-          {
             pending.push_back(*resolved);
-          }
         }
       }
 
@@ -2878,23 +2638,17 @@ namespace forge
       std::map<std::string, std::set<std::string>> reachable;
 
       for (const auto& source : sources)
-      {
         reachable[source] = reachable_local_headers(project_directory, source, headers);
-      }
 
       std::vector<std::vector<std::string>> target_sources(entry_points.size());
 
       for (std::size_t target_index = 0; target_index < entry_points.size(); ++target_index)
-      {
         target_sources[target_index].push_back(entry_points[target_index]);
-      }
 
       for (const auto& source : sources)
       {
         if (std::binary_search(entry_points.begin(), entry_points.end(), source))
-        {
           continue;
-        }
 
         std::vector<std::size_t> owners;
 
@@ -2918,23 +2672,17 @@ namespace forge
         if (owners.empty())
         {
           for (std::size_t target_index = 0; target_index < entry_points.size(); ++target_index)
-          {
             target_sources[target_index].push_back(source);
-          }
         }
         else
         {
           for (const auto owner : owners)
-          {
             target_sources[owner].push_back(source);
-          }
         }
       }
 
       for (auto& target : target_sources)
-      {
         std::ranges::sort(target);
-      }
 
       return target_sources;
     }
@@ -2995,9 +2743,7 @@ namespace forge
         })
         {
           if (!directory_error && entry.is_regular_file() && is_cpp_header(entry.path()))
-          {
             scanned.push_back(entry.path().lexically_relative(project_directory).generic_string());
-          }
         }
       }
 
@@ -3017,9 +2763,7 @@ namespace forge
         const auto& entry = *iterator;
 
         if (entry.is_directory(filesystem_error) && is_ignored_directory(entry.path()))
-        {
           iterator.disable_recursion_pending();
-        }
         else if (!filesystem_error
                  && entry.is_regular_file(filesystem_error)
                  && !is_cpp_source(entry.path())
@@ -3043,9 +2787,7 @@ namespace forge
         while (std::getline(file, line))
         {
           if (!looks_like_runtime_file_access(line))
-          {
             continue;
-          }
 
           for (auto match = std::sregex_iterator { line.begin(), line.end(), literal };
                match != std::sregex_iterator {};
@@ -3054,18 +2796,14 @@ namespace forge
             const auto expected = std::filesystem::path { (*match)[1].str() };
 
             if (expected.empty() || expected.is_absolute() || expected.string().starts_with(".."))
-            {
               continue;
-            }
 
             std::vector<std::filesystem::path> matches;
             const auto adjacent =
               (std::filesystem::path { scanned_file }.parent_path() / expected).lexically_normal();
 
             if (std::ranges::find(candidates, adjacent) != candidates.end())
-            {
               matches.push_back(adjacent);
-            }
 
             if (matches.empty())
             {
@@ -3101,18 +2839,14 @@ namespace forge
     std::string format_sources(const std::vector<std::string>& sources)
     {
       if (sources.empty())
-      {
         return "[]";
-      }
 
       std::string formatted = "[";
 
       for (std::size_t index = 0; index < sources.size(); ++index)
       {
         if (index != 0)
-        {
           formatted += ", ";
-        }
 
         formatted += '"' + escape_toml_string(sources[index]) + '"';
       }
@@ -3148,16 +2882,12 @@ namespace forge
       for (std::size_t index = 0; index < runtime_files.size(); ++index)
       {
         if (index != 0)
-        {
           formatted += ", ";
-        }
 
         const auto& runtime_file = runtime_files[index];
 
         if (runtime_file.source == runtime_file.destination)
-        {
           formatted += '"' + escape_toml_string(runtime_file.source.generic_string()) + '"';
-        }
         else
         {
           formatted += "{ source = \""
@@ -3232,9 +2962,7 @@ namespace forge
         const auto content = trim(line);
 
         if (!content.starts_with("Project("))
-        {
           continue;
-        }
 
         std::vector<std::string> quoted;
         std::size_t position = 0;
@@ -3244,26 +2972,20 @@ namespace forge
           const auto end = content.find('"', position + 1);
 
           if (end == std::string_view::npos)
-          {
             break;
-          }
 
           quoted.emplace_back(content.substr(position + 1, end - position - 1));
           position = end + 1;
         }
 
         if (quoted.size() < 3)
-        {
           continue;
-        }
 
         std::replace(quoted[2].begin(), quoted[2].end(), '\\', '/');
         const auto project = std::filesystem::path { quoted[2] };
 
         if (project.extension() == ".vcxproj")
-        {
           projects.push_back((solution_path.parent_path() / project).lexically_normal());
-        }
       }
 
       std::ranges::sort(projects);
@@ -3284,23 +3006,17 @@ namespace forge
       for (const auto& command : cmake_commands(contents))
       {
         if (command.name != "add_subdirectory" || command.arguments.empty())
-        {
           continue;
-        }
 
         const auto& argument = command.arguments.front();
 
         if (argument.find('$') != std::string::npos)
-        {
           continue;
-        }
 
         const auto project = (cmake_path.parent_path() / argument).lexically_normal();
 
         if (std::filesystem::is_regular_file(project / "CMakeLists.txt"))
-        {
           projects.push_back(project);
-        }
       }
 
       std::ranges::sort(projects);
@@ -3414,9 +3130,7 @@ namespace forge
         "projects = " + format_sources(relative_directories) + "\n";
 
       if (!write_file(workspace_path, workspace, error))
-      {
         return 2;
-      }
 
       output << "Created " << workspace_path.string() << '\n'
              << "Adopted " << projects.size() << " Visual Studio project";
@@ -3493,9 +3207,7 @@ namespace forge
       const auto cmake_project = read_cmake_project(cmake_path, error);
 
       if (cmake_project && !cmake_project->name.empty())
-      {
         name = cmake_project->name;
-      }
 
       const std::string workspace =
         "#:schema " + std::string { workspace_schema_url } + "\n"
@@ -3505,9 +3217,7 @@ namespace forge
         "projects = " + format_sources(relative_directories) + "\n";
 
       if (!write_file(workspace_path, workspace, error))
-      {
         return 2;
-      }
 
       output << "Created " << workspace_path.string() << '\n'
              << "Adopted " << projects.size() << " CMake project";
@@ -3616,9 +3326,7 @@ namespace forge
     }
 
     if (show_progress)
-    {
       report_progress(output, 1, 6, "Inspecting project");
-    }
 
     const auto recipe_path = project_directory / "forge.recipe.toml";
 
@@ -3644,21 +3352,15 @@ namespace forge
     std::vector<std::string> merged_project_formats;
 
     if (show_progress)
-    {
       report_progress(output, 2, 6, "Scanning sources and headers");
-    }
 
     if (!discover_sources(project_directory, sources, public_headers, headers, entry_points, error))
-    {
       return 2;
-    }
 
     auto runtime_headers = headers;
 
     if (show_progress)
-    {
       report_progress(output, 3, 6, "Reading project metadata");
-    }
 
     if (visual_studio_projects.size() == 1
         && !(has_cmake_project
@@ -3667,9 +3369,7 @@ namespace forge
       visual_studio_project = read_visual_studio_project(visual_studio_projects.front(), error);
 
       if (!visual_studio_project)
-      {
         return 2;
-      }
     }
     else if (xcode_projects.size() == 1
              && !(has_cmake_project && is_cmake_generated_xcode_project(xcode_projects.front())))
@@ -3677,18 +3377,14 @@ namespace forge
       visual_studio_project = read_xcode_project(xcode_projects.front(), error);
 
       if (!visual_studio_project)
-      {
         return 2;
-      }
     }
     else if (has_cmake_project)
     {
       visual_studio_project = read_cmake_project(cmake_path, error);
 
       if (!visual_studio_project)
-      {
         return 2;
-      }
     }
 
     if (visual_studio_project && has_cmake_project && visual_studio_project->format != "CMake")
@@ -3696,9 +3392,7 @@ namespace forge
       const auto cmake_project = read_cmake_project(cmake_path, error);
 
       if (!cmake_project)
-      {
         return 2;
-      }
 
       merge_project_metadata(*visual_studio_project, *cmake_project);
       merged_project_formats.push_back("CMake");
@@ -3707,14 +3401,10 @@ namespace forge
     if (visual_studio_project)
     {
       if (!visual_studio_project->sources.empty())
-      {
         sources = visual_studio_project->sources;
-      }
 
       if (!visual_studio_project->headers.empty())
-      {
         headers = visual_studio_project->headers;
-      }
 
       public_headers.clear();
       entry_points.clear();
@@ -3724,17 +3414,13 @@ namespace forge
         const auto path = std::filesystem::path { header };
 
         if (!path.empty() && path.begin()->string() == "include")
-        {
           public_headers.push_back(header);
-        }
       }
 
       for (const auto& source : sources)
       {
         if (contains_main_function(project_directory / source))
-        {
           entry_points.push_back(source);
-        }
       }
     }
 
@@ -3746,17 +3432,13 @@ namespace forge
     );
 
     if (show_progress)
-    {
       report_progress(output, 4, 6, "Resolving dependencies");
-    }
 
     const auto verify_git_dependencies = options.dependency_style == DependencyStyle::git;
     const std::size_t dependency_progress_total = verify_git_dependencies ? 7 : 6;
 
     if (show_progress)
-    {
       report_subprogress(output, 1, dependency_progress_total, "Inferring include directories");
-    }
 
     auto include_directories = infer_include_directories(project_directory, sources, headers);
 
@@ -3775,23 +3457,17 @@ namespace forge
     }
 
     if (show_progress)
-    {
       report_subprogress(output, 2, dependency_progress_total, "Scanning unresolved includes");
-    }
 
     auto unresolved = unresolved_includes(project_directory, sources, headers);
 
     if (show_progress)
-    {
       report_subprogress(output, 3, dependency_progress_total, "Matching sibling Forge projects");
-    }
 
     auto sibling_dependencies = infer_sibling_dependencies(project_directory, unresolved);
 
     if (show_progress)
-    {
       report_subprogress(output, 4, dependency_progress_total, "Reading project references");
-    }
 
     if (visual_studio_project)
     {
@@ -3823,16 +3499,12 @@ namespace forge
     }
 
     if (show_progress)
-    {
       report_subprogress(output, 5, dependency_progress_total, "Preparing GitHub suggestions");
-    }
 
     const auto suggestions = github_suggestions(project_directory, unresolved);
 
     if (show_progress && verify_git_dependencies)
-    {
       report_subprogress(output, 6, dependency_progress_total, "Verifying GitHub candidates");
-    }
 
     const auto github_dependencies = verify_git_dependencies
       ? resolve_github_dependencies(
@@ -3945,9 +3617,7 @@ namespace forge
         for (const auto& source : sources)
         {
           if (!std::binary_search(entry_points.begin(), entry_points.end(), source))
-          {
             library_sources.push_back(source);
-          }
         }
 
         recipe
@@ -3959,24 +3629,16 @@ namespace forge
           "sources = " + format_sources(library_sources) + "\n";
 
         if (!public_headers.empty())
-        {
           recipe += "public_headers = " + formatted_headers + "\n";
-        }
 
         if (!include_directories.empty())
-        {
           recipe += "include_dirs = " + formatted_include_directories + "\n";
-        }
 
         if (visual_studio_project && !visual_studio_project->definitions.empty())
-        {
           recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
-        }
 
         if (visual_studio_project)
-        {
           recipe += format_system_links(*visual_studio_project);
-        }
       }
 
       for (std::size_t index = 0; index < entry_points.size(); ++index)
@@ -4005,36 +3667,24 @@ namespace forge
           recipe += "runtime_files = " + format_runtime_files(runtime_files) + "\n";
 
           for (const auto& runtime_file : runtime_files)
-          {
             inferred_runtime_files.emplace_back(name, runtime_file);
-          }
         }
 
         if (!library_target.empty())
-        {
           recipe += "dependencies = [\"" + escape_toml_string(library_target) + "\"]\n";
-        }
         else
         {
           if (!public_headers.empty())
-          {
             recipe += "public_headers = " + formatted_headers + "\n";
-          }
 
           if (!include_directories.empty())
-          {
             recipe += "include_dirs = " + formatted_include_directories + "\n";
-          }
 
           if (visual_studio_project && !visual_studio_project->definitions.empty())
-          {
             recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
-          }
 
           if (visual_studio_project)
-          {
             recipe += format_system_links(*visual_studio_project);
-          }
         }
 
         auto first_directory = std::filesystem::path { entry_points[index] }.begin()->string();
@@ -4048,15 +3698,11 @@ namespace forge
         );
 
         if (first_directory == "test" || first_directory == "tests")
-        {
           recipe += "test = true\n";
-        }
       }
 
       if (initial_build_number)
-      {
         recipe += "\n[build]\nnumber = " + std::to_string(*initial_build_number) + "\n";
-      }
     }
     else
     {
@@ -4080,14 +3726,10 @@ namespace forge
         "paths = " + formatted_sources + "\n";
 
       if (!public_headers.empty())
-      {
         recipe += "public_headers = " + formatted_headers + "\n";
-      }
 
       if (!include_directories.empty())
-      {
         recipe += "include_dirs = " + formatted_include_directories + "\n";
-      }
 
       if (initial_build_number
           || (visual_studio_project
@@ -4097,19 +3739,13 @@ namespace forge
         recipe += "\n[build]\n";
 
         if (initial_build_number)
-        {
           recipe += "number = " + std::to_string(*initial_build_number) + "\n";
-        }
 
         if (visual_studio_project && !visual_studio_project->definitions.empty())
-        {
           recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
-        }
 
         if (visual_studio_project)
-        {
           recipe += format_system_links(*visual_studio_project);
-        }
       }
 
       if (type == "executable")
@@ -4121,17 +3757,13 @@ namespace forge
           recipe += "\n[runtime]\nfiles = " + format_runtime_files(runtime_files) + "\n";
 
           for (const auto& runtime_file : runtime_files)
-          {
             inferred_runtime_files.emplace_back(project_name, runtime_file);
-          }
         }
       }
     }
 
     if (initial_build_number)
-    {
       recipe += "\n[release]\nbuild_number_format = \"dotted\"\n";
-    }
 
     if (!sibling_dependencies.empty() || !github_dependencies.empty())
     {
@@ -4191,38 +3823,28 @@ namespace forge
           "configuration = \"" + escape_toml_string(profile.configuration) + "\"\n";
 
         if (profile.cpp_standard != 0 && profile.cpp_standard != visual_studio_project->cpp_standard)
-        {
           recipe += "cpp_std = " + std::to_string(profile.cpp_standard) + "\n";
-        }
 
         if (!profile.include_directories.empty())
         {
           std::vector<std::string> includes;
 
           for (const auto& include : profile.include_directories)
-          {
             includes.push_back(include.generic_string());
-          }
 
           recipe += "include_dirs = " + format_sources(includes) + "\n";
         }
 
         if (!profile.compile_definitions.empty())
-        {
           recipe += "defines = " + format_sources(profile.compile_definitions) + "\n";
-        }
       }
     }
 
     if (show_progress)
-    {
       report_progress(output, 5, 6, "Writing recipe");
-    }
 
     if (!write_file(recipe_path, recipe, error))
-    {
       return 2;
-    }
 
     if (initialize_version_header)
     {
@@ -4245,9 +3867,7 @@ namespace forge
     }
 
     if (show_progress)
-    {
       report_progress(output, 6, 6, "Creating release support");
-    }
 
     if (!generate_github_release_support(
       project_directory,
@@ -4264,17 +3884,13 @@ namespace forge
       << "Found " << sources.size() << " C++ source file";
 
     if (sources.size() != 1)
-    {
       output << 's';
-    }
 
     output << '\n'
            << "Found " << entry_points.size() << " main() entry point";
 
     if (entry_points.size() != 1)
-    {
       output << 's';
-    }
 
     output << '\n';
 
@@ -4285,9 +3901,7 @@ namespace forge
              << '\n';
 
       for (const auto& format : merged_project_formats)
-      {
         output << "Merged mirrored " << format << " project metadata\n";
-      }
 
       if (!visual_studio_project->profiles.empty())
       {
@@ -4315,16 +3929,12 @@ namespace forge
         output << (visual_studio_project->unresolved_properties.size() == 1 ? ":\n" : "s:\n");
 
         for (const auto& value : visual_studio_project->unresolved_properties)
-        {
           output << "  " << value << '\n';
-        }
       }
     }
 
     if (inferred_target_count != 0)
-    {
       output << "Inferred " << inferred_target_count << " Forge targets\n";
-    }
 
     if (!include_directories.empty())
     {
@@ -4344,9 +3954,7 @@ namespace forge
              << " possible version headers; configure [version_header] manually:\n";
 
       for (const auto& candidate : version_headers)
-      {
         output << "  " << candidate.path << " with prefix " << candidate.prefix << '\n';
-      }
     }
 
     if (!inferred_runtime_files.empty())
@@ -4359,9 +3967,7 @@ namespace forge
         output << "  " << target << ": " << runtime_file.source.generic_string();
 
         if (runtime_file.source != runtime_file.destination)
-        {
           output << " -> " << runtime_file.destination.generic_string();
-        }
 
         output << '\n';
       }
@@ -4373,9 +3979,7 @@ namespace forge
       output << (unresolved.size() == 1 ? ":\n" : "s:\n");
 
       for (const auto& [include, source] : unresolved)
-      {
         output << "  <" << include << "> from " << source << '\n';
-      }
     }
 
     if (!sibling_dependencies.empty())
@@ -4384,9 +3988,7 @@ namespace forge
       output << (sibling_dependencies.size() == 1 ? "y:\n" : "ies:\n");
 
       for (const auto& dependency : sibling_dependencies)
-      {
         output << "  " << dependency.name << " = " << dependency.path << '\n';
-      }
 
       output
         << "Workflow release profile requires reproducible replacements for "
@@ -4403,9 +4005,7 @@ namespace forge
         output << "  " << repository << " for";
 
         for (const auto& include : includes)
-        {
           output << " <" << include << ">";
-        }
 
         output << '\n';
       }
@@ -4414,9 +4014,7 @@ namespace forge
     }
 
     if (entry_points.empty() && !sources.empty() && public_headers.empty())
-    {
       output << "Could not infer a library interface; generated an executable recipe\n";
-    }
 
     return 0;
   }

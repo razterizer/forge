@@ -58,9 +58,7 @@ namespace
     for (const auto& value : command)
     {
       if (value == argument)
-      {
         return true;
-      }
     }
 
     return false;
@@ -404,9 +402,7 @@ namespace
         commands.push_back(command);
 
         if (command_contains(command, "show-ref"))
-        {
           return 1;
-        }
 
         if (command.size() > 1 && command[1] == "--build")
         {
