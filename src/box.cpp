@@ -4,6 +4,7 @@
 #include "recipe.h"
 #include "runtime_assets.h"
 #include "sha256.h"
+#include "target_support.h"
 #include "zip.h"
 
 #include <algorithm>
@@ -251,48 +252,6 @@ namespace forge
       }
 
       return true;
-    }
-
-    std::string target_os()
-    {
-#ifdef _WIN32
-      return "windows";
-#elif __APPLE__
-      return "macos";
-#elif __linux__
-      return "linux";
-#else
-      return "unknown";
-#endif
-    }
-
-    std::string target_arch()
-    {
-#if defined(__aarch64__) || defined(_M_ARM64)
-      return "arm64";
-#elif defined(__x86_64__) || defined(_M_X64)
-      return "x86_64";
-#elif defined(__i386__) || defined(_M_IX86)
-      return "x86";
-#else
-      return "unknown";
-#endif
-    }
-
-    std::string current_target()
-    {
-      return target_os() + "-" + target_arch();
-    }
-
-    bool dependency_matches_target(const Dependency& dependency)
-    {
-      const auto target = current_target();
-      return dependency.targets.empty()
-        || std::find(
-          dependency.targets.begin(),
-          dependency.targets.end(),
-          target
-        ) != dependency.targets.end();
     }
 
     std::filesystem::path dynamic_library_filename(std::string_view name)
@@ -656,38 +615,6 @@ namespace forge
       return static_cast<bool>(manifest);
     }
 
-    std::string package_version(const Recipe& recipe)
-    {
-      auto version = recipe.version;
-
-      if (recipe.build_number)
-        version += "+build." + std::to_string(*recipe.build_number);
-
-      return version;
-    }
-
-    bool has_platform_specific_requirements(const Recipe& recipe)
-    {
-      return std::any_of(
-          recipe.dependencies.begin(),
-          recipe.dependencies.end(),
-          [](const Dependency& dependency)
-          {
-            return !dependency.targets.empty();
-          }
-        )
-        || !recipe.macos_system_include_directories.empty()
-        || !recipe.linux_system_include_directories.empty()
-        || !recipe.windows_system_include_directories.empty()
-        || !recipe.macos_system_library_directories.empty()
-        || !recipe.linux_system_library_directories.empty()
-        || !recipe.windows_system_library_directories.empty()
-        || !recipe.macos_frameworks.empty()
-        || !recipe.macos_libraries.empty()
-        || !recipe.linux_libraries.empty()
-        || !recipe.windows_libraries.empty();
-    }
-
     std::string box_variant_suffix(const Recipe& recipe,
                                    const std::optional<std::string>& profile)
     {
@@ -741,7 +668,7 @@ namespace forge
 
       for (const auto& dependency : recipe.dependencies)
       {
-        if (!dependency_matches_target(dependency))
+        if (!dependency_matches_current_target(dependency))
           continue;
 
         BoxMetadata metadata;
@@ -2115,7 +2042,7 @@ namespace forge
 
     for (const auto& dependency : recipe.dependencies)
     {
-      if (!dependency_matches_target(dependency))
+      if (!dependency_matches_current_target(dependency))
         continue;
 
       const auto source = project_directory / ".forge" / "dependency-boxes" / (dependency.name + ".cbox");

@@ -26,6 +26,7 @@ add_library(forge_core STATIC
     src/runtime_assets.cpp
     src/sha256.cpp
     src/test.cpp
+    src/target_support.cpp
     src/workspace.cpp
     src/zip.cpp
 )

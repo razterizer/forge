@@ -5,6 +5,7 @@
 #include "recipe.h"
 #include "runtime_assets.h"
 #include "sha256.h"
+#include "target_support.h"
 
 #include <algorithm>
 #include <array>
@@ -238,46 +239,6 @@ namespace forge
     }
 #endif
 
-    std::string target_os()
-    {
-#ifdef _WIN32
-      return "windows";
-#elif __APPLE__
-      return "macos";
-#elif __linux__
-      return "linux";
-#else
-      return "unknown";
-#endif
-    }
-
-    std::string target_arch()
-    {
-#if defined(__x86_64__) || defined(_M_X64)
-      return "x86_64";
-#elif defined(__aarch64__) || defined(_M_ARM64)
-      return "arm64";
-#else
-      return "unknown";
-#endif
-    }
-
-    std::string current_target()
-    {
-      return target_os() + "-" + target_arch();
-    }
-
-    bool is_supported_dependency_target(std::string_view target)
-    {
-      return target == "linux-x86_64"
-        || target == "linux-arm64"
-        || target == "macos-x86_64"
-        || target == "macos-arm64"
-        || target == "windows-x86"
-        || target == "windows-x86_64"
-        || target == "windows-arm64";
-    }
-
     std::string dependency_target()
     {
       if (dependency_session != nullptr && dependency_session->options.update_target)
@@ -288,48 +249,17 @@ namespace forge
 
     bool dependency_matches_target(const Dependency& dependency)
     {
-      return dependency.targets.empty()
-        || std::find(
-          dependency.targets.begin(),
-          dependency.targets.end(),
-          dependency_target()
-        ) != dependency.targets.end();
-    }
-
-    bool has_platform_specific_requirements(const Recipe& recipe)
-    {
-      return std::any_of(
-          recipe.dependencies.begin(),
-          recipe.dependencies.end(),
-          [](const Dependency& dependency)
-          {
-            return !dependency.targets.empty();
-          }
-        )
-        || !recipe.macos_system_include_directories.empty()
-        || !recipe.linux_system_include_directories.empty()
-        || !recipe.windows_system_include_directories.empty()
-        || !recipe.macos_system_library_directories.empty()
-        || !recipe.linux_system_library_directories.empty()
-        || !recipe.windows_system_library_directories.empty()
-        || !recipe.macos_frameworks.empty()
-        || !recipe.macos_libraries.empty()
-        || !recipe.linux_libraries.empty()
-        || !recipe.windows_libraries.empty();
+      return forge::dependency_matches_target(dependency, dependency_target());
     }
 
     std::string dependency_target_os()
     {
-      const auto target = dependency_target();
-      const auto separator = target.find('-');
-      return separator == std::string::npos ? target : target.substr(0, separator);
+      return target_os_from_target(dependency_target());
     }
 
     std::string dependency_target_arch()
     {
-      const auto target = dependency_target();
-      const auto separator = target.find('-');
-      return separator == std::string::npos ? target : target.substr(separator + 1);
+      return target_arch_from_target(dependency_target());
     }
 
     bool is_sha256(std::string_view value)
@@ -694,26 +624,6 @@ namespace forge
       return std::string { name }
         + '\n' + std::string { variant }
         + '\n' + std::string { target };
-    }
-
-    std::string package_version(const BoxMetadata& metadata)
-    {
-      auto version = metadata.version;
-
-      if (metadata.build_number)
-        version += "+build." + std::to_string(*metadata.build_number);
-
-      return version;
-    }
-
-    std::string package_version(const Recipe& recipe)
-    {
-      auto version = recipe.version;
-
-      if (recipe.build_number)
-        version += "+build." + std::to_string(*recipe.build_number);
-
-      return version;
     }
 
     bool is_safe_project_path(const std::filesystem::path& path)

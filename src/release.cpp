@@ -4,6 +4,7 @@
 #include "build.h"
 #include "recipe.h"
 #include "runtime_assets.h"
+#include "target_support.h"
 
 #include <algorithm>
 #include <array>
@@ -49,48 +50,9 @@ namespace forge
       return profiles;
     }
 
-    std::string target_os()
-    {
-#ifdef __APPLE__
-      return "macos";
-#elif defined(__linux__)
-      return "linux";
-#elif defined(_WIN32)
-      return "windows";
-#else
-      return "unknown";
-#endif
-    }
-
-    std::string target_arch()
-    {
-#if defined(__aarch64__) || defined(_M_ARM64)
-      return "arm64";
-#elif defined(__x86_64__) || defined(_M_X64)
-      return "x86_64";
-#elif defined(__i386__) || defined(_M_IX86)
-      return "x86";
-#else
-      return "unknown";
-#endif
-    }
-
-    std::string current_target()
-    {
-      return target_os() + "-" + target_arch();
-    }
-
     std::string hosted_platform()
     {
-#ifdef _WIN32
-      return "windows";
-#elif __APPLE__
-      return "macos";
-#elif __linux__
-      return "linux";
-#else
-      return "unknown";
-#endif
+      return target_os();
     }
 
     bool has_current_import_profile(const Recipe& recipe)
@@ -104,17 +66,6 @@ namespace forge
           return profile.target == target;
         }
       ) != recipe.imports.end();
-    }
-
-    bool dependency_matches_current_target(const Dependency& dependency)
-    {
-      const auto target = current_target();
-      return dependency.targets.empty()
-        || std::find(
-          dependency.targets.begin(),
-          dependency.targets.end(),
-          target
-        ) != dependency.targets.end();
     }
 
     bool validate_workflow_release_dependencies(Recipe recipe, std::ostream& error)
@@ -391,16 +342,6 @@ namespace forge
       return heading;
     }
 
-    std::string package_version(const Recipe& recipe)
-    {
-      auto version = recipe.version;
-
-      if (recipe.build_number)
-        version += "+build." + std::to_string(*recipe.build_number);
-
-      return version;
-    }
-
     std::string release_slug(std::string_view value)
     {
       std::string slug;
@@ -447,30 +388,6 @@ namespace forge
 
       return release_slug(recipe.name);
     }
-
-    bool has_platform_specific_requirements(const Recipe& recipe)
-    {
-      return std::any_of(
-          recipe.dependencies.begin(),
-          recipe.dependencies.end(),
-          [](const Dependency& dependency)
-          {
-            return !dependency.targets.empty();
-          }
-        )
-        || !recipe.macos_system_include_directories.empty()
-        || !recipe.linux_system_include_directories.empty()
-        || !recipe.windows_system_include_directories.empty()
-        || !recipe.macos_system_library_directories.empty()
-        || !recipe.linux_system_library_directories.empty()
-        || !recipe.windows_system_library_directories.empty()
-        || !recipe.macos_frameworks.empty()
-        || !recipe.macos_libraries.empty()
-        || !recipe.linux_libraries.empty()
-        || !recipe.windows_libraries.empty();
-    }
-
-    std::string hosted_target();
 
     std::string box_variant_suffix(const Recipe& recipe,
                                    const std::optional<std::string>& profile)
@@ -556,7 +473,7 @@ namespace forge
         filename += "-ho";
       }
       else
-        filename += "-" + hosted_target();
+        filename += "-" + current_target();
 
       return filename + ".cbox";
     }
@@ -630,34 +547,6 @@ namespace forge
       return true;
     }
 
-    std::string hosted_target()
-    {
-      std::string os;
-      std::string architecture;
-
-#ifdef _WIN32
-      os = "windows";
-#elif __APPLE__
-      os = "macos";
-#elif __linux__
-      os = "linux";
-#else
-      os = "unknown";
-#endif
-
-#if defined(__aarch64__) || defined(_M_ARM64)
-      architecture = "arm64";
-#elif defined(__x86_64__) || defined(_M_X64)
-      architecture = "x86_64";
-#elif defined(__i386__) || defined(_M_IX86)
-      architecture = "x86";
-#else
-      architecture = "unknown";
-#endif
-
-      return os + "-" + architecture;
-    }
-
     std::string current_date()
     {
       const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -696,7 +585,7 @@ namespace forge
       replace_placeholder(tag, "<name>", recipe.name);
       replace_placeholder(tag, "<version>", release_notes_heading(recipe));
       replace_placeholder(tag, "<curr-date>", current_date());
-      replace_placeholder(tag, "<target>", hosted_target());
+      replace_placeholder(tag, "<target>", current_target());
       replace_placeholder(tag, "<configuration>", "release");
 
       if (tag.find("<build-nr>") != std::string::npos)
@@ -1163,7 +1052,7 @@ namespace forge
         }
 
         const auto package_name = target_recipe.name + "-" + package_version(target_recipe);
-        const auto hosted_archive = release_directory / (package_name + "-" + hosted_target() + ".zip");
+        const auto hosted_archive = release_directory / (package_name + "-" + current_target() + ".zip");
         const auto staged_package = release_directory / package_name;
 
         if (!std::filesystem::is_directory(staged_package)
@@ -1377,7 +1266,7 @@ namespace forge
       const auto archive = release_directory / (recipe.name + "-" + package_version(recipe) + ".zip");
       const auto hosted_archive =
         release_directory / (recipe.name + "-" + package_version(recipe)
-                             + "-" + hosted_target() + ".zip");
+                             + "-" + current_target() + ".zip");
       std::filesystem::remove(hosted_archive, filesystem_error);
       filesystem_error.clear();
       std::filesystem::rename(archive, hosted_archive, filesystem_error);
