@@ -59,8 +59,9 @@ compilers and build systems rather than replacing them.
 - `forge.workspace.toml` groups independently defined Forge projects. Workspace
   builds validate the complete local project graph and build root projects,
   while existing recipe dependencies remain the source of truth for edges.
-  Workspace runs select a project or named target, and workspace tests
-  aggregate marked tests across projects.
+  Workspace runs select a project or named target, workspace tests aggregate
+  marked tests across projects, and workspace clean removes generated state
+  from every project.
 
 ## Project workspace
 
@@ -132,7 +133,6 @@ for 1.0.
 
 ### v0.8: Workspace and adoption lifecycle
 
-- Add workspace-aware `forge clean`.
 - Add workspace release preparation and publication.
 - Make repeated `forge adopt` runs safe, preserving intentional recipe and
   workflow edits while reporting newly discovered or changed metadata.

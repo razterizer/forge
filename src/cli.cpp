@@ -64,7 +64,7 @@ namespace forge::cli
         << "  build           Build a project, target, or workspace selection\n"
         << "  build-and-run   Build and run an executable project or target\n"
         << "  bump            Bump the project version and prepare release notes\n"
-        << "  clean           Remove all generated Forge state for a project\n"
+        << "  clean           Remove generated Forge state for a project or workspace\n"
         << "  profile         List recipe dependency and build profiles\n"
         << "  run             Run an already-built executable project or target\n"
         << "  test            Build and run marked test targets\n"
@@ -226,11 +226,12 @@ namespace forge::cli
       if (command == "clean")
       {
         output
-          << "Remove all generated Forge state for the current project.\n\n"
+          << "Remove generated Forge state for the current project or workspace.\n\n"
           << "Usage:\n"
           << "  forge clean\n\n"
           << "Removes .forge/ build output, generated files, dependency installs,\n"
-          << "boxes, release artifacts, and caches. Source files are preserved.\n";
+          << "boxes, release artifacts, and caches. In a workspace root, removes\n"
+          << "that state from every workspace project. Source files are preserved.\n";
         return true;
       }
 
@@ -1166,6 +1167,12 @@ namespace forge::cli
 
     if (arguments.front() == "clean")
     {
+      if (!std::filesystem::exists(working_directory / "forge.recipe.toml")
+          && std::filesystem::exists(working_directory / "forge.workspace.toml"))
+      {
+        return clean_workspace(working_directory, output, error);
+      }
+
       return clean_project(working_directory, output, error);
     }
 

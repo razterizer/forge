@@ -784,4 +784,62 @@ namespace forge
     return command_failed ? 2 : 1;
   }
 
+  int clean_workspace(const std::filesystem::path& workspace_directory,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    Workspace workspace;
+    std::map<std::filesystem::path, Recipe> recipes;
+
+    if (!load_workspace(workspace_directory, workspace, recipes, error))
+    {
+      return 2;
+    }
+
+    std::error_code filesystem_error;
+    const auto workspace_forge_directory = workspace_directory / ".forge";
+    const auto root_removed =
+      std::filesystem::remove_all(workspace_forge_directory, filesystem_error);
+
+    if (filesystem_error)
+    {
+      error
+        << "forge: could not clean '" << workspace_forge_directory.string()
+        << "': " << filesystem_error.message() << '\n';
+      return 2;
+    }
+
+    std::size_t cleaned_projects = root_removed == 0 ? 0 : 1;
+
+    for (const auto& project : workspace.projects)
+    {
+      const auto forge_directory = project.path / ".forge";
+      const auto removed = std::filesystem::remove_all(forge_directory, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error
+          << "forge: could not clean '" << forge_directory.string()
+          << "': " << filesystem_error.message() << '\n';
+        return 2;
+      }
+
+      if (removed != 0)
+      {
+        ++cleaned_projects;
+      }
+    }
+
+    if (cleaned_projects == 0)
+    {
+      output << "Workspace " << workspace.name << " is already clean\n";
+    }
+    else
+    {
+      output << "Cleaned workspace " << workspace.name << '\n';
+    }
+
+    return 0;
+  }
+
 } // namespace forge

@@ -66,5 +66,12 @@ Workspace-wide tests skip projects that contain no marked test targets,
 continue through project test failures, and report an aggregate project
 summary.
 
-Releases and clean remain project-scoped. Adoption can create a workspace from
-a Visual Studio solution without changing the workspace format.
+Clean removes generated state from every project when run from the workspace
+root:
+
+```sh
+forge clean
+```
+
+Releases remain project-scoped. Adoption can create a workspace from a Visual
+Studio solution without changing the workspace format.

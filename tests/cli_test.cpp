@@ -3513,6 +3513,102 @@ namespace
     expect(contains(error.str(), "forge.recipe.toml"), "clean explains the required recipe");
   }
 
+  void test_clean_removes_workspace_generated_state()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "clean" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    write_file(
+      directory.path() / "forge.workspace.toml",
+      "[workspace]\nname = \"suite\"\nprojects = [\"app\", \"core\"]\n"
+    );
+    write_file(
+      directory.path() / "app/forge.recipe.toml",
+      "[project]\nname = \"app\"\nversion = \"0.1.0\"\ntype = \"executable\"\n"
+      "cpp_std = 20\n"
+      "\n[sources]\npaths = [\"main.cpp\"]\n"
+    );
+    write_file(
+      directory.path() / "core/forge.recipe.toml",
+      "[project]\nname = \"core\"\nversion = \"0.1.0\"\ntype = \"static_library\"\n"
+      "cpp_std = 20\n"
+      "\n[sources]\npaths = [\"src/core.cpp\"]\n"
+    );
+    write_file(directory.path() / ".forge/cache/workspace", "");
+    write_file(directory.path() / "app/.forge/build/app", "");
+    write_file(directory.path() / "core/.forge/boxes/core.cbox", "");
+    write_file(directory.path() / "app/main.cpp", "int main() {}\n");
+    write_file(directory.path() / "core/src/core.cpp", "int answer() { return 42; }\n");
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "clean succeeds from a workspace root"
+    );
+    expect(!std::filesystem::exists(directory.path() / ".forge"), "workspace clean removes root state");
+    expect(!std::filesystem::exists(directory.path() / "app/.forge"), "workspace clean removes app state");
+    expect(!std::filesystem::exists(directory.path() / "core/.forge"), "workspace clean removes core state");
+    expect(std::filesystem::exists(directory.path() / "app/main.cpp"), "workspace clean preserves app sources");
+    expect(std::filesystem::exists(directory.path() / "core/src/core.cpp"), "workspace clean preserves library sources");
+    expect(contains(output.str(), "Cleaned workspace suite"), "workspace clean reports the workspace");
+    expect(error.str().empty(), "successful workspace clean does not write an error");
+  }
+
+  void test_clean_accepts_already_clean_workspace()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "clean" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    write_file(
+      directory.path() / "forge.workspace.toml",
+      "[workspace]\nname = \"suite\"\nprojects = [\"app\"]\n"
+    );
+    write_file(
+      directory.path() / "app/forge.recipe.toml",
+      "[project]\nname = \"app\"\nversion = \"0.1.0\"\ntype = \"executable\"\n"
+      "cpp_std = 20\n"
+      "\n[sources]\npaths = [\"main.cpp\"]\n"
+    );
+    write_file(directory.path() / "app/main.cpp", "int main() {}\n");
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "clean accepts a workspace without Forge state"
+    );
+    expect(
+      contains(output.str(), "Workspace suite is already clean"),
+      "workspace clean reports an already clean workspace"
+    );
+    expect(error.str().empty(), "already clean workspace does not write an error");
+  }
+
+  void test_clean_refuses_invalid_workspace()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "clean" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    write_file(
+      directory.path() / "forge.workspace.toml",
+      "[workspace]\nname = \"suite\"\nprojects = [\"missing\"]\n"
+    );
+    write_file(directory.path() / ".forge/important.txt", "");
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "clean rejects an invalid workspace"
+    );
+    expect(
+      std::filesystem::exists(directory.path() / ".forge/important.txt"),
+      "workspace clean preserves state when workspace validation fails"
+    );
+    expect(contains(error.str(), "forge.recipe.toml"), "invalid workspace clean explains the missing recipe");
+  }
+
   void test_box_round_trip()
   {
     TemporaryDirectory directory;
@@ -5544,6 +5640,9 @@ int main()
   test_clean_removes_generated_state();
   test_clean_accepts_already_clean_project();
   test_clean_refuses_non_project_directory();
+  test_clean_removes_workspace_generated_state();
+  test_clean_accepts_already_clean_workspace();
+  test_clean_refuses_invalid_workspace();
   test_box_round_trip();
   test_static_library_box_round_trip();
   test_header_only_box_round_trip();

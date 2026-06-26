@@ -2,7 +2,9 @@
 
 ## 0.8.9
 
-- Describe changes.
+- Added workspace-aware `forge clean`, so running clean from a
+  `forge.workspace.toml` root removes generated Forge state from every
+  workspace project.
 
 ## 0.8.8
 

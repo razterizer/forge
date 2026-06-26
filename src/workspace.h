@@ -105,4 +105,8 @@ namespace forge
                      std::ostream& output,
                      std::ostream& error);
 
+  int clean_workspace(const std::filesystem::path& workspace_directory,
+                      std::ostream& output,
+                      std::ostream& error);
+
 } // namespace forge

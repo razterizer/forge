@@ -384,15 +384,16 @@ target and recursively embeds boxes for its internal library dependencies.
 `forge workflow prepare-release <target>` prepares hosted assets for a
 selected named executable or library.
 
-Remove all generated project state, including builds, dependencies, boxes,
-release artifacts, and caches:
+Remove all generated project or workspace state, including builds,
+dependencies, boxes, release artifacts, and caches:
 
 ```sh
 forge clean
 ```
 
 For safety, `forge clean` only runs from a directory containing
-`forge.recipe.toml`.
+`forge.recipe.toml` or `forge.workspace.toml`. In a workspace root, it removes
+generated state from every workspace project.
 
 Dynamic libraries use the same source and public-header layout:
 
