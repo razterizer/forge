@@ -1,6 +1,7 @@
 #include "build.h"
 
 #include "box.h"
+#include "file_support.h"
 #include "fprocess.h"
 #include "recipe.h"
 #include "runtime_assets.h"
@@ -624,20 +625,6 @@ namespace forge
       return std::string { name }
         + '\n' + std::string { variant }
         + '\n' + std::string { target };
-    }
-
-    bool is_safe_project_path(const std::filesystem::path& path)
-    {
-      if (path.empty() || path.is_absolute() || path.has_root_path())
-        return false;
-
-      for (const auto& component : path)
-      {
-        if (component == "..")
-          return false;
-      }
-
-      return true;
     }
 
     bool validate_imported_project(const std::filesystem::path& project_directory,

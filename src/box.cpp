@@ -1,6 +1,7 @@
 #include "box.h"
 
 #include "build.h"
+#include "file_support.h"
 #include "recipe.h"
 #include "runtime_assets.h"
 #include "sha256.h"
@@ -274,16 +275,6 @@ namespace forge
     }
 #endif
 
-    bool is_safe_path_component(std::string_view value)
-    {
-      return
-        !value.empty()
-        && value != "."
-        && value != ".."
-        && value.find('/') == std::string_view::npos
-        && value.find('\\') == std::string_view::npos;
-    }
-
     bool is_safe_archive_path(const std::filesystem::path& path)
     {
       if (path.empty() || path.is_absolute() || path.has_root_path())
@@ -293,27 +284,6 @@ namespace forge
       {
         if (component == "." || component == ".." || component.empty())
           return false;
-      }
-
-      return true;
-    }
-
-    bool copy_file(const std::filesystem::path& source,
-                   const std::filesystem::path& destination,
-                   std::ostream& error)
-    {
-      std::error_code filesystem_error;
-      std::filesystem::copy_file(
-        source,
-        destination,
-        std::filesystem::copy_options::overwrite_existing,
-        filesystem_error
-      );
-
-      if (filesystem_error)
-      {
-        error << "forge: could not copy '" << source.string() << "'\n";
-        return false;
       }
 
       return true;
@@ -350,20 +320,6 @@ namespace forge
           std::string { kind },
           checksum
         });
-      return true;
-    }
-
-    bool is_safe_project_path(const std::filesystem::path& path)
-    {
-      if (path.empty() || path.is_absolute() || path.has_root_path())
-        return false;
-
-      for (const auto& component : path)
-      {
-        if (component == "..")
-          return false;
-      }
-
       return true;
     }
 
@@ -719,23 +675,6 @@ namespace forge
     bool is_portable_header_only_filename(const std::filesystem::path& path)
     {
       return path.filename().string().ends_with("-ho.cbox");
-    }
-
-    bool prepare_empty_directory(const std::filesystem::path& path,
-                                 std::ostream& error)
-    {
-      std::error_code filesystem_error;
-      std::filesystem::remove_all(path, filesystem_error);
-      filesystem_error.clear();
-      std::filesystem::create_directories(path, filesystem_error);
-
-      if (filesystem_error)
-      {
-        error << "forge: could not create '" << path.string() << "'\n";
-        return false;
-      }
-
-      return true;
     }
 
     std::filesystem::path box_metadata_cache_root(const std::filesystem::path& working_directory)

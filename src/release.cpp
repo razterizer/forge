@@ -2,6 +2,7 @@
 
 #include "box.h"
 #include "build.h"
+#include "file_support.h"
 #include "recipe.h"
 #include "runtime_assets.h"
 #include "target_support.h"
@@ -107,37 +108,6 @@ namespace forge
             return false;
           }
         }
-      }
-
-      return true;
-    }
-
-    bool is_safe_path_component(std::string_view value)
-    {
-      return
-        !value.empty()
-        && value != "."
-        && value != ".."
-        && value.find('/') == std::string_view::npos
-        && value.find('\\') == std::string_view::npos;
-    }
-
-    bool copy_file(const std::filesystem::path& source,
-                   const std::filesystem::path& destination,
-                   std::ostream& error)
-    {
-      std::error_code filesystem_error;
-      std::filesystem::copy_file(
-        source,
-        destination,
-        std::filesystem::copy_options::overwrite_existing,
-        filesystem_error
-      );
-
-      if (filesystem_error)
-      {
-        error << "forge: could not copy '" << source.string() << "'\n";
-        return false;
       }
 
       return true;

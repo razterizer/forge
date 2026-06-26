@@ -1,5 +1,6 @@
 #include "init.h"
 
+#include "file_support.h"
 #include "github.h"
 #include "recipe.h"
 #include "versioning.h"
@@ -1953,16 +1954,6 @@ namespace forge
       return candidates;
     }
 
-    bool is_safe_project_path(const std::filesystem::path& path)
-    {
-      return !path.empty()
-        && !path.is_absolute()
-        && std::ranges::none_of(path, [](const auto& component)
-        {
-          return component == "..";
-        });
-    }
-
     struct IncludedHeader
     {
       std::string path;
@@ -2917,29 +2908,6 @@ namespace forge
       }
 
       return name.empty() ? "executable-" + std::to_string(index + 1) : name;
-    }
-
-    bool write_file(const std::filesystem::path& path,
-                    std::string_view contents,
-                    std::ostream& error)
-    {
-      std::ofstream file { path };
-
-      if (!file)
-      {
-        error << "forge: could not create '" << path.string() << "'\n";
-        return false;
-      }
-
-      file << contents;
-
-      if (!file)
-      {
-        error << "forge: could not write '" << path.string() << "'\n";
-        return false;
-      }
-
-      return true;
     }
 
     std::vector<std::filesystem::path> read_solution_projects(

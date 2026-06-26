@@ -1,5 +1,6 @@
 #include "bump.h"
 
+#include "file_support.h"
 #include "recipe.h"
 
 #include <charconv>
@@ -243,45 +244,6 @@ namespace forge
       return true;
     }
 
-    bool write_file(const std::filesystem::path& path,
-                    const std::string& content,
-                    std::ostream& error)
-    {
-      std::error_code filesystem_error;
-      std::filesystem::create_directories(path.parent_path(), filesystem_error);
-
-      if (filesystem_error)
-      {
-        error << "forge: could not create directory for '" << path.string() << "'\n";
-        return false;
-      }
-
-      std::ofstream file { path };
-      file << content;
-
-      if (!file)
-      {
-        error << "forge: could not write '" << path.string() << "'\n";
-        return false;
-      }
-
-      return true;
-    }
-
-    bool is_safe_project_path(const std::filesystem::path& path)
-    {
-      if (path.empty() || path.is_absolute())
-        return false;
-
-      for (const auto& component : path)
-      {
-        if (component == "..")
-          return false;
-      }
-
-      return true;
-    }
-
     std::string version_header(std::string_view prefix,
                                std::string_view version,
                                const Version& parsed,
@@ -312,8 +274,8 @@ namespace forge
       const auto recipe_backup = recipe_path.string() + ".bak";
       const auto notes_backup = notes_path.string() + ".bak";
 
-      if (!write_file(recipe_temporary, recipe, error)
-          || !write_file(notes_temporary, notes, error))
+      if (!write_file(recipe_temporary, recipe, error, true)
+          || !write_file(notes_temporary, notes, error, true))
       {
         std::error_code filesystem_error;
         std::filesystem::remove(recipe_temporary, filesystem_error);
@@ -455,7 +417,8 @@ namespace forge
       if (!write_file(
         header_path,
         version_header(recipe.version_header_prefix, version, parsed, build_number),
-        error
+        error,
+        true
       ))
       {
         return 2;

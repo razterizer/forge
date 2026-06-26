@@ -1,11 +1,10 @@
 #include "new.h"
 
+#include "file_support.h"
 #include "github.h"
 #include "recipe.h"
 #include "versioning.h"
 
-#include <algorithm>
-#include <fstream>
 #include <string>
 #include <system_error>
 
@@ -38,48 +37,6 @@ namespace forge
       }
 
       return escaped;
-    }
-
-    bool write_file(const std::filesystem::path& path,
-                    std::string_view contents,
-                    std::ostream& error)
-    {
-      std::error_code filesystem_error;
-      std::filesystem::create_directories(path.parent_path(), filesystem_error);
-
-      if (filesystem_error)
-      {
-        error << "forge: could not create directory for '" << path.string() << "'\n";
-        return false;
-      }
-
-      std::ofstream file { path };
-
-      if (!file)
-      {
-        error << "forge: could not create '" << path.string() << "'\n";
-        return false;
-      }
-
-      file << contents;
-
-      if (!file)
-      {
-        error << "forge: could not write '" << path.string() << "'\n";
-        return false;
-      }
-
-      return true;
-    }
-
-    bool is_safe_project_path(const std::filesystem::path& path)
-    {
-      return !path.empty()
-        && !path.is_absolute()
-        && std::ranges::none_of(path, [](const auto& component)
-        {
-          return component == "..";
-        });
     }
 
   } // namespace
@@ -183,13 +140,14 @@ namespace forge
       ? project_directory / *options.version_header_path
       : std::filesystem::path {};
 
-    if (!write_file(recipe_path, recipe, error)
-        || !write_file(main_path, main_source, error)
+    if (!write_file(recipe_path, recipe, error, true)
+        || !write_file(main_path, main_source, error, true)
         || (options.version_header_path
             && !write_file(
               version_header_path,
               generated_version_header(version_macro_prefix(project_name), *initial_version),
-              error
+              error,
+              true
             ))
         || !generate_github_release_support(
           project_directory,

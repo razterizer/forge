@@ -16,6 +16,7 @@ add_library(forge_core STATIC
     src/clean.cpp
     src/cli.cpp
     src/cli_support.cpp
+    src/file_support.cpp
     src/github.cpp
     src/init.cpp
     src/new.cpp
