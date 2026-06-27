@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.8.10
+
+- Describe changes.
+
 ## 0.8.9
 
 - Added workspace-aware `forge clean`, so running clean from a
