@@ -19,6 +19,8 @@ add_library(forge_core STATIC
     src/cli_support.cpp
     src/file_support.cpp
     src/github.cpp
+    src/init_cmake.cpp
+    src/init_support.cpp
     src/init.cpp
     src/new.cpp
     src/fprocess.cpp
