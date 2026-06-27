@@ -21,6 +21,7 @@ add_library(forge_core STATIC
     src/github.cpp
     src/init_cmake.cpp
     src/init_support.cpp
+    src/init_visual_studio.cpp
     src/init_xcode.cpp
     src/init.cpp
     src/new.cpp
