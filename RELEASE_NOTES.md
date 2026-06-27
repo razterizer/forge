@@ -2,7 +2,9 @@
 
 ## 0.8.10
 
-- Describe changes.
+- Made `forge adopt` infer an initial project version from existing
+  `RELEASE_NOTES.md` headings when stronger project metadata does not declare
+  one, including dotted and SemVer build-qualified headings.
 
 ## 0.8.9
 

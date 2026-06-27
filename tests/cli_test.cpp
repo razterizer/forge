@@ -542,6 +542,86 @@ namespace
     expect(!contains(recipe, "generated.cpp"), "adopt ignores generated directories");
   }
 
+  void test_adopt_infers_version_from_release_notes()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+
+    write_file(directory.path() / "main.cpp", "int main() {}\n");
+    write_file(
+      directory.path() / "RELEASE_NOTES.md",
+      "# Release notes\n"
+      "\n"
+      "## Next\n"
+      "\n"
+      "- Unreleased.\n"
+      "\n"
+      "## 2.4.6\n"
+      "\n"
+      "- Released.\n"
+    );
+
+    std::ostringstream output;
+    std::ostringstream error;
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt succeeds with existing release notes"
+    );
+
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "version = \"2.4.6\""),
+      "adopt infers the project version from the first valid release-notes heading"
+    );
+    expect(
+      !contains(recipe, "[build]"),
+      "plain release-note versions do not create a build number"
+    );
+    expect(
+      contains(read_file(directory.path() / "RELEASE_NOTES.md"), "## 2.4.6\n"),
+      "adopt preserves existing release notes"
+    );
+    expect(error.str().empty(), "release-note version inference does not write an error");
+  }
+
+  void test_adopt_infers_build_qualified_version_from_release_notes()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+
+    write_file(directory.path() / "main.cpp", "int main() {}\n");
+    write_file(
+      directory.path() / "RELEASE_NOTES.md",
+      "# Release notes\n"
+      "\n"
+      "## 3.5.8+build.13\n"
+      "\n"
+      "- Released.\n"
+    );
+
+    std::ostringstream output;
+    std::ostringstream error;
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt succeeds with semver build-qualified release notes"
+    );
+
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "version = \"3.5.8\""),
+      "adopt infers the semantic project version from build-qualified release notes"
+    );
+    expect(
+      contains(recipe, "[build]\nnumber = 13"),
+      "adopt infers the build number from build-qualified release notes"
+    );
+    expect(
+      contains(recipe, "[release]\nbuild_number_format = \"semver\""),
+      "adopt preserves semver build-number release-note formatting"
+    );
+    expect(error.str().empty(), "build-qualified release-note inference does not write an error");
+  }
+
   void test_adopt_infers_unique_version_header()
   {
     TemporaryDirectory directory;
@@ -5546,6 +5626,8 @@ int main()
   test_init_alias_adopts_existing_project();
   test_init_discovers_existing_sources();
   test_init_ignores_generated_directories();
+  test_adopt_infers_version_from_release_notes();
+  test_adopt_infers_build_qualified_version_from_release_notes();
   test_adopt_infers_unique_version_header();
   test_adopt_reports_ambiguous_version_headers();
   test_adopt_accepts_explicit_initial_version_and_version_header();

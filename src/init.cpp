@@ -54,6 +54,95 @@ namespace forge
       return escaped;
     }
 
+    std::string_view trim(std::string_view value)
+    {
+      const auto first = value.find_first_not_of(" \t\r");
+
+      if (first == std::string_view::npos)
+        return {};
+
+      return value.substr(first, value.find_last_not_of(" \t\r") - first + 1);
+    }
+
+    struct ReleaseNotesInitialVersion
+    {
+      InitialVersion version;
+      std::optional<std::string> build_number_format;
+    };
+
+    std::optional<ReleaseNotesInitialVersion> parse_release_notes_version_heading(
+      std::string_view line
+    )
+    {
+      line = trim(line);
+
+      if (!line.starts_with("##") || line.starts_with("###"))
+        return std::nullopt;
+
+      auto heading = trim(line.substr(2));
+      auto build_number_format = std::optional<std::string> {};
+      auto parsed = parse_initial_version(heading);
+
+      if (!parsed)
+      {
+        constexpr std::string_view semver_build = "+build.";
+        const auto build_separator = heading.find(semver_build);
+
+        if (build_separator != std::string_view::npos)
+        {
+          auto normalized = std::string { heading.substr(0, build_separator) };
+          normalized += '.';
+          normalized += heading.substr(build_separator + semver_build.size());
+          parsed = parse_initial_version(normalized);
+
+          if (parsed && parsed->build_number)
+            build_number_format = "semver";
+        }
+      }
+      else if (parsed->build_number)
+      {
+        build_number_format = "dotted";
+      }
+
+      if (!parsed)
+        return std::nullopt;
+
+      return ReleaseNotesInitialVersion { *parsed, build_number_format };
+    }
+
+    bool infer_release_notes_initial_version(
+      const std::filesystem::path& project_directory,
+      std::optional<ReleaseNotesInitialVersion>& version,
+      std::ostream& error
+    )
+    {
+      const auto notes_path = project_directory / "RELEASE_NOTES.md";
+
+      if (!std::filesystem::exists(notes_path))
+        return true;
+
+      std::ifstream file { notes_path };
+
+      if (!file)
+      {
+        error << "forge: could not read '" << notes_path.string() << "'\n";
+        return false;
+      }
+
+      std::string line;
+
+      while (std::getline(file, line))
+      {
+        if (const auto parsed = parse_release_notes_version_heading(line))
+        {
+          version = *parsed;
+          return true;
+        }
+      }
+
+      return true;
+    }
+
     void report_progress(std::ostream& output,
                          std::size_t current,
                          std::size_t total,
@@ -1723,6 +1812,11 @@ namespace forge
         return 2;
     }
 
+    std::optional<ReleaseNotesInitialVersion> release_notes_version;
+
+    if (!infer_release_notes_initial_version(project_directory, release_notes_version, error))
+      return 2;
+
     if (visual_studio_project && has_cmake_project && visual_studio_project->format != "CMake")
     {
       const auto cmake_project = read_cmake_project(cmake_path, error);
@@ -1865,14 +1959,32 @@ namespace forge
     const auto project_name = visual_studio_project
       ? visual_studio_project->name
       : project_directory.filename().string();
+    const auto metadata_version =
+      visual_studio_project && !visual_studio_project->version.empty()
+        ? std::optional<std::string> { visual_studio_project->version }
+        : std::optional<std::string> {};
     const auto project_version =
       explicit_version
         ? explicit_version->version
-        : visual_studio_project && !visual_studio_project->version.empty()
-        ? visual_studio_project->version
+        : metadata_version
+        ? *metadata_version
+        : release_notes_version
+        ? release_notes_version->version.version
         : "0.1.0";
-    const auto initial_build_number =
-      explicit_version ? explicit_version->build_number : std::optional<int> {};
+    const auto initial_build_number = explicit_version
+      ? explicit_version->build_number
+      : metadata_version
+      ? std::optional<int> {}
+      : release_notes_version
+      ? release_notes_version->version.build_number
+      : std::optional<int> {};
+    const auto initial_build_number_format = explicit_version
+      ? std::optional<std::string> { "dotted" }
+      : metadata_version
+      ? std::optional<std::string> {}
+      : release_notes_version
+      ? release_notes_version->build_number_format
+      : std::optional<std::string> {};
     const auto escaped_project_name = escape_toml_string(project_name);
     const auto formatted_sources = format_sources(sources);
     const auto formatted_include_directories = format_sources(include_directories);
@@ -2099,7 +2211,10 @@ namespace forge
     }
 
     if (initial_build_number)
-      recipe += "\n[release]\nbuild_number_format = \"dotted\"\n";
+    {
+      recipe += "\n[release]\nbuild_number_format = \""
+        + initial_build_number_format.value_or("dotted") + "\"\n";
+    }
 
     if (!sibling_dependencies.empty() || !github_dependencies.empty())
     {
