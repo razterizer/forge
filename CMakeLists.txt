@@ -11,6 +11,7 @@ option(FORGE_BUILD_TESTS "Build Forge tests" ON)
 
 add_library(forge_core STATIC
     src/box.cpp
+    src/box_manifest.cpp
     src/bump.cpp
     src/build.cpp
     src/clean.cpp
