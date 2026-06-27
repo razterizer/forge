@@ -8,7 +8,7 @@
 namespace forge::cli
 {
 
-  inline constexpr std::string_view version = "0.8.8+build.16";
+  inline constexpr std::string_view version = "0.8.9+build.17";
 
   int run(std::span<const std::string_view> arguments,
           std::ostream& output,
