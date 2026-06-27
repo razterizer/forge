@@ -27,4 +27,19 @@ namespace forge
     return relative.generic_string();
   }
 
+  void sort_unique(BuildProfile& profile)
+  {
+    std::ranges::sort(profile.include_directories);
+    std::ranges::sort(profile.compile_definitions);
+    profile.include_directories.erase(
+      std::unique(profile.include_directories.begin(), profile.include_directories.end()),
+      profile.include_directories.end()
+    );
+    profile.compile_definitions.erase(
+      std::unique(profile.compile_definitions.begin(), profile.compile_definitions.end()),
+      profile.compile_definitions.end()
+    );
+  }
+
+
 } // namespace forge

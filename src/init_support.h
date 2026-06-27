@@ -33,6 +33,8 @@ namespace forge
   };
 
 
+  void sort_unique(BuildProfile& profile);
+
   std::optional<std::string> project_relative_path(
     const std::filesystem::path& project_directory,
     const std::filesystem::path& path);
