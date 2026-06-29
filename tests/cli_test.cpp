@@ -200,6 +200,19 @@ namespace
       && contains(adopt_output.str(), "prebuilt binaries"),
       "adopt help explains imported libraries are recipe-level prebuilt binaries"
     );
+
+    constexpr std::array update_arguments {
+      std::string_view { "update" },
+      std::string_view { "--help" }
+    };
+    std::ostringstream update_output;
+    std::ostringstream update_error;
+    forge::cli::run(update_arguments, update_output, update_error);
+    expect(
+      contains(update_output.str(), "--all-targets")
+        && contains(update_output.str(), "forge.lock.toml"),
+      "update help documents all-target updates"
+    );
   }
 
   void test_cli_builds_workspace()
@@ -3026,12 +3039,25 @@ namespace
       std::string_view { "update" },
       std::string_view { "--target=windows-x86_64" }
     };
+    constexpr std::array update_all_targets_arguments {
+      std::string_view { "update" },
+      std::string_view { "--all-targets" }
+    };
+    constexpr std::array update_conflicting_targets_arguments {
+      std::string_view { "update" },
+      std::string_view { "--target=windows-x86_64" },
+      std::string_view { "--all-targets" }
+    };
     std::ostringstream new_output;
     std::ostringstream new_error;
     std::ostringstream update_all_output;
     std::ostringstream update_all_error;
     std::ostringstream update_target_output;
     std::ostringstream update_target_error;
+    std::ostringstream update_all_targets_output;
+    std::ostringstream update_all_targets_error;
+    std::ostringstream update_conflicting_targets_output;
+    std::ostringstream update_conflicting_targets_error;
     std::ostringstream update_output;
     std::ostringstream update_error;
     forge::cli::run(new_arguments, directory.path(), new_output, new_error);
@@ -3069,6 +3095,38 @@ namespace
       "target-aware update reports the selected dependency target"
     );
     expect(update_target_error.str().empty(), "target-aware update does not write an error");
+
+    expect(
+      forge::cli::run(
+        update_all_targets_arguments,
+        project_directory,
+        update_all_targets_output,
+        update_all_targets_error
+      ) == 0,
+      "update accepts all locked targets"
+    );
+    expect(
+      contains(update_all_targets_output.str(), "Updated locked dependencies"),
+      "all-target update reports success"
+    );
+    expect(
+      update_all_targets_error.str().empty(),
+      "all-target update does not write an error"
+    );
+
+    expect(
+      forge::cli::run(
+        update_conflicting_targets_arguments,
+        project_directory,
+        update_conflicting_targets_output,
+        update_conflicting_targets_error
+      ) == 2,
+      "update rejects target and all-targets together"
+    );
+    expect(
+      contains(update_conflicting_targets_error.str(), "--all-targets"),
+      "conflicting target options print update usage"
+    );
 
     std::ostringstream update_profile_output;
     std::ostringstream update_profile_error;

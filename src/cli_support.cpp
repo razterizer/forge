@@ -182,10 +182,12 @@ namespace forge::cli
       output
         << "Resolve and lock GitHub cbox dependencies for the current target.\n\n"
         << "Usage:\n"
-        << "  forge update [dependency] [--profile=<name>] [--target=<os-arch>]\n\n"
+        << "  forge update [dependency] [--profile=<name>] "
+        << "[--target=<os-arch> | --all-targets]\n\n"
         << "Options:\n"
         << "  --profile=<name>   Select a dependency profile before resolving\n"
         << "  --target=<os-arch> Resolve dependencies for another platform target\n\n"
+        << "  --all-targets      Resolve targets already represented in forge.lock.toml\n\n"
         << "Writes exact package identities, selected components, URLs, targets,\n"
         << "and checksums to forge.lock.toml without building the current project.\n"
         << "Existing entries for other targets are preserved.\n";
@@ -375,7 +377,9 @@ namespace forge::cli
 
   void print_update_usage(std::ostream& error)
   {
-    error << "forge: usage: forge update [dependency] [--profile=<name>] [--target=<os-arch>]\n";
+    error
+      << "forge: usage: forge update [dependency] [--profile=<name>] "
+      << "[--target=<os-arch> | --all-targets]\n";
   }
 
   void print_build_usage(std::ostream& error)

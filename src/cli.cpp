@@ -11,10 +11,12 @@
 #include "release.h"
 #include "run.h"
 #include "test.h"
+#include "target_support.h"
 #include "workspace.h"
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <optional>
 #include <ostream>
 #include <set>
@@ -27,6 +29,183 @@ namespace forge::cli
 {
   namespace
   {
+
+    std::string_view trim_cli(std::string_view value)
+    {
+      const auto first = value.find_first_not_of(" \t\r\n");
+
+      if (first == std::string_view::npos)
+        return {};
+
+      const auto last = value.find_last_not_of(" \t\r\n");
+      return value.substr(first, last - first + 1);
+    }
+
+    bool parse_cli_string(std::string_view value, std::string& result)
+    {
+      value = trim_cli(value);
+
+      if (value.size() < 2 || value.front() != '"' || value.back() != '"')
+        return false;
+
+      result = std::string { value.substr(1, value.size() - 2) };
+      return result.find('"') == std::string::npos;
+    }
+
+    bool selected_github_dependency_names(const std::filesystem::path& project_directory,
+                                          const std::optional<std::string>& profile,
+                                          const std::optional<std::string>& dependency,
+                                          std::set<std::string>& names,
+                                          std::ostream& error)
+    {
+      Recipe recipe;
+
+      if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error)
+          || !select_dependency_profile(recipe, profile, true, error))
+      {
+        return false;
+      }
+
+      for (const auto& candidate : recipe.dependencies)
+      {
+        if (candidate.github.empty())
+          continue;
+
+        if (dependency && candidate.name != *dependency)
+          continue;
+
+        names.insert(candidate.name);
+      }
+
+      return true;
+    }
+
+    bool store_locked_target(const std::set<std::string>& dependency_names,
+                             const std::string& name,
+                             const std::string& target,
+                             std::set<std::string>& targets)
+    {
+      if (name.empty() || target.empty() || target == "any")
+        return true;
+
+      if (!dependency_names.empty() && !dependency_names.contains(name))
+        return true;
+
+      if (!is_supported_dependency_target(target))
+        return false;
+
+      targets.insert(target);
+      return true;
+    }
+
+    bool collect_locked_update_targets(const std::filesystem::path& project_directory,
+                                       const std::set<std::string>& dependency_names,
+                                       std::set<std::string>& targets,
+                                       std::ostream& error)
+    {
+      const auto path = project_directory / "forge.lock.toml";
+
+      if (!std::filesystem::is_regular_file(path))
+        return true;
+
+      std::ifstream file { path };
+
+      if (!file)
+      {
+        error << "forge: could not read forge.lock.toml\n";
+        return false;
+      }
+
+      std::string line;
+      std::string name;
+      std::string target;
+
+      while (std::getline(file, line))
+      {
+        const auto content = trim_cli(line);
+
+        if (content.empty() || content.front() == '#')
+          continue;
+
+        if (content == "[[dependency]]")
+        {
+          if (!store_locked_target(dependency_names, name, target, targets))
+          {
+            error << "forge: forge.lock.toml contains an unsupported dependency target\n";
+            return false;
+          }
+
+          name.clear();
+          target.clear();
+          continue;
+        }
+
+        const auto equals = content.find('=');
+
+        if (equals == std::string_view::npos)
+          continue;
+
+        const auto key = trim_cli(content.substr(0, equals));
+        const auto value = trim_cli(content.substr(equals + 1));
+        std::string parsed;
+
+        if (key == "name")
+        {
+          if (parse_cli_string(value, parsed))
+            name = std::move(parsed);
+        }
+        else if (key == "target")
+        {
+          if (parse_cli_string(value, parsed))
+            target = std::move(parsed);
+        }
+      }
+
+      if (!store_locked_target(dependency_names, name, target, targets))
+      {
+        error << "forge: forge.lock.toml contains an unsupported dependency target\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    bool collect_update_targets(const std::filesystem::path& project_directory,
+                                const BuildOptions& options,
+                                std::vector<std::string>& targets,
+                                std::ostream& error)
+    {
+      std::set<std::string> dependency_names;
+
+      if (!selected_github_dependency_names(
+        project_directory,
+        options.profile,
+        options.update_dependency,
+        dependency_names,
+        error
+      ))
+      {
+        return false;
+      }
+
+      std::set<std::string> locked_targets;
+
+      if (!collect_locked_update_targets(
+        project_directory,
+        dependency_names,
+        locked_targets,
+        error
+      ))
+      {
+        return false;
+      }
+
+      if (locked_targets.empty())
+        locked_targets.insert(current_target());
+
+      targets.assign(locked_targets.begin(), locked_targets.end());
+      return true;
+    }
 
     int list_profiles(const std::filesystem::path& project_directory,
                       std::ostream& output,
@@ -402,6 +581,7 @@ namespace forge::cli
       BuildOptions options;
       options.dependencies_only = true;
       options.update_dependencies = true;
+      bool all_targets = false;
 
       for (const auto argument : arguments.subspan(1))
       {
@@ -419,6 +599,8 @@ namespace forge::cli
 
           options.update_target = std::string { value };
         }
+        else if (argument == "--all-targets")
+          all_targets = true;
         else if (!options.update_dependency)
         {
           options.update_dependency = std::string { argument };
@@ -428,6 +610,32 @@ namespace forge::cli
           print_update_usage(error);
           return 2;
         }
+      }
+
+      if (all_targets && options.update_target)
+      {
+        print_update_usage(error);
+        return 2;
+      }
+
+      if (all_targets)
+      {
+        std::vector<std::string> targets;
+
+        if (!collect_update_targets(working_directory, options, targets, error))
+          return 2;
+
+        for (const auto& target : targets)
+        {
+          auto target_options = options;
+          target_options.update_target = target;
+          const auto result = build_project(working_directory, target_options, output, error);
+
+          if (result != 0)
+            return result;
+        }
+
+        return 0;
       }
 
       return build_project(working_directory, options, output, error);
