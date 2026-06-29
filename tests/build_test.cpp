@@ -364,6 +364,82 @@ namespace
     expect(error.str().empty(), "successful build profile does not write an error");
   }
 
+  void test_build_generates_system_package_hint_diagnostics()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[build]\n"
+      << "macos_libraries = [\"openal\"]\n"
+      << "macos_brew_packages = [\"openal-soft\"]\n"
+      << "linux_libraries = [\"openal\"]\n"
+      << "linux_apt_packages = [\"libopenal-dev\"]\n";
+    recipe.close();
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 0,
+      "build succeeds while generating system package hint diagnostics"
+    );
+    const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
+    expect(
+      contains(generated, "forge: missing system library 'openal'; install provider package with: brew install openal-soft"),
+      "macOS system library diagnostics include the Homebrew provider hint"
+    );
+    expect(
+      contains(generated, "forge: missing system library 'openal'; install provider package with: sudo apt install libopenal-dev"),
+      "Linux system library diagnostics include the apt provider hint"
+    );
+  }
+
+  void test_build_generates_named_target_system_package_hint_diagnostics()
+  {
+    TemporaryDirectory directory;
+    write_multi_target_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[target.hello]\n"
+      << "macos_brew_packages = [\"openal-soft\"]\n"
+      << "linux_apt_packages = [\"libasound2-dev\"]\n";
+    recipe.close();
+    forge::BuildOptions options;
+    options.target = "examples";
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), options, runner, output, error) == 0,
+      "named target build succeeds while generating system package hint diagnostics"
+    );
+    const auto generated = read_file(directory.path() / ".forge/generated/examples/CMakeLists.txt");
+    expect(
+      contains(generated, "forge: missing system library 'AudioToolbox'; install provider package with: brew install openal-soft"),
+      "named target framework diagnostics include the Homebrew provider hint"
+    );
+    expect(
+      contains(generated, "forge: missing system library 'asound'; install provider package with: sudo apt install libasound2-dev"),
+      "named target Linux library diagnostics include the apt provider hint"
+    );
+  }
+
   void test_build_skips_dependencies_filtered_to_other_targets()
   {
     TemporaryDirectory directory;
@@ -445,8 +521,8 @@ namespace
       "selected target links its internal dependency"
     );
     expect(
-      contains(generated, "find_library(FORGE_forge_internal_0_FRAMEWORK_0 AudioToolbox REQUIRED)")
-        && contains(generated, "target_link_libraries(forge_internal_0 INTERFACE asound)")
+      contains(generated, "find_library(FORGE_forge_internal_0_FRAMEWORK_0 AudioToolbox)")
+        && contains(generated, "find_library(FORGE_forge_internal_0_LINUX_LIBRARY_0 asound)")
         && contains(generated, "target_link_libraries(forge_internal_0 INTERFACE ole32)"),
       "internal libraries propagate platform system-link requirements"
     );
@@ -1872,6 +1948,8 @@ int main()
   test_build_generates_named_target_definitions();
   test_build_rejects_invalid_recipe_definition();
   test_build_applies_build_profile();
+  test_build_generates_system_package_hint_diagnostics();
+  test_build_generates_named_target_system_package_hint_diagnostics();
   test_build_skips_dependencies_filtered_to_other_targets();
   test_build_selects_named_target();
   test_build_requires_target_for_multi_target_recipe();

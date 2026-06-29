@@ -48,7 +48,9 @@ namespace forge
       std::vector<std::filesystem::path> windows_system_library_directories;
       std::vector<std::string> macos_frameworks;
       std::vector<std::string> macos_libraries;
+      std::vector<std::string> macos_brew_packages;
       std::vector<std::string> linux_libraries;
+      std::vector<std::string> linux_apt_packages;
       std::vector<std::string> windows_libraries;
       std::vector<ResolvedLibrary> libraries;
       std::vector<std::filesystem::path> runtimes;
@@ -1079,9 +1081,35 @@ namespace forge
                             std::string_view visibility,
                             const std::vector<std::string>& macos_frameworks,
                             const std::vector<std::string>& macos_libraries,
+                            const std::vector<std::string>& macos_brew_packages,
                             const std::vector<std::string>& linux_libraries,
+                            const std::vector<std::string>& linux_apt_packages,
                             const std::vector<std::string>& windows_libraries)
     {
+      const auto write_missing_system_library =
+        [&file](std::string_view variable,
+                std::string_view library,
+                std::string_view package_manager,
+                const std::vector<std::string>& packages)
+        {
+          file << "  if(NOT " << variable << ")\n"
+               << "    message(FATAL_ERROR \"forge: missing system library '"
+               << escape_cmake(library) << "'";
+
+          if (!packages.empty())
+          {
+            file << "; install provider package"
+                 << (packages.size() == 1 ? "" : "s") << " with: "
+                 << package_manager << " install";
+
+            for (const auto& package : packages)
+              file << ' ' << escape_cmake(package);
+          }
+
+          file << "\")\n"
+               << "  endif()\n";
+        };
+
       if (!macos_frameworks.empty() || !macos_libraries.empty())
       {
         file << "if(APPLE)\n";
@@ -1091,15 +1119,32 @@ namespace forge
           const auto variable = "FORGE_" + std::string { target }
             + "_FRAMEWORK_" + std::to_string(index);
           file << "  find_library(" << variable << ' '
-               << escape_cmake(macos_frameworks[index]) << " REQUIRED)\n"
+               << escape_cmake(macos_frameworks[index]) << ")\n";
+          write_missing_system_library(
+            variable,
+            macos_frameworks[index],
+            "brew",
+            macos_brew_packages
+          );
+          file
                << "  target_link_libraries(" << target << ' ' << visibility
                << " \"${" << variable << "}\")\n";
         }
 
-        for (const auto& library : macos_libraries)
+        for (std::size_t index = 0; index < macos_libraries.size(); ++index)
         {
-          file << "  target_link_libraries(" << target << ' ' << visibility << ' '
-               << escape_cmake(library) << ")\n";
+          const auto variable = "FORGE_" + std::string { target }
+            + "_MACOS_LIBRARY_" + std::to_string(index);
+          file << "  find_library(" << variable << ' '
+               << escape_cmake(macos_libraries[index]) << ")\n";
+          write_missing_system_library(
+            variable,
+            macos_libraries[index],
+            "brew",
+            macos_brew_packages
+          );
+          file << "  target_link_libraries(" << target << ' ' << visibility
+               << " \"${" << variable << "}\")\n";
         }
 
         file << "endif()\n";
@@ -1109,10 +1154,20 @@ namespace forge
       {
         file << "if(UNIX AND NOT APPLE)\n";
 
-        for (const auto& library : linux_libraries)
+        for (std::size_t index = 0; index < linux_libraries.size(); ++index)
         {
-          file << "  target_link_libraries(" << target << ' ' << visibility << ' '
-               << escape_cmake(library) << ")\n";
+          const auto variable = "FORGE_" + std::string { target }
+            + "_LINUX_LIBRARY_" + std::to_string(index);
+          file << "  find_library(" << variable << ' '
+               << escape_cmake(linux_libraries[index]) << ")\n";
+          write_missing_system_library(
+            variable,
+            linux_libraries[index],
+            "sudo apt",
+            linux_apt_packages
+          );
+          file << "  target_link_libraries(" << target << ' ' << visibility
+               << " \"${" << variable << "}\")\n";
         }
 
         file << "endif()\n";
@@ -1323,7 +1378,9 @@ namespace forge
           visibility,
           target.macos_frameworks,
           target.macos_libraries,
+          target.macos_brew_packages,
           target.linux_libraries,
+          target.linux_apt_packages,
           target.windows_libraries
         );
 
@@ -1419,7 +1476,9 @@ namespace forge
         "PRIVATE",
         recipe.macos_frameworks,
         recipe.macos_libraries,
+        recipe.macos_brew_packages,
         recipe.linux_libraries,
+        recipe.linux_apt_packages,
         recipe.windows_libraries
       );
 
@@ -1457,7 +1516,9 @@ namespace forge
           "PRIVATE",
           dependency.macos_frameworks,
           dependency.macos_libraries,
+          dependency.macos_brew_packages,
           dependency.linux_libraries,
+          dependency.linux_apt_packages,
           dependency.windows_libraries
         );
 
@@ -2420,7 +2481,9 @@ namespace forge
                             : std::vector<std::filesystem::path> {},
           node.box_metadata ? node.box_metadata->macos_frameworks : std::vector<std::string> {},
           node.box_metadata ? node.box_metadata->macos_libraries : std::vector<std::string> {},
+          node.box_metadata ? node.box_metadata->macos_brew_packages : std::vector<std::string> {},
           node.box_metadata ? node.box_metadata->linux_libraries : std::vector<std::string> {},
+          node.box_metadata ? node.box_metadata->linux_apt_packages : std::vector<std::string> {},
           node.box_metadata ? node.box_metadata->windows_libraries : std::vector<std::string> {},
           {},
           {},
