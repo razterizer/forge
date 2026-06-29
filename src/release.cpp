@@ -407,7 +407,9 @@ namespace forge
             || !metadata.windows_system_library_directories.empty()
             || !metadata.macos_frameworks.empty()
             || !metadata.macos_libraries.empty()
+            || !metadata.macos_brew_packages.empty()
             || !metadata.linux_libraries.empty()
+            || !metadata.linux_apt_packages.empty()
             || !metadata.windows_libraries.empty())
         {
           return true;

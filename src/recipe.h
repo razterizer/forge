@@ -73,7 +73,9 @@ namespace forge
     std::vector<std::string> dependencies;
     std::vector<std::string> macos_frameworks;
     std::vector<std::string> macos_libraries;
+    std::vector<std::string> macos_brew_packages;
     std::vector<std::string> linux_libraries;
+    std::vector<std::string> linux_apt_packages;
     std::vector<std::string> windows_libraries;
     bool test = false;
   };
@@ -124,7 +126,9 @@ namespace forge
     std::vector<std::string> compile_definitions;
     std::vector<std::string> macos_frameworks;
     std::vector<std::string> macos_libraries;
+    std::vector<std::string> macos_brew_packages;
     std::vector<std::string> linux_libraries;
+    std::vector<std::string> linux_apt_packages;
     std::vector<std::string> windows_libraries;
     std::vector<ImportProfile> imports;
     std::vector<Dependency> dependencies;

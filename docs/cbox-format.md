@@ -76,7 +76,9 @@ runtime = "libc++"
 macos_system_include_dirs = ["/opt/homebrew/opt/openal-soft/include"]
 macos_system_library_dirs = ["/opt/homebrew/opt/openal-soft/lib"]
 macos_libraries = ["openal"]
+macos_brew_packages = ["openal-soft"]
 linux_libraries = ["openal"]
+linux_apt_packages = ["libopenal-dev"]
 
 [[artifact]]
 path = "bin/hello"
@@ -143,7 +145,10 @@ The optional `[requirements]` section records platform-specific system include
 directories, system library search directories, frameworks, and library names
 that consumers must apply when they use the box. Forge emits these as CMake
 `SYSTEM` include directories, `target_link_directories`, and platform-guarded
-link requirements for dependent builds.
+link requirements for dependent builds. Package-manager fields such as
+`macos_brew_packages` and `linux_apt_packages` are provider hints for satisfying
+those requirements; they are recorded in the box manifest but do not add link
+flags by themselves.
 
 Each `[[dependency]]` entry declares one direct dependency embedded as another
 verified `.cbox`. Child boxes recursively carry their own direct dependencies,

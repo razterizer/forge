@@ -54,7 +54,9 @@ namespace forge
     std::vector<std::filesystem::path> windows_system_library_directories;
     std::vector<std::string> macos_frameworks;
     std::vector<std::string> macos_libraries;
+    std::vector<std::string> macos_brew_packages;
     std::vector<std::string> linux_libraries;
+    std::vector<std::string> linux_apt_packages;
     std::vector<std::string> windows_libraries;
     std::vector<BoxArtifact> artifacts;
     std::vector<BoxDependency> dependencies;

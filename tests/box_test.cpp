@@ -435,6 +435,11 @@ namespace
       << "name = \"vendor-sdk\"\n"
       << "version = \"4.2.0\"\n"
       << "type = \"imported_library\"\n\n"
+      << "[build]\n"
+      << "macos_libraries = [\"openal\"]\n"
+      << "macos_brew_packages = [\"openal-soft\"]\n"
+      << "linux_libraries = [\"openal\"]\n"
+      << "linux_apt_packages = [\"libopenal-dev\"]\n\n"
       << "[import." << current_target() << "]\n"
       << "compiler = \"ExampleCompiler\"\n"
       << "compiler_version = \"1.0\"\n"
@@ -477,6 +482,14 @@ namespace
     expect(contains(manifest, "path = \"include/vendor/sdk.h\""), "manifest declares imported headers");
     expect(contains(manifest, "path = \"lib/sdk.a\""), "manifest declares imported static libraries");
     expect(contains(manifest, "path = \"runtime/sdk.so\""), "manifest declares imported runtime libraries");
+    expect(
+      contains(manifest, "macos_brew_packages = [\"openal-soft\"]"),
+      "manifest records macOS package-provider hints"
+    );
+    expect(
+      contains(manifest, "linux_apt_packages = [\"libopenal-dev\"]"),
+      "manifest records Linux package-provider hints"
+    );
     expect(std::filesystem::exists(staging / "include/vendor/sdk.h"), "box stages imported headers");
     expect(std::filesystem::exists(staging / "lib/sdk.a"), "box stages imported static libraries");
     expect(std::filesystem::exists(staging / "runtime/sdk.so"), "box stages imported runtime libraries");

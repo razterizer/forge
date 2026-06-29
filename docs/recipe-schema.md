@@ -37,6 +37,10 @@ rules:
 - `macos_system_library_dirs`, `linux_system_library_dirs`, and
   `windows_system_library_dirs` declare platform-specific external library
   search directories for SDKs installed outside the project tree.
+- `macos_brew_packages` and `linux_apt_packages` declare package-manager
+  provider hints for satisfying platform system requirements. The field name is
+  the Forge keyword; the strings inside the array are package names such as
+  `openal-soft` or `libopenal-dev`.
 - `[build].defines` and named-target `defines` declare persistent preprocessor
   definitions. Definitions use `NAME` or `NAME=value` syntax. Repeatable
   `forge build --define=<symbol>` options temporarily add private definitions
@@ -105,8 +109,9 @@ rules:
 - Named targets may declare internal library target dependencies. Forge builds
   and links their transitive closure and rejects missing or cyclic targets.
 - Legacy `[build]` sections and named targets may declare `macos_frameworks`,
-  `macos_libraries`, `linux_libraries`, and `windows_libraries`. Named library
-  target requirements propagate to dependent targets.
+  `macos_libraries`, `linux_libraries`, `windows_libraries`, and provider hints
+  such as `macos_brew_packages` and `linux_apt_packages`. Named library target
+  requirements propagate to dependent targets.
 - Named executable targets marked with `test = true` are run by `forge test`.
 - Named targets may be selected for boxing and release preparation. Internal
   library target dependencies are recursively packaged as embedded boxes.

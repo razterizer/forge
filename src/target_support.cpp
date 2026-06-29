@@ -99,7 +99,9 @@ namespace forge
       || !recipe.windows_system_library_directories.empty()
       || !recipe.macos_frameworks.empty()
       || !recipe.macos_libraries.empty()
+      || !recipe.macos_brew_packages.empty()
       || !recipe.linux_libraries.empty()
+      || !recipe.linux_apt_packages.empty()
       || !recipe.windows_libraries.empty();
   }
 

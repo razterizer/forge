@@ -483,6 +483,47 @@ namespace forge
       );
     }
 
+    bool parse_package_names(std::string_view value, std::vector<std::string>& names)
+    {
+      std::vector<std::filesystem::path> paths;
+
+      if (!parse_sources(value, paths))
+        return false;
+
+      names.clear();
+
+      for (const auto& path : paths)
+      {
+        const auto name = path.generic_string();
+
+        if (name.empty()
+            || name == "."
+            || name == ".."
+            || name.front() == '/'
+            || name.find('\\') != std::string::npos
+            || !std::ranges::all_of(
+                 name,
+                 [](unsigned char character)
+                 {
+                   return std::isalnum(character)
+                     || character == '_'
+                     || character == '-'
+                     || character == '.'
+                     || character == '+'
+                     || character == '@'
+                     || character == '/';
+                 }
+               ))
+        {
+          return false;
+        }
+
+        names.push_back(name);
+      }
+
+      return true;
+    }
+
     bool parse_definitions(std::string_view value, std::vector<std::string>& definitions)
     {
       std::vector<std::filesystem::path> paths;
@@ -767,8 +808,12 @@ namespace forge
         valid = parse_link_names(value, recipe.macos_frameworks);
       else if (section == "build" && key == "macos_libraries")
         valid = parse_link_names(value, recipe.macos_libraries);
+      else if (section == "build" && key == "macos_brew_packages")
+        valid = parse_package_names(value, recipe.macos_brew_packages);
       else if (section == "build" && key == "linux_libraries")
         valid = parse_link_names(value, recipe.linux_libraries);
+      else if (section == "build" && key == "linux_apt_packages")
+        valid = parse_package_names(value, recipe.linux_apt_packages);
       else if (section == "build" && key == "windows_libraries")
         valid = parse_link_names(value, recipe.windows_libraries);
       else if (section == "sources" && key == "paths")
@@ -834,8 +879,12 @@ namespace forge
           valid = parse_link_names(value, target->macos_frameworks);
         else if (key == "macos_libraries")
           valid = parse_link_names(value, target->macos_libraries);
+        else if (key == "macos_brew_packages")
+          valid = parse_package_names(value, target->macos_brew_packages);
         else if (key == "linux_libraries")
           valid = parse_link_names(value, target->linux_libraries);
+        else if (key == "linux_apt_packages")
+          valid = parse_package_names(value, target->linux_apt_packages);
         else if (key == "windows_libraries")
           valid = parse_link_names(value, target->windows_libraries);
         else if (key == "test")
@@ -1195,7 +1244,9 @@ namespace forge
     recipe.compile_definitions = selected->compile_definitions;
     recipe.macos_frameworks = selected->macos_frameworks;
     recipe.macos_libraries = selected->macos_libraries;
+    recipe.macos_brew_packages = selected->macos_brew_packages;
     recipe.linux_libraries = selected->linux_libraries;
+    recipe.linux_apt_packages = selected->linux_apt_packages;
     recipe.windows_libraries = selected->windows_libraries;
     recipe.runtime_files = selected->runtime_files;
     return true;

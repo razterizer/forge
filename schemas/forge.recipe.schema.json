@@ -97,8 +97,16 @@
         "macos_libraries": {
           "$ref": "#/$defs/linkNames"
         },
+        "macos_brew_packages": {
+          "$ref": "#/$defs/packageNames",
+          "description": "Homebrew packages that can satisfy this macOS system requirement."
+        },
         "linux_libraries": {
           "$ref": "#/$defs/linkNames"
+        },
+        "linux_apt_packages": {
+          "$ref": "#/$defs/packageNames",
+          "description": "apt packages that can satisfy this Linux system requirement."
         },
         "windows_libraries": {
           "$ref": "#/$defs/linkNames"
@@ -215,8 +223,16 @@
           "macos_libraries": {
             "$ref": "#/$defs/linkNames"
           },
+          "macos_brew_packages": {
+            "$ref": "#/$defs/packageNames",
+            "description": "Homebrew packages that can satisfy this macOS system requirement."
+          },
           "linux_libraries": {
             "$ref": "#/$defs/linkNames"
+          },
+          "linux_apt_packages": {
+            "$ref": "#/$defs/packageNames",
+            "description": "apt packages that can satisfy this Linux system requirement."
           },
           "windows_libraries": {
             "$ref": "#/$defs/linkNames"
@@ -998,6 +1014,14 @@
       "items": {
         "type": "string",
         "pattern": "^[A-Za-z0-9_.+-]+$"
+      },
+      "uniqueItems": true
+    },
+    "packageNames": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?!/)(?!\\.{1,2}$)[A-Za-z0-9_.+@/-]+$"
       },
       "uniqueItems": true
     },

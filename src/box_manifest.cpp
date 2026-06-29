@@ -204,7 +204,9 @@ namespace forge
           || !recipe.windows_system_library_directories.empty()
           || !recipe.macos_frameworks.empty()
           || !recipe.macos_libraries.empty()
+          || !recipe.macos_brew_packages.empty()
           || !recipe.linux_libraries.empty()
+          || !recipe.linux_apt_packages.empty()
           || !recipe.windows_libraries.empty())
       {
         manifest << "\n[requirements]\n";
@@ -240,7 +242,9 @@ namespace forge
         );
         write_string_array(manifest, "macos_frameworks", recipe.macos_frameworks);
         write_string_array(manifest, "macos_libraries", recipe.macos_libraries);
+        write_string_array(manifest, "macos_brew_packages", recipe.macos_brew_packages);
         write_string_array(manifest, "linux_libraries", recipe.linux_libraries);
+        write_string_array(manifest, "linux_apt_packages", recipe.linux_apt_packages);
         write_string_array(manifest, "windows_libraries", recipe.windows_libraries);
       }
 
@@ -501,8 +505,12 @@ namespace forge
           valid = parse_strings(value, manifest.macos_frameworks);
         else if (identity == "requirements.macos_libraries")
           valid = parse_strings(value, manifest.macos_libraries);
+        else if (identity == "requirements.macos_brew_packages")
+          valid = parse_strings(value, manifest.macos_brew_packages);
         else if (identity == "requirements.linux_libraries")
           valid = parse_strings(value, manifest.linux_libraries);
+        else if (identity == "requirements.linux_apt_packages")
+          valid = parse_strings(value, manifest.linux_apt_packages);
         else if (identity == "requirements.windows_libraries")
           valid = parse_strings(value, manifest.windows_libraries);
         else if (section == "artifact" && artifact_index && key == "path")

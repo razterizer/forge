@@ -375,7 +375,9 @@ namespace forge
             || !metadata.windows_system_library_directories.empty()
             || !metadata.macos_frameworks.empty()
             || !metadata.macos_libraries.empty()
+            || !metadata.macos_brew_packages.empty()
             || !metadata.linux_libraries.empty()
+            || !metadata.linux_apt_packages.empty()
             || !metadata.windows_libraries.empty())
         {
           return true;
@@ -1784,7 +1786,9 @@ namespace forge
         manifest.windows_system_library_directories,
         manifest.macos_frameworks,
         manifest.macos_libraries,
+        manifest.macos_brew_packages,
         manifest.linux_libraries,
+        manifest.linux_apt_packages,
         manifest.windows_libraries,
         {},
         {},
