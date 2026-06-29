@@ -30,6 +30,7 @@ namespace forge::cli
   void print_new_usage(std::ostream& error);
   void print_adopt_usage(std::ostream& error);
   void print_update_usage(std::ostream& error);
+  void print_upgrade_usage(std::ostream& error);
   void print_build_usage(std::ostream& error);
   void print_workflow_feature_usage(std::string_view operation,
                                     std::ostream& error);

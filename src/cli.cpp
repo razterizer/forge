@@ -4,6 +4,7 @@
 #include "build.h"
 #include "clean.h"
 #include "cli_support.h"
+#include "fprocess.h"
 #include "github.h"
 #include "init.h"
 #include "new.h"
@@ -15,8 +16,10 @@
 #include "workspace.h"
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <optional>
 #include <ostream>
 #include <set>
@@ -188,6 +191,13 @@ namespace forge::cli
         return false;
       }
 
+      if (options.update_dependency && dependency_names.empty())
+      {
+        error << "forge: GitHub dependency '" << *options.update_dependency
+              << "' was not found\n";
+        return false;
+      }
+
       std::set<std::string> locked_targets;
 
       if (!collect_locked_update_targets(
@@ -204,6 +214,560 @@ namespace forge::cli
         locked_targets.insert(current_target());
 
       targets.assign(locked_targets.begin(), locked_targets.end());
+      return true;
+    }
+
+    int run_dependency_update(const std::filesystem::path& working_directory,
+                              const BuildOptions& options,
+                              bool all_targets,
+                              std::ostream& output,
+                              std::ostream& error)
+    {
+      if (all_targets && options.update_target)
+      {
+        print_update_usage(error);
+        return 2;
+      }
+
+      if (!all_targets)
+        return build_project(working_directory, options, output, error);
+
+      std::vector<std::string> targets;
+
+      if (!collect_update_targets(working_directory, options, targets, error))
+        return 2;
+
+      for (const auto& target : targets)
+      {
+        auto target_options = options;
+        target_options.update_target = target;
+        const auto result = build_project(working_directory, target_options, output, error);
+
+        if (result != 0)
+          return result;
+      }
+
+      return 0;
+    }
+
+    bool read_text_file(const std::filesystem::path& path,
+                        std::string& content,
+                        std::ostream& error)
+    {
+      std::ifstream file { path };
+
+      if (!file)
+      {
+        error << "forge: could not read '" << path.string() << "'\n";
+        return false;
+      }
+
+      content = {
+        std::istreambuf_iterator<char> { file },
+        std::istreambuf_iterator<char> {}
+      };
+      return true;
+    }
+
+    bool write_text_file(const std::filesystem::path& path,
+                         std::string_view content,
+                         std::ostream& error)
+    {
+      const auto temporary = path.string() + ".tmp";
+      std::ofstream file { temporary };
+
+      if (!file)
+      {
+        error << "forge: could not write '" << path.string() << "'\n";
+        return false;
+      }
+
+      file << content;
+
+      if (!file)
+      {
+        error << "forge: could not write '" << path.string() << "'\n";
+        return false;
+      }
+
+      file.close();
+      std::error_code filesystem_error;
+      const auto backup = path.string() + ".bak";
+      std::filesystem::remove(backup, filesystem_error);
+      filesystem_error.clear();
+
+      if (std::filesystem::is_regular_file(path))
+      {
+        std::filesystem::rename(path, backup, filesystem_error);
+
+        if (filesystem_error)
+        {
+          std::filesystem::remove(temporary, filesystem_error);
+          error << "forge: could not replace '" << path.string() << "'\n";
+          return false;
+        }
+      }
+
+      std::filesystem::rename(temporary, path, filesystem_error);
+
+      if (filesystem_error)
+      {
+        filesystem_error.clear();
+        std::filesystem::rename(backup, path, filesystem_error);
+        std::filesystem::remove(temporary, filesystem_error);
+        error << "forge: could not replace '" << path.string() << "'\n";
+        return false;
+      }
+
+      std::filesystem::remove(backup, filesystem_error);
+      return true;
+    }
+
+    std::string dependency_section(const std::optional<std::string>& profile)
+    {
+      return profile
+        ? "profile." + *profile + ".dependencies"
+        : "dependencies";
+    }
+
+    bool replace_dependency_version_line(std::string_view line,
+                                         std::string_view version,
+                                         std::string& updated)
+    {
+      const auto version_key = line.find("version");
+
+      if (version_key == std::string_view::npos)
+        return false;
+
+      const auto equals = line.find('=', version_key);
+
+      if (equals == std::string_view::npos)
+        return false;
+
+      const auto open_quote = line.find('"', equals);
+
+      if (open_quote == std::string_view::npos)
+        return false;
+
+      const auto close_quote = line.find('"', open_quote + 1);
+
+      if (close_quote == std::string_view::npos)
+        return false;
+
+      updated.assign(line.substr(0, open_quote + 1));
+      updated += version;
+      updated += line.substr(close_quote);
+      return true;
+    }
+
+    bool replace_dependency_version(std::string_view content,
+                                    const std::optional<std::string>& profile,
+                                    std::string_view dependency,
+                                    std::string_view version,
+                                    std::string& updated,
+                                    std::ostream& error)
+    {
+      updated.clear();
+      std::string section;
+      const auto wanted_section = dependency_section(profile);
+      bool replaced = false;
+      std::string_view remaining = content;
+
+      while (!remaining.empty())
+      {
+        const auto newline = remaining.find('\n');
+        const auto line = remaining.substr(0, newline);
+        const auto trimmed = trim_cli(line);
+
+        if (trimmed.starts_with("[") && trimmed.ends_with("]"))
+          section = std::string { trim_cli(trimmed.substr(1, trimmed.size() - 2)) };
+
+        const auto equals = trimmed.find('=');
+        const auto key = equals == std::string_view::npos
+          ? std::string_view {}
+          : trim_cli(trimmed.substr(0, equals));
+
+        if (!replaced && section == wanted_section && key == dependency)
+        {
+          std::string replacement;
+
+          if (!replace_dependency_version_line(line, version, replacement))
+          {
+            error << "forge: dependency '" << dependency
+                  << "' has no inline version to upgrade\n";
+            return false;
+          }
+
+          updated += replacement;
+          replaced = true;
+        }
+        else
+          updated += line;
+
+        if (newline == std::string_view::npos)
+          break;
+
+        updated += '\n';
+        remaining.remove_prefix(newline + 1);
+      }
+
+      if (!replaced)
+      {
+        error << "forge: dependency '" << dependency << "' was not found in ["
+              << wanted_section << "]\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    bool validate_upgrade_dependency(const std::filesystem::path& project_directory,
+                                     const std::optional<std::string>& profile,
+                                     std::string_view dependency,
+                                     std::ostream& error)
+    {
+      std::set<std::string> names;
+
+      if (!selected_github_dependency_names(
+        project_directory,
+        profile,
+        std::string { dependency },
+        names,
+        error
+      ))
+      {
+        return false;
+      }
+
+      if (names.empty())
+      {
+        error << "forge: GitHub dependency '" << dependency << "' was not found\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    bool is_safe_url_component(std::string_view value)
+    {
+      return !value.empty()
+        && value != "."
+        && value != ".."
+        && value.find_first_not_of(
+          "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-"
+        ) == std::string_view::npos;
+    }
+
+    bool is_numeric_version_identifier(std::string_view value)
+    {
+      return !value.empty()
+        && value.find_first_not_of("0123456789") == std::string_view::npos
+        && (value.size() == 1 || value.front() != '0');
+    }
+
+    bool is_github_dependency_version(std::string_view value)
+    {
+      const auto build = value.find("+build.");
+
+      if (build != std::string_view::npos)
+      {
+        if (!is_numeric_version_identifier(value.substr(build + std::string_view { "+build." }.size())))
+          return false;
+
+        value = value.substr(0, build);
+      }
+
+      const auto prerelease = value.find('-');
+      const auto core = value.substr(0, prerelease);
+      std::size_t offset = 0;
+
+      for (int component = 0; component < 3; ++component)
+      {
+        const auto separator = core.find('.', offset);
+        const auto end = component == 2 ? core.size() : separator;
+
+        if ((component != 2 && separator == std::string_view::npos)
+            || !is_numeric_version_identifier(core.substr(offset, end - offset)))
+        {
+          return false;
+        }
+
+        offset = end + 1;
+      }
+
+      return prerelease == std::string_view::npos
+        || is_safe_url_component(value.substr(prerelease + 1));
+    }
+
+    bool upgrade_recipe_dependency(const std::filesystem::path& project_directory,
+                                   const std::optional<std::string>& profile,
+                                   std::string_view dependency,
+                                   std::string_view version,
+                                   std::ostream& error)
+    {
+      if (version.empty() || version.find('"') != std::string_view::npos)
+      {
+        error << "forge: upgrade version cannot be empty\n";
+        return false;
+      }
+
+      if (!is_github_dependency_version(version))
+      {
+        error << "forge: upgrade version must use <major>.<minor>.<patch>[+build.<number>]\n";
+        return false;
+      }
+
+      if (!validate_upgrade_dependency(project_directory, profile, dependency, error))
+        return false;
+
+      const auto path = project_directory / "forge.recipe.toml";
+      std::string content;
+      std::string updated;
+
+      return read_text_file(path, content, error)
+        && replace_dependency_version(content, profile, dependency, version, updated, error)
+        && write_text_file(path, updated, error);
+    }
+
+    bool find_recipe_github_dependency(const std::filesystem::path& project_directory,
+                                       const std::optional<std::string>& profile,
+                                       std::string_view dependency,
+                                       Dependency& result,
+                                       std::ostream& error)
+    {
+      Recipe recipe;
+
+      if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error)
+          || !select_dependency_profile(recipe, profile, true, error))
+      {
+        return false;
+      }
+
+      for (const auto& candidate : recipe.dependencies)
+      {
+        if (candidate.name == dependency && !candidate.github.empty())
+        {
+          result = candidate;
+          return true;
+        }
+      }
+
+      error << "forge: GitHub dependency '" << dependency << "' was not found\n";
+      return false;
+    }
+
+    bool download_latest_release_json(const std::filesystem::path& project_directory,
+                                      const Dependency& dependency,
+                                      std::filesystem::path& destination,
+                                      std::ostream& error)
+    {
+      const auto cache_directory =
+        project_directory / ".forge" / "cache" / "github"
+          / std::filesystem::path { dependency.github };
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(cache_directory, filesystem_error);
+
+      if (filesystem_error)
+      {
+        error << "forge: could not create the GitHub release cache\n";
+        return false;
+      }
+
+      destination = cache_directory / "latest-release.json";
+      auto status_path = destination;
+      status_path += ".status";
+      const auto script = cache_directory / "latest-release.cmake";
+      std::ofstream file { script };
+
+      if (!file)
+      {
+        error << "forge: could not create the GitHub release query script\n";
+        return false;
+      }
+
+      file
+        << "file(DOWNLOAD \"${URL}\" \"${DESTINATION}.tmp\" STATUS status TLS_VERIFY ON)\n"
+        << "list(GET status 0 code)\n"
+        << "file(WRITE \"${STATUS_FILE}\" \"${code}\")\n"
+        << "if(NOT code EQUAL 0)\n"
+        << "  file(REMOVE \"${DESTINATION}.tmp\")\n"
+        << "  return()\n"
+        << "endif()\n"
+        << "file(REMOVE \"${DESTINATION}\")\n"
+        << "file(RENAME \"${DESTINATION}.tmp\" \"${DESTINATION}\")\n";
+      file.close();
+
+      const auto url = "https://api.github.com/repos/" + dependency.github + "/releases/latest";
+      std::filesystem::remove(status_path, filesystem_error);
+      const auto result = run_process(
+        {
+          "cmake",
+          "-DURL=" + url,
+          "-DDESTINATION=" + destination.generic_string(),
+          "-DSTATUS_FILE=" + status_path.generic_string(),
+          "-P",
+          script.string()
+        },
+        project_directory,
+        error
+      );
+
+      if (result != 0)
+        return false;
+
+      std::ifstream status_file { status_path };
+      int status = 0;
+
+      if (!(status_file >> status))
+        return false;
+
+      std::filesystem::remove(status_path, filesystem_error);
+      return status == 0;
+    }
+
+    bool json_string_value(std::string_view json,
+                           std::string_view key,
+                           std::string& value)
+    {
+      const auto key_pattern = "\"" + std::string { key } + "\"";
+      const auto key_position = json.find(key_pattern);
+
+      if (key_position == std::string_view::npos)
+        return false;
+
+      const auto colon = json.find(':', key_position + key_pattern.size());
+
+      if (colon == std::string_view::npos)
+        return false;
+
+      const auto open_quote = json.find('"', colon + 1);
+
+      if (open_quote == std::string_view::npos)
+        return false;
+
+      value.clear();
+
+      for (auto index = open_quote + 1; index < json.size(); ++index)
+      {
+        const auto character = json[index];
+
+        if (character == '"')
+          return true;
+
+        if (character == '\\')
+        {
+          if (index + 1 >= json.size())
+            return false;
+
+          value += json[++index];
+        }
+        else
+          value += character;
+      }
+
+      return false;
+    }
+
+    bool is_numeric_version_component(std::string_view value)
+    {
+      return !value.empty()
+        && value.find_first_not_of("0123456789") == std::string_view::npos;
+    }
+
+    std::optional<std::string> latest_tag_to_dependency_version(std::string_view tag)
+    {
+      if (tag.starts_with("release-"))
+        tag.remove_prefix(std::string_view { "release-" }.size());
+
+      if (tag.starts_with("v"))
+        tag.remove_prefix(1);
+
+      std::array<std::string_view, 4> components {};
+      std::size_t component_count = 0;
+      std::size_t offset = 0;
+      bool consumed_tag = false;
+
+      while (offset <= tag.size() && component_count < components.size())
+      {
+        const auto separator = tag.find('.', offset);
+        const auto end = separator == std::string_view::npos ? tag.size() : separator;
+        components[component_count++] = tag.substr(offset, end - offset);
+
+        if (separator == std::string_view::npos)
+        {
+          consumed_tag = true;
+          break;
+        }
+
+        offset = separator + 1;
+      }
+
+      if (component_count == 4
+          && consumed_tag
+          && std::all_of(
+            components.begin(),
+            components.end(),
+            [](std::string_view component)
+            {
+              return is_numeric_version_component(component);
+            }
+          ))
+      {
+        return std::string { components[0] } + "."
+          + std::string { components[1] } + "."
+          + std::string { components[2] } + "+build."
+          + std::string { components[3] };
+      }
+
+      return std::string { tag };
+    }
+
+    bool latest_dependency_version(const std::filesystem::path& project_directory,
+                                   const std::optional<std::string>& profile,
+                                   std::string_view dependency_name,
+                                   std::string& version,
+                                   std::ostream& output,
+                                   std::ostream& error)
+    {
+      Dependency dependency;
+
+      if (!find_recipe_github_dependency(project_directory, profile, dependency_name, dependency, error))
+        return false;
+
+      std::filesystem::path latest_json;
+      output << "Resolving latest GitHub release for " << dependency.name << '\n';
+
+      if (!download_latest_release_json(project_directory, dependency, latest_json, error))
+      {
+        error << "forge: could not resolve latest GitHub release for '"
+              << dependency.name << "'\n";
+        return false;
+      }
+
+      std::string content;
+
+      if (!read_text_file(latest_json, content, error))
+        return false;
+
+      std::string tag;
+
+      if (!json_string_value(content, "tag_name", tag))
+      {
+        error << "forge: latest GitHub release for '" << dependency.name
+              << "' did not include a tag_name\n";
+        return false;
+      }
+
+      const auto resolved = latest_tag_to_dependency_version(tag);
+
+      if (!resolved || resolved->empty())
+      {
+        error << "forge: latest GitHub release for '" << dependency.name
+              << "' has an invalid tag\n";
+        return false;
+      }
+
+      version = *resolved;
       return true;
     }
 
@@ -612,33 +1176,97 @@ namespace forge::cli
         }
       }
 
-      if (all_targets && options.update_target)
+      return run_dependency_update(working_directory, options, all_targets, output, error);
+    }
+
+    if (arguments.front() == "upgrade")
+    {
+      BuildOptions options;
+      options.dependencies_only = true;
+      options.update_dependencies = true;
+      bool all_targets = false;
+      std::optional<std::string> version;
+      bool latest = false;
+
+      for (const auto argument : arguments.subspan(1))
       {
-        print_update_usage(error);
+        if (argument.starts_with("--profile="))
+        {
+          if (!read_profile_option(argument, options.profile, error))
+            return 2;
+        }
+        else if (argument.starts_with("--target="))
+        {
+          const auto value = *option_value(argument, "--target=");
+
+          if (!read_required_option(value, "forge: --target requires a value", error))
+            return 2;
+
+          options.update_target = std::string { value };
+        }
+        else if (argument == "--all-targets")
+          all_targets = true;
+        else if (argument == "--latest")
+          latest = true;
+        else if (const auto value = option_value(argument, "--to="))
+        {
+          if (!read_required_option(*value, "forge: --to requires a version", error))
+            return 2;
+
+          if (!set_once(version, *value))
+          {
+            print_upgrade_usage(error);
+            return 2;
+          }
+        }
+        else if (!options.update_dependency && !argument.starts_with("-"))
+          options.update_dependency = std::string { argument };
+        else
+        {
+          print_upgrade_usage(error);
+          return 2;
+        }
+      }
+
+      if (!options.update_dependency || (latest == version.has_value()))
+      {
+        print_upgrade_usage(error);
         return 2;
       }
 
-      if (all_targets)
+      if (all_targets && options.update_target)
       {
-        std::vector<std::string> targets;
-
-        if (!collect_update_targets(working_directory, options, targets, error))
-          return 2;
-
-        for (const auto& target : targets)
-        {
-          auto target_options = options;
-          target_options.update_target = target;
-          const auto result = build_project(working_directory, target_options, output, error);
-
-          if (result != 0)
-            return result;
-        }
-
-        return 0;
+        print_upgrade_usage(error);
+        return 2;
       }
 
-      return build_project(working_directory, options, output, error);
+      if (latest
+          && !latest_dependency_version(
+            working_directory,
+            options.profile,
+            *options.update_dependency,
+            version.emplace(),
+            output,
+            error
+          ))
+      {
+        return 2;
+      }
+
+      if (!upgrade_recipe_dependency(
+        working_directory,
+        options.profile,
+        *options.update_dependency,
+        *version,
+        error
+      ))
+      {
+        return 2;
+      }
+
+      output << "Upgraded dependency " << *options.update_dependency
+             << " to " << *version << '\n';
+      return run_dependency_update(working_directory, options, all_targets, output, error);
     }
 
     if (arguments.front() == "release-git" || arguments.front() == "release-github")

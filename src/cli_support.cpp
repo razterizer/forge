@@ -20,6 +20,7 @@ namespace forge::cli
       std::string_view { "run" },
       std::string_view { "test" },
       std::string_view { "update" },
+      std::string_view { "upgrade" },
       std::string_view { "release" },
       std::string_view { "workflow" },
       std::string_view { "prepare-release" },
@@ -50,6 +51,7 @@ namespace forge::cli
       << "  run             Run an already-built executable project or target\n"
       << "  test            Build and run marked test targets\n"
       << "  update          Resolve and lock GitHub cbox dependencies\n"
+      << "  upgrade         Change a GitHub cbox dependency version and update locks\n"
       << "  release         Build and package a local executable release\n"
       << "  workflow        Run or extend hosted CI workflows\n"
       << "  release-git     Create and push a tag that triggers hosted releases\n\n"
@@ -191,6 +193,24 @@ namespace forge::cli
         << "Writes exact package identities, selected components, URLs, targets,\n"
         << "and checksums to forge.lock.toml without building the current project.\n"
         << "Existing entries for other targets are preserved.\n";
+      return true;
+    }
+
+    if (command == "upgrade")
+    {
+      output
+        << "Change a GitHub cbox dependency version and update its locks.\n\n"
+        << "Usage:\n"
+        << "  forge upgrade <dependency> (--to=<version> | --latest) [--profile=<name>] "
+        << "[--target=<os-arch> | --all-targets]\n\n"
+        << "Options:\n"
+        << "  --to=<version>      Set the dependency recipe version before resolving\n"
+        << "  --latest            Use the latest GitHub release tag as the version\n"
+        << "  --profile=<name>    Select a dependency profile before upgrading\n"
+        << "  --target=<os-arch>  Resolve dependencies for another platform target\n\n"
+        << "  --all-targets       Resolve targets already represented in forge.lock.toml\n\n"
+        << "Updates forge.recipe.toml, then writes exact package identities, URLs,\n"
+        << "targets, and checksums to forge.lock.toml.\n";
       return true;
     }
 
@@ -380,6 +400,13 @@ namespace forge::cli
     error
       << "forge: usage: forge update [dependency] [--profile=<name>] "
       << "[--target=<os-arch> | --all-targets]\n";
+  }
+
+  void print_upgrade_usage(std::ostream& error)
+  {
+    error
+      << "forge: usage: forge upgrade <dependency> (--to=<version> | --latest) "
+      << "[--profile=<name>] [--target=<os-arch> | --all-targets]\n";
   }
 
   void print_build_usage(std::ostream& error)

@@ -128,6 +128,7 @@ namespace
       std::string_view { "test" },
       std::string_view { "profile" },
       std::string_view { "update" },
+      std::string_view { "upgrade" },
       std::string_view { "bump" },
       std::string_view { "clean" },
       std::string_view { "release" },
@@ -3048,6 +3049,22 @@ namespace
       std::string_view { "--target=windows-x86_64" },
       std::string_view { "--all-targets" }
     };
+    constexpr std::array upgrade_missing_version_arguments {
+      std::string_view { "upgrade" },
+      std::string_view { "answer" },
+      std::string_view { "--profile=pinned" }
+    };
+    constexpr std::array upgrade_conflicting_version_arguments {
+      std::string_view { "upgrade" },
+      std::string_view { "answer" },
+      std::string_view { "--to=1.2.3" },
+      std::string_view { "--latest" }
+    };
+    constexpr std::array upgrade_invalid_version_arguments {
+      std::string_view { "upgrade" },
+      std::string_view { "answer" },
+      std::string_view { "--to=not-a-version" }
+    };
     std::ostringstream new_output;
     std::ostringstream new_error;
     std::ostringstream update_all_output;
@@ -3058,6 +3075,12 @@ namespace
     std::ostringstream update_all_targets_error;
     std::ostringstream update_conflicting_targets_output;
     std::ostringstream update_conflicting_targets_error;
+    std::ostringstream upgrade_missing_version_output;
+    std::ostringstream upgrade_missing_version_error;
+    std::ostringstream upgrade_conflicting_version_output;
+    std::ostringstream upgrade_conflicting_version_error;
+    std::ostringstream upgrade_invalid_version_output;
+    std::ostringstream upgrade_invalid_version_error;
     std::ostringstream update_output;
     std::ostringstream update_error;
     forge::cli::run(new_arguments, directory.path(), new_output, new_error);
@@ -3126,6 +3149,46 @@ namespace
     expect(
       contains(update_conflicting_targets_error.str(), "--all-targets"),
       "conflicting target options print update usage"
+    );
+
+    expect(
+      forge::cli::run(
+        upgrade_missing_version_arguments,
+        project_directory,
+        upgrade_missing_version_output,
+        upgrade_missing_version_error
+      ) == 2,
+      "upgrade requires an explicit target version"
+    );
+    expect(
+      contains(upgrade_missing_version_error.str(), "forge upgrade <dependency> (--to=<version> | --latest)"),
+      "upgrade prints its usage"
+    );
+    expect(
+      forge::cli::run(
+        upgrade_conflicting_version_arguments,
+        project_directory,
+        upgrade_conflicting_version_output,
+        upgrade_conflicting_version_error
+      ) == 2,
+      "upgrade rejects explicit and latest versions together"
+    );
+    expect(
+      contains(upgrade_conflicting_version_error.str(), "--latest"),
+      "conflicting upgrade version options print upgrade usage"
+    );
+    expect(
+      forge::cli::run(
+        upgrade_invalid_version_arguments,
+        project_directory,
+        upgrade_invalid_version_output,
+        upgrade_invalid_version_error
+      ) == 2,
+      "upgrade rejects invalid dependency versions"
+    );
+    expect(
+      contains(upgrade_invalid_version_error.str(), "<major>.<minor>.<patch>"),
+      "invalid upgrade version explains the required shape"
     );
 
     std::ostringstream update_profile_output;
