@@ -10,7 +10,7 @@ cpp_std = 20
 number = 18
 
 [sources]
-paths = ["src/box.cpp", "src/bump.cpp", "src/build.cpp", "src/clean.cpp", "src/cli.cpp", "src/fprocess.cpp", "src/github.cpp", "src/init.cpp", "src/main.cpp", "src/new.cpp", "src/recipe.cpp", "src/release.cpp", "src/run.cpp", "src/runtime_assets.cpp", "src/sha256.cpp", "src/test.cpp", "src/workspace.cpp", "src/zip.cpp"]
+paths = ["src/box.cpp", "src/box_manifest.cpp", "src/bump.cpp", "src/build.cpp", "src/clean.cpp", "src/cli.cpp", "src/cli_support.cpp", "src/file_support.cpp", "src/fprocess.cpp", "src/github.cpp", "src/init_cmake.cpp", "src/init_support.cpp", "src/init_visual_studio.cpp", "src/init_xcode.cpp", "src/init.cpp", "src/main.cpp", "src/new.cpp", "src/recipe.cpp", "src/release.cpp", "src/run.cpp", "src/runtime_assets.cpp", "src/sha256.cpp", "src/target_support.cpp", "src/test.cpp", "src/workspace.cpp", "src/zip.cpp"]
 
 [release]
 files = ["examples"]
