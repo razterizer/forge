@@ -109,7 +109,7 @@ namespace
         && contains(output.str(), "upgrade         Change a GitHub dependency version"),
       "help distinguishes update and upgrade"
     );
-    expect(contains(output.str(), "init            Alias for adopt"), "help documents the init alias");
+    expect(!contains(output.str(), "init            Alias for adopt"), "help omits the removed init command");
     expect(
       contains(output.str(), "forge <command> --help"),
       "help points to command-specific documentation"
@@ -131,7 +131,7 @@ namespace
       std::string_view { "build-and-run" },
       std::string_view { "run" },
       std::string_view { "test" },
-      std::string_view { "profile" },
+      std::string_view { "list" },
       std::string_view { "update" },
       std::string_view { "upgrade" },
       std::string_view { "bump" },
@@ -358,7 +358,7 @@ namespace
     expect(output.str() == "forge " + std::string { expected_version } + "\n", "version reports the current version");
   }
 
-  void test_profile_list()
+  void test_list_profiles()
   {
     TemporaryDirectory directory;
     write_file(
@@ -387,13 +387,13 @@ namespace
     std::ostringstream output;
     std::ostringstream error;
     constexpr std::array arguments {
-      std::string_view { "profile" },
-      std::string_view { "list" }
+      std::string_view { "list" },
+      std::string_view { "profiles" }
     };
 
     expect(
       forge::cli::run(arguments, directory.path(), output, error) == 0,
-      "profile list succeeds"
+      "list profiles succeeds"
     );
     expect(
       contains(output.str(), "Profiles:\n")
@@ -403,12 +403,12 @@ namespace
         && contains(output.str(), "  dev                dependencies\n")
         && contains(output.str(), "  workflow-release   dependencies, build, release variant 'hosted'\n")
         && contains(output.str(), "  applaudio-release  build, box variant 'applaudio'\n"),
-      "profile list reports dependency, build, release, and box profile roles"
+      "list profiles reports dependency, build, release, and box profile roles"
     );
-    expect(error.str().empty(), "profile list does not write an error");
+    expect(error.str().empty(), "list profiles does not write an error");
   }
 
-  void test_profile_list_reports_no_profiles()
+  void test_list_profiles_reports_no_profiles()
   {
     TemporaryDirectory directory;
     write_file(
@@ -424,66 +424,109 @@ namespace
     std::ostringstream output;
     std::ostringstream error;
     constexpr std::array arguments {
-      std::string_view { "profile" },
+      std::string_view { "list" },
+      std::string_view { "profiles" }
+    };
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "list profiles succeeds without profiles"
+    );
+    expect(output.str() == "No profiles declared\n", "list profiles reports empty profile set");
+    expect(error.str().empty(), "empty list profiles does not write an error");
+  }
+
+  void test_list_targets_and_dependencies()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"arcade\"\n"
+      "version = \"0.1.0\"\n\n"
+      "[target.engine]\n"
+      "type = \"static_library\"\n"
+      "cpp_std = 20\n"
+      "sources = [\"engine.cpp\"]\n\n"
+      "[target.game]\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n"
+      "sources = [\"main.cpp\"]\n"
+      "dependencies = [\"engine\"]\n\n"
+      "[dependencies]\n"
+      "Core = { github = \"example/Core\", version = \"1.0.0\" }\n"
+      "Audio = { path = \"../Audio\" }\n\n"
+      "[profile.release.dependencies]\n"
+      "Core = { github = \"example/Core\", version = \"1.1.0\" }\n"
+    );
+    constexpr std::array target_arguments {
+      std::string_view { "list" },
+      std::string_view { "targets" }
+    };
+    constexpr std::array dependency_arguments {
+      std::string_view { "list" },
+      std::string_view { "deps" }
+    };
+    std::ostringstream target_output;
+    std::ostringstream target_error;
+    std::ostringstream dependency_output;
+    std::ostringstream dependency_error;
+
+    expect(
+      forge::cli::run(target_arguments, directory.path(), target_output, target_error) == 0,
+      "list targets succeeds"
+    );
+    expect(
+      contains(target_output.str(), "Targets:\n")
+        && contains(target_output.str(), "  engine  static_library\n")
+        && contains(target_output.str(), "  game    executable\n"),
+      "list targets reports named target types"
+    );
+    expect(target_error.str().empty(), "list targets does not write an error");
+
+    expect(
+      forge::cli::run(dependency_arguments, directory.path(), dependency_output, dependency_error) == 0,
+      "list deps succeeds"
+    );
+    expect(
+      contains(dependency_output.str(), "Dependencies:\n")
+        && contains(dependency_output.str(), "default:\n")
+        && contains(dependency_output.str(), "Core")
+        && contains(dependency_output.str(), "github  1.0.0\n")
+        && contains(dependency_output.str(), "Audio")
+        && contains(dependency_output.str(), "path")
+        && contains(dependency_output.str(), "profile release:\n")
+        && contains(dependency_output.str(), "github  1.1.0\n"),
+      "list deps reports default and profile dependency sections"
+    );
+    expect(dependency_error.str().empty(), "list deps does not write an error");
+  }
+
+  void test_list_rejects_invalid_usage()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"plain\"\n"
+      "version = \"0.1.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+    constexpr std::array arguments {
       std::string_view { "list" }
     };
 
     expect(
-      forge::cli::run(arguments, directory.path(), output, error) == 0,
-      "profile list succeeds without profiles"
-    );
-    expect(output.str() == "No profiles declared\n", "profile list reports empty profile set");
-    expect(error.str().empty(), "empty profile list does not write an error");
-  }
-
-  void test_profile_rejects_invalid_usage()
-  {
-    TemporaryDirectory directory;
-    write_file(
-      directory.path() / "forge.recipe.toml",
-      "[project]\n"
-      "name = \"plain\"\n"
-      "version = \"0.1.0\"\n"
-      "type = \"executable\"\n"
-      "cpp_std = 20\n\n"
-      "[sources]\n"
-      "paths = [\"main.cpp\"]\n"
-    );
-    std::ostringstream output;
-    std::ostringstream error;
-    constexpr std::array arguments {
-      std::string_view { "profile" }
-    };
-
-    expect(
       forge::cli::run(arguments, directory.path(), output, error) == 2,
-      "profile rejects missing subcommand"
+      "list rejects missing category"
     );
-    expect(contains(error.str(), "forge profile list"), "profile usage explains list subcommand");
-    expect(output.str().empty(), "invalid profile usage does not write output");
-  }
-
-  void test_init_alias_adopts_existing_project()
-  {
-    TemporaryDirectory directory;
-    constexpr std::array arguments { std::string_view { "init" } };
-    std::ostringstream output;
-    std::ostringstream error;
-    write_file(directory.path() / "main.cpp", "int main() {}\n");
-
-    expect(
-      forge::cli::run(arguments, directory.path(), output, error) == 0,
-      "init alias adopts an existing project"
-    );
-    expect(
-      std::filesystem::exists(directory.path() / "forge.recipe.toml"),
-      "init alias creates the adopted recipe"
-    );
-    expect(
-      contains(output.str(), "Adopted project"),
-      "init alias reports adoption"
-    );
-    expect(error.str().empty(), "init alias does not write an error");
+    expect(contains(error.str(), "forge list <profiles|targets|deps|dependencies|boxes>"), "list usage explains categories");
+    expect(output.str().empty(), "invalid list usage does not write output");
   }
 
   void test_init_discovers_existing_sources()
@@ -3084,6 +3127,13 @@ namespace
       std::string_view { "answer" },
       std::string_view { "--profile=pinned" }
     };
+    constexpr std::array upgrade_all_deps_missing_version_arguments {
+      std::string_view { "upgrade" }
+    };
+    constexpr std::array upgrade_all_deps_to_version_arguments {
+      std::string_view { "upgrade" },
+      std::string_view { "--to=1.2.3" }
+    };
     constexpr std::array upgrade_conflicting_version_arguments {
       std::string_view { "upgrade" },
       std::string_view { "answer" },
@@ -3143,6 +3193,10 @@ namespace
     std::ostringstream update_local_only_profile_error;
     std::ostringstream upgrade_missing_version_output;
     std::ostringstream upgrade_missing_version_error;
+    std::ostringstream upgrade_all_deps_missing_version_output;
+    std::ostringstream upgrade_all_deps_missing_version_error;
+    std::ostringstream upgrade_all_deps_to_version_output;
+    std::ostringstream upgrade_all_deps_to_version_error;
     std::ostringstream upgrade_conflicting_version_output;
     std::ostringstream upgrade_conflicting_version_error;
     std::ostringstream upgrade_invalid_version_output;
@@ -3306,8 +3360,34 @@ namespace
       "upgrade requires an explicit target version"
     );
     expect(
-      contains(upgrade_missing_version_error.str(), "forge upgrade <dependency> (--to=<version> | --latest)"),
+      contains(upgrade_missing_version_error.str(), "forge upgrade [dependency] (--to=<version> | --latest)"),
       "upgrade prints its usage"
+    );
+    expect(
+      forge::cli::run(
+        upgrade_all_deps_missing_version_arguments,
+        project_directory,
+        upgrade_all_deps_missing_version_output,
+        upgrade_all_deps_missing_version_error
+      ) == 2,
+      "upgrade all dependencies requires latest"
+    );
+    expect(
+      contains(upgrade_all_deps_missing_version_error.str(), "requires --latest"),
+      "missing all-dependency upgrade version explains latest requirement"
+    );
+    expect(
+      forge::cli::run(
+        upgrade_all_deps_to_version_arguments,
+        project_directory,
+        upgrade_all_deps_to_version_output,
+        upgrade_all_deps_to_version_error
+      ) == 2,
+      "upgrade all dependencies rejects explicit version"
+    );
+    expect(
+      contains(upgrade_all_deps_to_version_error.str(), "requires --latest"),
+      "all-dependency upgrade explains latest-only semantics"
     );
     expect(
       forge::cli::run(
@@ -5938,10 +6018,10 @@ int main()
   test_cli_rejects_invalid_compile_definition();
   test_cli_runs_and_tests_workspace();
   test_version();
-  test_profile_list();
-  test_profile_list_reports_no_profiles();
-  test_profile_rejects_invalid_usage();
-  test_init_alias_adopts_existing_project();
+  test_list_profiles();
+  test_list_profiles_reports_no_profiles();
+  test_list_targets_and_dependencies();
+  test_list_rejects_invalid_usage();
   test_init_discovers_existing_sources();
   test_init_ignores_generated_directories();
   test_adopt_infers_version_from_release_notes();

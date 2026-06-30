@@ -15,9 +15,9 @@ compilers and build systems rather than replacing them.
   source files. It discovers public headers and `main()` entry points to infer
   executable, multi-executable, static-library, and header-only recipes. For
   multi-executable projects, unambiguous local include relationships guide
-  source ownership while uncertain sources remain shared. `forge init` remains
-  a compatibility alias. Remaining library-looking includes are reported as
-  dependency candidates. Unambiguous public-header matches from sibling
+  source ownership while uncertain sources remain shared. Remaining
+  library-looking includes are reported as dependency candidates.
+  Unambiguous public-header matches from sibling
   single-target Forge libraries are added as local path dependencies. A GitHub
   origin enables non-network same-owner suggestions; `forge adopt` with
   `--dependency-style=git` explicitly verifies and pins accepted repositories

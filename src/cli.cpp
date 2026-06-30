@@ -66,7 +66,6 @@ namespace forge::cli
         error << "; did you mean '--release-targets'?";
       else if (argument == "--all-profile")
         error << "; did you mean '--all-profiles'?";
-
       error << '\n';
     }
 
@@ -163,6 +162,46 @@ namespace forge::cli
         return false;
       }
 
+      return true;
+    }
+
+    bool selected_github_dependency_names(const std::filesystem::path& project_directory,
+                                          const std::vector<std::optional<std::string>>& profiles,
+                                          std::set<std::string>& names,
+                                          std::ostream& error)
+    {
+      for (const auto& profile : profiles)
+      {
+        if (!selected_github_dependency_names(project_directory, profile, std::nullopt, names, error))
+          return false;
+      }
+
+      return true;
+    }
+
+    bool profile_contains_github_dependency(const std::filesystem::path& project_directory,
+                                            const std::optional<std::string>& profile,
+                                            std::string_view dependency,
+                                            bool& contains_dependency,
+                                            std::ostream& error)
+    {
+      Recipe recipe;
+      contains_dependency = false;
+
+      if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error)
+          || !select_dependency_profile(recipe, profile, true, error))
+      {
+        return false;
+      }
+
+      contains_dependency = std::any_of(
+        recipe.dependencies.begin(),
+        recipe.dependencies.end(),
+        [dependency](const Dependency& candidate)
+        {
+          return candidate.name == dependency && !candidate.github.empty();
+        }
+      );
       return true;
     }
 
@@ -734,6 +773,63 @@ namespace forge::cli
       return write_text_file(path, content, error);
     }
 
+    bool upgrade_recipe_dependency_versions(
+      const std::filesystem::path& project_directory,
+      const std::vector<std::optional<std::string>>& profiles,
+      const std::vector<std::pair<std::string, std::string>>& versions,
+      std::ostream& error
+    )
+    {
+      const auto path = project_directory / "forge.recipe.toml";
+      std::string content;
+
+      if (!read_text_file(path, content, error))
+        return false;
+
+      for (const auto& [dependency, version] : versions)
+      {
+        if (version.empty() || version.find('"') != std::string::npos)
+        {
+          error << "forge: upgrade version cannot be empty\n";
+          return false;
+        }
+
+        if (!is_github_dependency_version(version))
+        {
+          error << "forge: upgrade version must use <major>.<minor>.<patch>[+build.<number>]\n";
+          return false;
+        }
+
+        for (const auto& profile : profiles)
+        {
+          bool contains_dependency = false;
+
+          if (!profile_contains_github_dependency(
+            project_directory,
+            profile,
+            dependency,
+            contains_dependency,
+            error
+          ))
+          {
+            return false;
+          }
+
+          if (!contains_dependency)
+            continue;
+
+          std::string updated;
+
+          if (!replace_dependency_version(content, profile, dependency, version, updated, error))
+            return false;
+
+          content = std::move(updated);
+        }
+      }
+
+      return write_text_file(path, content, error);
+    }
+
     bool find_recipe_github_dependency(const std::filesystem::path& project_directory,
                                        const std::optional<std::string>& profile,
                                        std::string_view dependency,
@@ -987,6 +1083,40 @@ namespace forge::cli
       return true;
     }
 
+    bool latest_dependency_version_for_profiles(
+      const std::filesystem::path& project_directory,
+      const std::vector<std::optional<std::string>>& profiles,
+      std::string_view dependency_name,
+      std::string& version,
+      std::ostream& output,
+      std::ostream& error
+    )
+    {
+      for (const auto& profile : profiles)
+      {
+        bool contains_dependency = false;
+
+        if (!profile_contains_github_dependency(
+          project_directory,
+          profile,
+          dependency_name,
+          contains_dependency,
+          error
+        ))
+        {
+          return false;
+        }
+
+        if (!contains_dependency)
+          continue;
+
+        return latest_dependency_version(project_directory, profile, dependency_name, version, output, error);
+      }
+
+      error << "forge: GitHub dependency '" << dependency_name << "' was not found\n";
+      return false;
+    }
+
     int list_profiles(const std::filesystem::path& project_directory,
                       std::ostream& output,
                       std::ostream& error)
@@ -1070,6 +1200,148 @@ namespace forge::cli
       return 0;
     }
 
+    int list_targets(const std::filesystem::path& project_directory,
+                     std::ostream& output,
+                     std::ostream& error)
+    {
+      Recipe recipe;
+
+      if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
+        return 2;
+
+      if (recipe.targets.empty())
+      {
+        output << "Targets:\n";
+        output << "  Target" << std::string(std::max(recipe.name.size(), std::string_view { "Target" }.size()) - std::string_view { "Target" }.size(), ' ')
+               << "  Type\n";
+        output << "  " << std::string(std::max(recipe.name.size(), std::string_view { "Target" }.size()), '-')
+               << "  ----\n";
+        output << "  " << recipe.name << "  " << recipe.type << '\n';
+        return 0;
+      }
+
+      std::size_t target_width = std::string_view { "Target" }.size();
+
+      for (const auto& target : recipe.targets)
+        target_width = std::max(target_width, target.name.size());
+
+      output << "Targets:\n";
+      output << "  Target" << std::string(target_width - std::string_view { "Target" }.size(), ' ')
+             << "  Type\n";
+      output << "  " << std::string(target_width, '-') << "  ----\n";
+
+      for (const auto& target : recipe.targets)
+        output << "  " << target.name << std::string(target_width - target.name.size(), ' ')
+               << "  " << target.type << '\n';
+
+      return 0;
+    }
+
+    std::string dependency_kind(const Dependency& dependency)
+    {
+      if (!dependency.github.empty())
+        return "github";
+
+      if (!dependency.git.empty())
+        return "git";
+
+      if (!dependency.path.empty())
+        return "path";
+
+      if (!dependency.box.empty())
+        return "box";
+
+      if (!dependency.url.empty())
+        return "url";
+
+      return "unknown";
+    }
+
+    void list_dependency_section(std::string_view section,
+                                 const std::vector<Dependency>& dependencies,
+                                 std::ostream& output)
+    {
+      output << section << ":\n";
+
+      if (dependencies.empty())
+      {
+        output << "  No dependencies declared\n";
+        return;
+      }
+
+      std::size_t name_width = std::string_view { "Dependency" }.size();
+      std::size_t kind_width = std::string_view { "Kind" }.size();
+
+      for (const auto& dependency : dependencies)
+      {
+        name_width = std::max(name_width, dependency.name.size());
+        kind_width = std::max(kind_width, dependency_kind(dependency).size());
+      }
+
+      output << "  Dependency" << std::string(name_width - std::string_view { "Dependency" }.size(), ' ')
+             << "  Kind" << std::string(kind_width - std::string_view { "Kind" }.size(), ' ')
+             << "  Version\n";
+      output << "  " << std::string(name_width, '-')
+             << "  " << std::string(kind_width, '-')
+             << "  -------\n";
+
+      for (const auto& dependency : dependencies)
+      {
+        const auto kind = dependency_kind(dependency);
+        output << "  " << dependency.name << std::string(name_width - dependency.name.size(), ' ')
+               << "  " << kind << std::string(kind_width - kind.size(), ' ')
+               << "  " << dependency.version << '\n';
+      }
+    }
+
+    int list_dependencies(const std::filesystem::path& project_directory,
+                          std::ostream& output,
+                          std::ostream& error)
+    {
+      Recipe recipe;
+
+      if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
+        return 2;
+
+      output << "Dependencies:\n";
+      list_dependency_section("default", recipe.dependencies, output);
+
+      for (const auto& [profile, dependencies] : recipe.dependency_profiles)
+        list_dependency_section("profile " + profile, dependencies, output);
+
+      return 0;
+    }
+
+    int list_category(const std::filesystem::path& working_directory,
+                      std::span<const std::string_view> arguments,
+                      std::ostream& output,
+                      std::ostream& error)
+    {
+      if (arguments.size() != 2)
+      {
+        error << "forge: usage: forge list <profiles|targets|deps|dependencies|boxes>\n";
+        return 2;
+      }
+
+      if (arguments[1] == "profiles")
+        return list_profiles(working_directory, output, error);
+
+      if (arguments[1] == "targets")
+        return list_targets(working_directory, output, error);
+
+      if (arguments[1] == "deps" || arguments[1] == "dependencies")
+      {
+        return list_dependencies(working_directory, output, error);
+      }
+
+      if (arguments[1] == "boxes")
+        return list_boxes(working_directory, output, error);
+
+      error << "forge: unknown list category '" << arguments[1] << "'\n";
+      error << "forge: usage: forge list <profiles|targets|deps|dependencies|boxes>\n";
+      return 2;
+    }
+
   } // namespace
 
   int run(std::span<const std::string_view> arguments,
@@ -1114,7 +1386,7 @@ namespace forge::cli
     if ((arguments.size() == 2
          && (arguments[1] == "--help" || arguments[1] == "-h"))
         || ((arguments.front() == "box"
-             || arguments.front() == "profile"
+             || arguments.front() == "list"
              || arguments.front() == "workflow")
             && (arguments.back() == "--help" || arguments.back() == "-h")))
     {
@@ -1347,14 +1619,8 @@ namespace forge::cli
       return bump_project(working_directory, arguments[1], output, error);
     }
 
-    if (arguments.front() == "profile")
-    {
-      if (arguments.size() == 2 && arguments[1] == "list")
-        return list_profiles(working_directory, output, error);
-
-      error << "forge: usage: forge profile list\n";
-      return 2;
-    }
+    if (arguments.front() == "list")
+      return list_category(working_directory, arguments, output, error);
 
     if (arguments.front() == "update")
     {
@@ -1470,7 +1736,18 @@ namespace forge::cli
         }
       }
 
-      if (!options.update_dependency || (latest == version.has_value()))
+      const bool all_dependencies = !options.update_dependency;
+
+      if (all_dependencies)
+      {
+        if (!latest || version)
+        {
+          error << "forge: upgrading all dependencies requires --latest\n";
+          print_upgrade_usage(error);
+          return 2;
+        }
+      }
+      else if (latest == version.has_value())
       {
         print_upgrade_usage(error);
         return 2;
@@ -1502,6 +1779,62 @@ namespace forge::cli
       }
       else
         upgrade_profiles.push_back(options.profile);
+
+      if (all_dependencies)
+      {
+        std::set<std::string> dependencies;
+
+        if (!selected_github_dependency_names(working_directory, upgrade_profiles, dependencies, error))
+          return 2;
+
+        if (dependencies.empty())
+        {
+          error << "forge: no GitHub dependencies were found\n";
+          return 2;
+        }
+
+        std::vector<std::pair<std::string, std::string>> versions;
+
+        for (const auto& dependency : dependencies)
+        {
+          std::string dependency_version;
+
+          if (!latest_dependency_version_for_profiles(
+            working_directory,
+            upgrade_profiles,
+            dependency,
+            dependency_version,
+            output,
+            error
+          ))
+          {
+            return 2;
+          }
+
+          versions.emplace_back(dependency, std::move(dependency_version));
+        }
+
+        if (!upgrade_recipe_dependency_versions(
+          working_directory,
+          upgrade_profiles,
+          versions,
+          error
+        ))
+        {
+          return 2;
+        }
+
+        output << "Upgraded " << versions.size() << " dependencies to latest releases\n";
+        return run_dependency_update(
+          working_directory,
+          options,
+          all_targets,
+          release_targets,
+          all_profiles,
+          output,
+          error
+        );
+      }
 
       if (latest
           && !latest_dependency_version(
@@ -1862,9 +2195,6 @@ namespace forge::cli
       error << "forge: commands do not accept arguments yet\n";
       return 2;
     }
-
-    if (arguments.front() == "init")
-      return init_project(working_directory, output, error);
 
     if (arguments.front() == "clean")
     {

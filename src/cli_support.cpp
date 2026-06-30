@@ -10,13 +10,12 @@ namespace forge::cli
     constexpr std::array commands {
       std::string_view { "box" },
       std::string_view { "adopt" },
-      std::string_view { "init" },
       std::string_view { "new" },
       std::string_view { "build" },
       std::string_view { "build-and-run" },
       std::string_view { "bump" },
       std::string_view { "clean" },
-      std::string_view { "profile" },
+      std::string_view { "list" },
       std::string_view { "run" },
       std::string_view { "test" },
       std::string_view { "update" },
@@ -41,13 +40,12 @@ namespace forge::cli
       << "Commands:\n"
       << "  adopt           Discover an existing project and create Forge metadata\n"
       << "  box             Create, inspect, verify, publish, and extract cboxes\n"
-      << "  init            Alias for adopt\n"
       << "  new             Create a new Forge C++ project\n"
       << "  build           Build a project, target, or workspace selection\n"
       << "  build-and-run   Build and run an executable project or target\n"
       << "  bump            Bump the project version and prepare release notes\n"
       << "  clean           Remove generated Forge state for a project or workspace\n"
-      << "  profile         List recipe dependency and build profiles\n"
+      << "  list            List recipe profiles, targets, dependencies, and boxes\n"
       << "  run             Run an already-built executable project or target\n"
       << "  test            Build and run marked test targets\n"
       << "  update          Refresh lockfile entries for declared dependency versions\n"
@@ -60,7 +58,7 @@ namespace forge::cli
 
   bool print_command_help(std::string_view command, std::ostream& output)
   {
-    if (command == "adopt" || command == "init")
+    if (command == "adopt")
     {
       output
         << "Discover an existing C++ project and create Forge metadata.\n\n"
@@ -157,14 +155,18 @@ namespace forge::cli
       return true;
     }
 
-    if (command == "profile")
+    if (command == "list")
     {
       output
-        << "List profiles declared by the current Forge recipe.\n\n"
+        << "List Forge recipe and package information.\n\n"
         << "Usage:\n"
-        << "  forge profile list\n\n"
-        << "Shows each `[profile.<name>.dependencies]` and `[profile.<name>.build]`\n"
-        << "profile, including whether it is referenced by release or cbox variants.\n";
+        << "  forge list <profiles|targets|deps|dependencies|boxes>\n\n"
+        << "Categories:\n"
+        << "  profiles      List dependency/build profiles and variant roles\n"
+        << "  targets       List buildable project targets\n"
+        << "  deps          List direct dependencies by recipe section\n"
+        << "  dependencies  Alias for deps\n"
+        << "  boxes         Alias for box list\n";
       return true;
     }
 
@@ -204,12 +206,13 @@ namespace forge::cli
       output
         << "Change a GitHub cbox dependency version and update its locks.\n\n"
         << "Usage:\n"
-        << "  forge upgrade <dependency> (--to=<version> | --latest) "
+        << "  forge upgrade [dependency] (--to=<version> | --latest) "
         << "[--profile=<name> | --all-profiles] "
         << "[--target=<os-arch> | --all-targets | --release-targets]\n\n"
         << "Options:\n"
         << "  --to=<version>      Set the dependency recipe version before resolving\n"
-        << "  --latest            Use the latest GitHub release tag as the version\n"
+        << "  --latest            Use latest GitHub release tags; without a dependency,\n"
+        << "                      upgrade all direct GitHub dependencies\n"
         << "  --profile=<name>    Select a dependency profile before upgrading\n"
         << "  --all-profiles      Upgrade default dependencies and dependency profiles\n"
         << "  --target=<os-arch>  Resolve dependencies for another platform target\n\n"
@@ -412,7 +415,7 @@ namespace forge::cli
   void print_upgrade_usage(std::ostream& error)
   {
     error
-      << "forge: usage: forge upgrade <dependency> (--to=<version> | --latest) "
+      << "forge: usage: forge upgrade [dependency] (--to=<version> | --latest) "
       << "[--profile=<name> | --all-profiles] "
       << "[--target=<os-arch> | --all-targets | --release-targets]\n";
   }

@@ -252,8 +252,6 @@ project rather than repeating every inner project phase. Solutions containing
 projects outside the solution root or multiple projects sharing one directory
 require manual restructuring.
 
-`forge init` remains available as a compatibility alias for `forge adopt`.
-
 Build a Forge project:
 
 ```sh
@@ -548,7 +546,7 @@ List declared dependency/build profiles and profile-backed release or cbox
 variants:
 
 ```sh
-forge profile list
+forge list profiles
 ```
 
 The root recipe must declare the requested profile. Forge propagates the
@@ -662,6 +660,13 @@ Upgrade a GitHub dependency's recipe version and then refresh its locks:
 
 ```sh
 forge upgrade answer --latest --all-profiles --release-targets
+```
+
+Omit the dependency name to upgrade every direct GitHub dependency selected by
+the same profile and target options:
+
+```sh
+forge upgrade --latest --all-profiles --release-targets
 ```
 
 Use `--to=<version>` instead of `--latest` to upgrade to a specific packaged
