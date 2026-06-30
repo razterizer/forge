@@ -184,12 +184,13 @@ namespace forge::cli
       output
         << "Resolve and lock GitHub cbox dependencies for the current target.\n\n"
         << "Usage:\n"
-        << "  forge update [dependency] [--profile=<name>] "
+        << "  forge update [dependency] [--profile=<name> | --all-profiles] "
         << "[--target=<os-arch> | --all-targets]\n\n"
         << "Options:\n"
-        << "  --profile=<name>   Select a dependency profile before resolving\n"
-        << "  --target=<os-arch> Resolve dependencies for another platform target\n\n"
-        << "  --all-targets      Resolve targets already represented in forge.lock.toml\n\n"
+        << "  --profile=<name>    Select a dependency profile before resolving\n"
+        << "  --all-profiles      Resolve default dependencies and dependency profiles\n"
+        << "  --target=<os-arch>  Resolve dependencies for another platform target\n\n"
+        << "  --all-targets       Resolve targets already represented in forge.lock.toml\n\n"
         << "Writes exact package identities, selected components, URLs, targets,\n"
         << "and checksums to forge.lock.toml without building the current project.\n"
         << "Existing entries for other targets are preserved.\n";
@@ -201,12 +202,14 @@ namespace forge::cli
       output
         << "Change a GitHub cbox dependency version and update its locks.\n\n"
         << "Usage:\n"
-        << "  forge upgrade <dependency> (--to=<version> | --latest) [--profile=<name>] "
+        << "  forge upgrade <dependency> (--to=<version> | --latest) "
+        << "[--profile=<name> | --all-profiles] "
         << "[--target=<os-arch> | --all-targets]\n\n"
         << "Options:\n"
         << "  --to=<version>      Set the dependency recipe version before resolving\n"
         << "  --latest            Use the latest GitHub release tag as the version\n"
         << "  --profile=<name>    Select a dependency profile before upgrading\n"
+        << "  --all-profiles      Upgrade default dependencies and dependency profiles\n"
         << "  --target=<os-arch>  Resolve dependencies for another platform target\n\n"
         << "  --all-targets       Resolve targets already represented in forge.lock.toml\n\n"
         << "Updates forge.recipe.toml, then writes exact package identities, URLs,\n"
@@ -398,7 +401,7 @@ namespace forge::cli
   void print_update_usage(std::ostream& error)
   {
     error
-      << "forge: usage: forge update [dependency] [--profile=<name>] "
+      << "forge: usage: forge update [dependency] [--profile=<name> | --all-profiles] "
       << "[--target=<os-arch> | --all-targets]\n";
   }
 
@@ -406,7 +409,7 @@ namespace forge::cli
   {
     error
       << "forge: usage: forge upgrade <dependency> (--to=<version> | --latest) "
-      << "[--profile=<name>] [--target=<os-arch> | --all-targets]\n";
+      << "[--profile=<name> | --all-profiles] [--target=<os-arch> | --all-targets]\n";
   }
 
   void print_build_usage(std::ostream& error)

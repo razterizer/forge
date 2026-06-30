@@ -83,6 +83,54 @@ namespace forge::cli
       return true;
     }
 
+    bool dependencies_contain_selected_github(
+      const std::vector<Dependency>& dependencies,
+      const std::optional<std::string>& dependency
+    )
+    {
+      return std::any_of(
+        dependencies.begin(),
+        dependencies.end(),
+        [&dependency](const Dependency& candidate)
+        {
+          return !candidate.github.empty()
+            && (!dependency || candidate.name == *dependency);
+        }
+      );
+    }
+
+    bool collect_update_profiles(const std::filesystem::path& project_directory,
+                                 const BuildOptions& options,
+                                 std::vector<std::optional<std::string>>& profiles,
+                                 std::ostream& error)
+    {
+      Recipe recipe;
+
+      if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
+        return false;
+
+      if (dependencies_contain_selected_github(recipe.dependencies, options.update_dependency))
+        profiles.push_back(std::nullopt);
+
+      for (const auto& [name, dependencies] : recipe.dependency_profiles)
+      {
+        if (dependencies_contain_selected_github(dependencies, options.update_dependency))
+          profiles.push_back(name);
+      }
+
+      if (profiles.empty() && !options.update_dependency)
+        profiles.push_back(std::nullopt);
+
+      if (profiles.empty())
+      {
+        error << "forge: GitHub dependency '" << *options.update_dependency
+              << "' was not found in any dependency profile\n";
+        return false;
+      }
+
+      return true;
+    }
+
     bool store_locked_target(const std::set<std::string>& dependency_names,
                              const std::string& name,
                              const std::string& target,
@@ -220,6 +268,7 @@ namespace forge::cli
     int run_dependency_update(const std::filesystem::path& working_directory,
                               const BuildOptions& options,
                               bool all_targets,
+                              bool all_profiles,
                               std::ostream& output,
                               std::ostream& error)
     {
@@ -229,19 +278,52 @@ namespace forge::cli
         return 2;
       }
 
-      if (!all_targets)
-        return build_project(working_directory, options, output, error);
+      if (all_profiles && options.profile)
+      {
+        print_update_usage(error);
+        return 2;
+      }
 
-      std::vector<std::string> targets;
+      if (!all_profiles)
+      {
+        if (!all_targets)
+          return build_project(working_directory, options, output, error);
 
-      if (!collect_update_targets(working_directory, options, targets, error))
+        std::vector<std::string> targets;
+
+        if (!collect_update_targets(working_directory, options, targets, error))
+          return 2;
+
+        for (const auto& target : targets)
+        {
+          auto target_options = options;
+          target_options.update_target = target;
+          const auto result = build_project(working_directory, target_options, output, error);
+
+          if (result != 0)
+            return result;
+        }
+
+        return 0;
+      }
+
+      std::vector<std::optional<std::string>> profiles;
+
+      if (!collect_update_profiles(working_directory, options, profiles, error))
         return 2;
 
-      for (const auto& target : targets)
+      for (const auto& profile : profiles)
       {
-        auto target_options = options;
-        target_options.update_target = target;
-        const auto result = build_project(working_directory, target_options, output, error);
+        auto profile_options = options;
+        profile_options.profile = profile;
+        const auto result = run_dependency_update(
+          working_directory,
+          profile_options,
+          all_targets,
+          false,
+          output,
+          error
+        );
 
         if (result != 0)
           return result;
@@ -527,6 +609,45 @@ namespace forge::cli
       return read_text_file(path, content, error)
         && replace_dependency_version(content, profile, dependency, version, updated, error)
         && write_text_file(path, updated, error);
+    }
+
+    bool upgrade_recipe_dependency_profiles(
+      const std::filesystem::path& project_directory,
+      const std::vector<std::optional<std::string>>& profiles,
+      std::string_view dependency,
+      std::string_view version,
+      std::ostream& error
+    )
+    {
+      if (version.empty() || version.find('"') != std::string_view::npos)
+      {
+        error << "forge: upgrade version cannot be empty\n";
+        return false;
+      }
+
+      if (!is_github_dependency_version(version))
+      {
+        error << "forge: upgrade version must use <major>.<minor>.<patch>[+build.<number>]\n";
+        return false;
+      }
+
+      const auto path = project_directory / "forge.recipe.toml";
+      std::string content;
+
+      if (!read_text_file(path, content, error))
+        return false;
+
+      for (const auto& profile : profiles)
+      {
+        std::string updated;
+
+        if (!replace_dependency_version(content, profile, dependency, version, updated, error))
+          return false;
+
+        content = std::move(updated);
+      }
+
+      return write_text_file(path, content, error);
     }
 
     bool find_recipe_github_dependency(const std::filesystem::path& project_directory,
@@ -1146,6 +1267,7 @@ namespace forge::cli
       options.dependencies_only = true;
       options.update_dependencies = true;
       bool all_targets = false;
+      bool all_profiles = false;
 
       for (const auto argument : arguments.subspan(1))
       {
@@ -1165,6 +1287,8 @@ namespace forge::cli
         }
         else if (argument == "--all-targets")
           all_targets = true;
+        else if (argument == "--all-profiles")
+          all_profiles = true;
         else if (!options.update_dependency)
         {
           options.update_dependency = std::string { argument };
@@ -1176,7 +1300,7 @@ namespace forge::cli
         }
       }
 
-      return run_dependency_update(working_directory, options, all_targets, output, error);
+      return run_dependency_update(working_directory, options, all_targets, all_profiles, output, error);
     }
 
     if (arguments.front() == "upgrade")
@@ -1185,6 +1309,7 @@ namespace forge::cli
       options.dependencies_only = true;
       options.update_dependencies = true;
       bool all_targets = false;
+      bool all_profiles = false;
       std::optional<std::string> version;
       bool latest = false;
 
@@ -1206,6 +1331,8 @@ namespace forge::cli
         }
         else if (argument == "--all-targets")
           all_targets = true;
+        else if (argument == "--all-profiles")
+          all_profiles = true;
         else if (argument == "--latest")
           latest = true;
         else if (const auto value = option_value(argument, "--to="))
@@ -1240,10 +1367,26 @@ namespace forge::cli
         return 2;
       }
 
+      if (all_profiles && options.profile)
+      {
+        print_upgrade_usage(error);
+        return 2;
+      }
+
+      std::vector<std::optional<std::string>> upgrade_profiles;
+
+      if (all_profiles)
+      {
+        if (!collect_update_profiles(working_directory, options, upgrade_profiles, error))
+          return 2;
+      }
+      else
+        upgrade_profiles.push_back(options.profile);
+
       if (latest
           && !latest_dependency_version(
             working_directory,
-            options.profile,
+            upgrade_profiles.front(),
             *options.update_dependency,
             version.emplace(),
             output,
@@ -1253,7 +1396,20 @@ namespace forge::cli
         return 2;
       }
 
-      if (!upgrade_recipe_dependency(
+      if (all_profiles)
+      {
+        if (!upgrade_recipe_dependency_profiles(
+          working_directory,
+          upgrade_profiles,
+          *options.update_dependency,
+          *version,
+          error
+        ))
+        {
+          return 2;
+        }
+      }
+      else if (!upgrade_recipe_dependency(
         working_directory,
         options.profile,
         *options.update_dependency,
@@ -1266,7 +1422,7 @@ namespace forge::cli
 
       output << "Upgraded dependency " << *options.update_dependency
              << " to " << *version << '\n';
-      return run_dependency_update(working_directory, options, all_targets, output, error);
+      return run_dependency_update(working_directory, options, all_targets, all_profiles, output, error);
     }
 
     if (arguments.front() == "release-git" || arguments.front() == "release-github")
