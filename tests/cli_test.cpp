@@ -104,6 +104,11 @@ namespace
       contains(output.str(), "adopt           Discover an existing project"),
       "help presents adopt as the primary discovery command"
     );
+    expect(
+      contains(output.str(), "update          Refresh lockfile entries")
+        && contains(output.str(), "upgrade         Change a GitHub dependency version"),
+      "help distinguishes update and upgrade"
+    );
     expect(contains(output.str(), "init            Alias for adopt"), "help documents the init alias");
     expect(
       contains(output.str(), "forge <command> --help"),
@@ -3065,6 +3070,15 @@ namespace
       std::string_view { "--profile=pinned" },
       std::string_view { "--all-profiles" }
     };
+    constexpr std::array update_singular_all_target_arguments {
+      std::string_view { "update" },
+      std::string_view { "--all-target" }
+    };
+    constexpr std::array update_local_only_profile_arguments {
+      std::string_view { "update" },
+      std::string_view { "answer" },
+      std::string_view { "--profile=local" }
+    };
     constexpr std::array upgrade_missing_version_arguments {
       std::string_view { "upgrade" },
       std::string_view { "answer" },
@@ -3095,6 +3109,18 @@ namespace
       std::string_view { "--target=windows-x86_64" },
       std::string_view { "--release-targets" }
     };
+    constexpr std::array upgrade_singular_release_target_arguments {
+      std::string_view { "upgrade" },
+      std::string_view { "answer" },
+      std::string_view { "--latest" },
+      std::string_view { "--release-target" }
+    };
+    constexpr std::array upgrade_local_only_profile_arguments {
+      std::string_view { "upgrade" },
+      std::string_view { "answer" },
+      std::string_view { "--latest" },
+      std::string_view { "--profile=local" }
+    };
     std::ostringstream new_output;
     std::ostringstream new_error;
     std::ostringstream update_all_output;
@@ -3111,6 +3137,10 @@ namespace
     std::ostringstream update_conflicting_release_targets_error;
     std::ostringstream update_conflicting_profiles_output;
     std::ostringstream update_conflicting_profiles_error;
+    std::ostringstream update_singular_all_target_output;
+    std::ostringstream update_singular_all_target_error;
+    std::ostringstream update_local_only_profile_output;
+    std::ostringstream update_local_only_profile_error;
     std::ostringstream upgrade_missing_version_output;
     std::ostringstream upgrade_missing_version_error;
     std::ostringstream upgrade_conflicting_version_output;
@@ -3121,13 +3151,20 @@ namespace
     std::ostringstream upgrade_conflicting_profiles_error;
     std::ostringstream upgrade_conflicting_release_targets_output;
     std::ostringstream upgrade_conflicting_release_targets_error;
+    std::ostringstream upgrade_singular_release_target_output;
+    std::ostringstream upgrade_singular_release_target_error;
+    std::ostringstream upgrade_local_only_profile_output;
+    std::ostringstream upgrade_local_only_profile_error;
     std::ostringstream update_output;
     std::ostringstream update_error;
     forge::cli::run(new_arguments, directory.path(), new_output, new_error);
     const auto project_directory = directory.path() / "hello";
     {
       std::ofstream recipe { project_directory / "forge.recipe.toml", std::ios::app };
-      recipe << "\n[profile.pinned.build]\nconfiguration = \"Debug\"\n";
+      recipe
+        << "\n[profile.pinned.build]\nconfiguration = \"Debug\"\n"
+        << "\n[profile.local.dependencies]\n"
+        << "answer = { path = \"../answer\" }\n";
     }
 
     expect(
@@ -3232,6 +3269,32 @@ namespace
       contains(update_conflicting_profiles_error.str(), "--all-profiles"),
       "conflicting profile options print update usage"
     );
+    expect(
+      forge::cli::run(
+        update_singular_all_target_arguments,
+        project_directory,
+        update_singular_all_target_output,
+        update_singular_all_target_error
+      ) == 2,
+      "update rejects singular all-target option"
+    );
+    expect(
+      contains(update_singular_all_target_error.str(), "did you mean '--all-targets'?"),
+      "update suggests plural all-targets option"
+    );
+    expect(
+      forge::cli::run(
+        update_local_only_profile_arguments,
+        project_directory,
+        update_local_only_profile_output,
+        update_local_only_profile_error
+      ) == 2,
+      "update rejects named local-only dependency"
+    );
+    expect(
+      contains(update_local_only_profile_error.str(), "is not a GitHub dependency"),
+      "update explains local-only dependency profile"
+    );
 
     expect(
       forge::cli::run(
@@ -3297,6 +3360,32 @@ namespace
     expect(
       contains(upgrade_conflicting_release_targets_error.str(), "--release-targets"),
       "conflicting upgrade release target options print upgrade usage"
+    );
+    expect(
+      forge::cli::run(
+        upgrade_singular_release_target_arguments,
+        project_directory,
+        upgrade_singular_release_target_output,
+        upgrade_singular_release_target_error
+      ) == 2,
+      "upgrade rejects singular release-target option"
+    );
+    expect(
+      contains(upgrade_singular_release_target_error.str(), "did you mean '--release-targets'?"),
+      "upgrade suggests plural release-targets option"
+    );
+    expect(
+      forge::cli::run(
+        upgrade_local_only_profile_arguments,
+        project_directory,
+        upgrade_local_only_profile_output,
+        upgrade_local_only_profile_error
+      ) == 2,
+      "upgrade rejects named local-only dependency"
+    );
+    expect(
+      contains(upgrade_local_only_profile_error.str(), "is not a GitHub dependency"),
+      "upgrade explains local-only dependency profile"
     );
 
     std::ostringstream update_profile_output;

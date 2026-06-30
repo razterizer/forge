@@ -55,6 +55,28 @@ namespace forge::cli
       return result.find('"') == std::string::npos;
     }
 
+    void print_unknown_option(std::string_view argument,
+                              std::ostream& error)
+    {
+      error << "forge: unknown option '" << argument << "'";
+
+      if (argument == "--all-target")
+        error << "; did you mean '--all-targets'?";
+      else if (argument == "--release-target")
+        error << "; did you mean '--release-targets'?";
+      else if (argument == "--all-profile")
+        error << "; did you mean '--all-profiles'?";
+
+      error << '\n';
+    }
+
+    std::string selected_dependency_scope(const std::optional<std::string>& profile)
+    {
+      return profile
+        ? "profile '" + *profile + "'"
+        : "default dependencies";
+    }
+
     bool selected_github_dependency_names(const std::filesystem::path& project_directory,
                                           const std::optional<std::string>& profile,
                                           const std::optional<std::string>& dependency,
@@ -69,8 +91,13 @@ namespace forge::cli
         return false;
       }
 
+      bool selected_non_github_dependency = false;
+
       for (const auto& candidate : recipe.dependencies)
       {
+        if (dependency && candidate.name == *dependency && candidate.github.empty())
+          selected_non_github_dependency = true;
+
         if (candidate.github.empty())
           continue;
 
@@ -78,6 +105,14 @@ namespace forge::cli
           continue;
 
         names.insert(candidate.name);
+      }
+
+      if (dependency && selected_non_github_dependency && names.empty())
+      {
+        error << "forge: dependency '" << *dependency << "' in "
+              << selected_dependency_scope(profile)
+              << " is not a GitHub dependency\n";
+        return false;
       }
 
       return true;
@@ -272,6 +307,36 @@ namespace forge::cli
       return true;
     }
 
+    bool validate_named_update_dependency(const std::filesystem::path& project_directory,
+                                          const BuildOptions& options,
+                                          std::ostream& error)
+    {
+      if (!options.update_dependency)
+        return true;
+
+      std::set<std::string> dependency_names;
+
+      if (!selected_github_dependency_names(
+        project_directory,
+        options.profile,
+        options.update_dependency,
+        dependency_names,
+        error
+      ))
+      {
+        return false;
+      }
+
+      if (dependency_names.empty())
+      {
+        error << "forge: GitHub dependency '" << *options.update_dependency
+              << "' was not found\n";
+        return false;
+      }
+
+      return true;
+    }
+
     int run_dependency_update(const std::filesystem::path& working_directory,
                               const BuildOptions& options,
                               bool all_targets,
@@ -300,7 +365,12 @@ namespace forge::cli
       if (!all_profiles)
       {
         if (!all_targets && !release_targets)
+        {
+          if (!validate_named_update_dependency(working_directory, options, error))
+            return 2;
+
           return build_project(working_directory, options, output, error);
+        }
 
         std::vector<std::string> targets;
 
@@ -684,6 +754,17 @@ namespace forge::cli
         {
           result = candidate;
           return true;
+        }
+      }
+
+      for (const auto& candidate : recipe.dependencies)
+      {
+        if (candidate.name == dependency)
+        {
+          error << "forge: dependency '" << dependency << "' in "
+                << selected_dependency_scope(profile)
+                << " is not a GitHub dependency\n";
+          return false;
         }
       }
 
@@ -1306,12 +1387,15 @@ namespace forge::cli
           release_targets = true;
         else if (argument == "--all-profiles")
           all_profiles = true;
-        else if (!options.update_dependency)
+        else if (!options.update_dependency && !argument.starts_with("-"))
         {
           options.update_dependency = std::string { argument };
         }
         else
         {
+          if (argument.starts_with("-"))
+            print_unknown_option(argument, error);
+
           print_update_usage(error);
           return 2;
         }
@@ -1378,6 +1462,9 @@ namespace forge::cli
           options.update_dependency = std::string { argument };
         else
         {
+          if (argument.starts_with("-"))
+            print_unknown_option(argument, error);
+
           print_upgrade_usage(error);
           return 2;
         }
