@@ -140,11 +140,13 @@ type = "header_only"
 cpp_std = 20
 
 [build]
-number = 11
+number = 12
 macos_system_include_dirs = ["/opt/homebrew/opt/openal-soft/include", "/usr/local/opt/openal-soft/include"]
 macos_system_library_dirs = ["/opt/homebrew/opt/openal-soft/lib", "/usr/local/opt/openal-soft/lib"]
 macos_libraries = ["openal"]
+macos_brew_packages = ["openal-soft"]
 linux_libraries = ["openal"]
+linux_apt_packages = ["libopenal-dev"]
 
 [dependencies]
 AudioLibSwitcher = { path = "AudioLibSwitcher" }
@@ -304,7 +306,7 @@ Core = { path = "../Core" }
 
 [profile.workflow-release.dependencies]
 3rdparty_libsndfile = { github = "razterizer/3rdparty_libsndfile", version = "1.0.0+build.3" }
-AudioLibSwitcher_OpenAL = { github = "razterizer/AudioLibSwitcher_OpenAL", version = "1.0.0+build.11" }
+AudioLibSwitcher_OpenAL = { github = "razterizer/AudioLibSwitcher_OpenAL", version = "1.0.0+build.12" }
 Core = { github = "razterizer/Core", version = "1.5.0+build.8" }
 
 [profile.applaudio-release.dependencies]
