@@ -656,6 +656,12 @@ already locked. `--release-targets` is policy-driven and asserts the standard
 release platform set. Portable header-only cboxes may still resolve to one
 `target = "any"` lock entry.
 
+List supported platforms:
+
+```sh
+forge list platforms
+```
+
 Upgrade a GitHub dependency's recipe version and then refresh its locks:
 
 ```sh

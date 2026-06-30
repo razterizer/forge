@@ -149,6 +149,9 @@ refreshes Forge's standard hosted-release dependency targets, currently
 does not yet contain those targets. Portable header-only packages may still
 resolve to a single `target = "any"` entry.
 
+Use `forge list platforms` to inspect the supported platform strings accepted by
+`--target=<os-arch>` and used by release-target updates.
+
 ## Dependency profiles
 
 Profile names such as `dev` and `pinned` are conventions chosen by the project.

@@ -1312,6 +1312,55 @@ namespace forge::cli
       return 0;
     }
 
+    int list_platforms(std::ostream& output)
+    {
+      const auto targets = supported_dependency_targets();
+      const auto release_targets = release_dependency_targets();
+      const auto host_target = current_target();
+      std::size_t target_width = std::string_view { "Platform" }.size();
+
+      for (const auto& target : targets)
+        target_width = std::max(target_width, target.size());
+
+      output << "Platforms:\n";
+      output << "  Platform" << std::string(target_width - std::string_view { "Platform" }.size(), ' ')
+             << "  Roles\n";
+      output << "  " << std::string(target_width, '-') << "  -----\n";
+
+      for (const auto& target : targets)
+      {
+        std::vector<std::string_view> roles;
+
+        if (target == host_target)
+          roles.push_back("current");
+
+        if (std::find(release_targets.begin(), release_targets.end(), target) != release_targets.end())
+          roles.push_back("release");
+
+        output << "  " << target;
+
+        if (roles.empty())
+        {
+          output << '\n';
+          continue;
+        }
+
+        output << std::string(target_width - target.size(), ' ') << "  ";
+
+        for (std::size_t index = 0; index < roles.size(); ++index)
+        {
+          if (index > 0)
+            output << ", ";
+
+          output << roles[index];
+        }
+
+        output << '\n';
+      }
+
+      return 0;
+    }
+
     int list_category(const std::filesystem::path& working_directory,
                       std::span<const std::string_view> arguments,
                       std::ostream& output,
@@ -1319,7 +1368,7 @@ namespace forge::cli
     {
       if (arguments.size() != 2)
       {
-        error << "forge: usage: forge list <profiles|targets|deps|dependencies|boxes>\n";
+        error << "forge: usage: forge list <profiles|targets|platforms|deps|dependencies|boxes>\n";
         return 2;
       }
 
@@ -1328,6 +1377,9 @@ namespace forge::cli
 
       if (arguments[1] == "targets")
         return list_targets(working_directory, output, error);
+
+      if (arguments[1] == "platforms")
+        return list_platforms(output);
 
       if (arguments[1] == "deps" || arguments[1] == "dependencies")
       {
@@ -1338,7 +1390,7 @@ namespace forge::cli
         return list_boxes(working_directory, output, error);
 
       error << "forge: unknown list category '" << arguments[1] << "'\n";
-      error << "forge: usage: forge list <profiles|targets|deps|dependencies|boxes>\n";
+      error << "forge: usage: forge list <profiles|targets|platforms|deps|dependencies|boxes>\n";
       return 2;
     }
 

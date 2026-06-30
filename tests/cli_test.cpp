@@ -467,10 +467,16 @@ namespace
       std::string_view { "list" },
       std::string_view { "deps" }
     };
+    constexpr std::array platform_arguments {
+      std::string_view { "list" },
+      std::string_view { "platforms" }
+    };
     std::ostringstream target_output;
     std::ostringstream target_error;
     std::ostringstream dependency_output;
     std::ostringstream dependency_error;
+    std::ostringstream platform_output;
+    std::ostringstream platform_error;
 
     expect(
       forge::cli::run(target_arguments, directory.path(), target_output, target_error) == 0,
@@ -500,6 +506,21 @@ namespace
       "list deps reports default and profile dependency sections"
     );
     expect(dependency_error.str().empty(), "list deps does not write an error");
+
+    expect(
+      forge::cli::run(platform_arguments, directory.path(), platform_output, platform_error) == 0,
+      "list platforms succeeds"
+    );
+    expect(
+      contains(platform_output.str(), "Platforms:\n")
+        && contains(platform_output.str(), "linux-x86_64")
+        && contains(platform_output.str(), "macos-arm64")
+        && contains(platform_output.str(), "windows-x86_64")
+        && contains(platform_output.str(), current_target())
+        && contains(platform_output.str(), "release"),
+      "list platforms reports supported, current, and release platforms"
+    );
+    expect(platform_error.str().empty(), "list platforms does not write an error");
   }
 
   void test_list_rejects_invalid_usage()
@@ -525,7 +546,7 @@ namespace
       forge::cli::run(arguments, directory.path(), output, error) == 2,
       "list rejects missing category"
     );
-    expect(contains(error.str(), "forge list <profiles|targets|deps|dependencies|boxes>"), "list usage explains categories");
+    expect(contains(error.str(), "forge list <profiles|targets|platforms|deps|dependencies|boxes>"), "list usage explains categories");
     expect(output.str().empty(), "invalid list usage does not write output");
   }
 

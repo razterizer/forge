@@ -55,6 +55,19 @@ namespace forge
       : std::string { target.substr(separator + 1) };
   }
 
+  std::vector<std::string> supported_dependency_targets()
+  {
+    return {
+      "linux-x86_64",
+      "linux-arm64",
+      "macos-x86_64",
+      "macos-arm64",
+      "windows-x86",
+      "windows-x86_64",
+      "windows-arm64"
+    };
+  }
+
   std::vector<std::string> release_dependency_targets()
   {
     return {
@@ -66,13 +79,8 @@ namespace forge
 
   bool is_supported_dependency_target(std::string_view target)
   {
-    return target == "linux-x86_64"
-      || target == "linux-arm64"
-      || target == "macos-x86_64"
-      || target == "macos-arm64"
-      || target == "windows-x86"
-      || target == "windows-x86_64"
-      || target == "windows-arm64";
+    const auto targets = supported_dependency_targets();
+    return std::find(targets.begin(), targets.end(), target) != targets.end();
   }
 
   bool dependency_matches_target(const Dependency& dependency, std::string_view target)
