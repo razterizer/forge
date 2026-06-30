@@ -97,6 +97,11 @@ rules:
   identity and `component` for the named library selected from it. Dependency
   cbox variants may declare `variant = "name"` to resolve filenames with that
   variant suffix.
+  Use `forge upgrade <dependency> --latest` or `--to=<version>` to update the
+  recipe version and refresh locks in one step. `--all-targets` refreshes
+  concrete targets already present in `forge.lock.toml`; `--release-targets`
+  refreshes Forge's standard release matrix: `linux-x86_64`, `macos-arm64`,
+  and `windows-x86_64`.
 - Projects may declare project-relative `[runtime].files`. Executable runtime
   files are staged beside the executable and included in boxes and releases.
   Library and header-only runtime files are exported in boxes and staged

@@ -212,6 +212,7 @@ namespace
     expect(
       contains(update_output.str(), "--all-targets")
         && contains(update_output.str(), "--all-profiles")
+        && contains(update_output.str(), "--release-targets")
         && contains(update_output.str(), "forge.lock.toml"),
       "update help documents multi-target and multi-profile updates"
     );
@@ -3045,10 +3046,19 @@ namespace
       std::string_view { "update" },
       std::string_view { "--all-targets" }
     };
+    constexpr std::array update_release_targets_arguments {
+      std::string_view { "update" },
+      std::string_view { "--release-targets" }
+    };
     constexpr std::array update_conflicting_targets_arguments {
       std::string_view { "update" },
       std::string_view { "--target=windows-x86_64" },
       std::string_view { "--all-targets" }
+    };
+    constexpr std::array update_conflicting_release_targets_arguments {
+      std::string_view { "update" },
+      std::string_view { "--all-targets" },
+      std::string_view { "--release-targets" }
     };
     constexpr std::array update_conflicting_profiles_arguments {
       std::string_view { "update" },
@@ -3078,6 +3088,13 @@ namespace
       std::string_view { "--profile=pinned" },
       std::string_view { "--all-profiles" }
     };
+    constexpr std::array upgrade_conflicting_release_targets_arguments {
+      std::string_view { "upgrade" },
+      std::string_view { "answer" },
+      std::string_view { "--to=1.2.3" },
+      std::string_view { "--target=windows-x86_64" },
+      std::string_view { "--release-targets" }
+    };
     std::ostringstream new_output;
     std::ostringstream new_error;
     std::ostringstream update_all_output;
@@ -3086,8 +3103,12 @@ namespace
     std::ostringstream update_target_error;
     std::ostringstream update_all_targets_output;
     std::ostringstream update_all_targets_error;
+    std::ostringstream update_release_targets_output;
+    std::ostringstream update_release_targets_error;
     std::ostringstream update_conflicting_targets_output;
     std::ostringstream update_conflicting_targets_error;
+    std::ostringstream update_conflicting_release_targets_output;
+    std::ostringstream update_conflicting_release_targets_error;
     std::ostringstream update_conflicting_profiles_output;
     std::ostringstream update_conflicting_profiles_error;
     std::ostringstream upgrade_missing_version_output;
@@ -3098,6 +3119,8 @@ namespace
     std::ostringstream upgrade_invalid_version_error;
     std::ostringstream upgrade_conflicting_profiles_output;
     std::ostringstream upgrade_conflicting_profiles_error;
+    std::ostringstream upgrade_conflicting_release_targets_output;
+    std::ostringstream upgrade_conflicting_release_targets_error;
     std::ostringstream update_output;
     std::ostringstream update_error;
     forge::cli::run(new_arguments, directory.path(), new_output, new_error);
@@ -3153,6 +3176,22 @@ namespace
       update_all_targets_error.str().empty(),
       "all-target update does not write an error"
     );
+    expect(
+      forge::cli::run(
+        update_release_targets_arguments,
+        project_directory,
+        update_release_targets_output,
+        update_release_targets_error
+      ) == 0,
+      "update accepts release targets"
+    );
+    expect(
+      contains(update_release_targets_output.str(), "Updated locked dependencies for linux-x86_64")
+        && contains(update_release_targets_output.str(), "Updated locked dependencies for macos-arm64")
+        && contains(update_release_targets_output.str(), "Updated locked dependencies for windows-x86_64"),
+      "release-target update resolves the standard release matrix"
+    );
+    expect(update_release_targets_error.str().empty(), "release-target update does not write an error");
 
     expect(
       forge::cli::run(
@@ -3166,6 +3205,19 @@ namespace
     expect(
       contains(update_conflicting_targets_error.str(), "--all-targets"),
       "conflicting target options print update usage"
+    );
+    expect(
+      forge::cli::run(
+        update_conflicting_release_targets_arguments,
+        project_directory,
+        update_conflicting_release_targets_output,
+        update_conflicting_release_targets_error
+      ) == 2,
+      "update rejects all-targets and release-targets together"
+    );
+    expect(
+      contains(update_conflicting_release_targets_error.str(), "--release-targets"),
+      "conflicting release target options print update usage"
     );
     expect(
       forge::cli::run(
@@ -3232,6 +3284,19 @@ namespace
     expect(
       contains(upgrade_conflicting_profiles_error.str(), "--all-profiles"),
       "conflicting upgrade profile options print upgrade usage"
+    );
+    expect(
+      forge::cli::run(
+        upgrade_conflicting_release_targets_arguments,
+        project_directory,
+        upgrade_conflicting_release_targets_output,
+        upgrade_conflicting_release_targets_error
+      ) == 2,
+      "upgrade rejects target and release-targets together"
+    );
+    expect(
+      contains(upgrade_conflicting_release_targets_error.str(), "--release-targets"),
+      "conflicting upgrade release target options print upgrade usage"
     );
 
     std::ostringstream update_profile_output;

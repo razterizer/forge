@@ -185,12 +185,14 @@ namespace forge::cli
         << "Resolve and lock GitHub cbox dependencies for the current target.\n\n"
         << "Usage:\n"
         << "  forge update [dependency] [--profile=<name> | --all-profiles] "
-        << "[--target=<os-arch> | --all-targets]\n\n"
+        << "[--target=<os-arch> | --all-targets | --release-targets]\n\n"
         << "Options:\n"
         << "  --profile=<name>    Select a dependency profile before resolving\n"
         << "  --all-profiles      Resolve default dependencies and dependency profiles\n"
         << "  --target=<os-arch>  Resolve dependencies for another platform target\n\n"
         << "  --all-targets       Resolve targets already represented in forge.lock.toml\n\n"
+        << "  --release-targets   Resolve the standard release matrix: linux-x86_64,\n"
+        << "                      macos-arm64, and windows-x86_64\n\n"
         << "Writes exact package identities, selected components, URLs, targets,\n"
         << "and checksums to forge.lock.toml without building the current project.\n"
         << "Existing entries for other targets are preserved.\n";
@@ -204,7 +206,7 @@ namespace forge::cli
         << "Usage:\n"
         << "  forge upgrade <dependency> (--to=<version> | --latest) "
         << "[--profile=<name> | --all-profiles] "
-        << "[--target=<os-arch> | --all-targets]\n\n"
+        << "[--target=<os-arch> | --all-targets | --release-targets]\n\n"
         << "Options:\n"
         << "  --to=<version>      Set the dependency recipe version before resolving\n"
         << "  --latest            Use the latest GitHub release tag as the version\n"
@@ -212,6 +214,8 @@ namespace forge::cli
         << "  --all-profiles      Upgrade default dependencies and dependency profiles\n"
         << "  --target=<os-arch>  Resolve dependencies for another platform target\n\n"
         << "  --all-targets       Resolve targets already represented in forge.lock.toml\n\n"
+        << "  --release-targets   Resolve the standard release matrix: linux-x86_64,\n"
+        << "                      macos-arm64, and windows-x86_64\n\n"
         << "Updates forge.recipe.toml, then writes exact package identities, URLs,\n"
         << "targets, and checksums to forge.lock.toml.\n";
       return true;
@@ -402,14 +406,15 @@ namespace forge::cli
   {
     error
       << "forge: usage: forge update [dependency] [--profile=<name> | --all-profiles] "
-      << "[--target=<os-arch> | --all-targets]\n";
+      << "[--target=<os-arch> | --all-targets | --release-targets]\n";
   }
 
   void print_upgrade_usage(std::ostream& error)
   {
     error
       << "forge: usage: forge upgrade <dependency> (--to=<version> | --latest) "
-      << "[--profile=<name> | --all-profiles] [--target=<os-arch> | --all-targets]\n";
+      << "[--profile=<name> | --all-profiles] "
+      << "[--target=<os-arch> | --all-targets | --release-targets]\n";
   }
 
   void print_build_usage(std::ostream& error)

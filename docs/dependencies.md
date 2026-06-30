@@ -124,6 +124,31 @@ write its exact URL, checksum, package identity, and selected component to
 re-resolve GitHub. Variant names are part of the lock identity, so the same
 package can be locked independently for different cbox variants.
 
+`forge update` refreshes lock entries without changing declared dependency
+versions. `forge upgrade` changes the GitHub dependency version in
+`forge.recipe.toml`, then performs the same lock refresh. Use `--latest` to
+read the latest GitHub Release tag, or `--to=<version>` to set an explicit
+packaged version:
+
+```sh
+forge upgrade Core --latest
+forge upgrade Core --to=1.5.0+build.8
+```
+
+Target selection has two bulk modes:
+
+```sh
+forge update Core --all-targets
+forge update Core --release-targets
+```
+
+`--all-targets` is lockfile-driven: it refreshes every concrete target already
+represented in `forge.lock.toml`. `--release-targets` is matrix-driven: it
+refreshes Forge's standard hosted-release dependency targets, currently
+`linux-x86_64`, `macos-arm64`, and `windows-x86_64`, even when the lockfile
+does not yet contain those targets. Portable header-only packages may still
+resolve to a single `target = "any"` entry.
+
 ## Dependency profiles
 
 Profile names such as `dev` and `pinned` are conventions chosen by the project.
@@ -146,6 +171,22 @@ Resolve the GitHub Release package once for the current target:
 ```sh
 forge update Core --profile=pinned
 ```
+
+Resolve every dependency profile that contains matching GitHub dependencies:
+
+```sh
+forge update Core --all-profiles
+```
+
+Combine profile and target bulk modes for release preparation:
+
+```sh
+forge upgrade Core --latest --all-profiles --release-targets
+```
+
+Local-only profile overrides are skipped by `--all-profiles`; the command only
+selects the default dependency set and dependency profiles where the requested
+dependency is declared as a GitHub Release package.
 
 Then select the desired dependency set for each command:
 

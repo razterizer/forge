@@ -632,6 +632,41 @@ Select dependencies from a named profile before resolving:
 forge update answer --profile=pinned
 ```
 
+Refresh default dependencies and every dependency profile that contains GitHub
+dependencies:
+
+```sh
+forge update --all-profiles
+```
+
+Refresh the concrete targets already represented in `forge.lock.toml`:
+
+```sh
+forge update --all-targets
+```
+
+Refresh Forge's standard hosted-release dependency matrix regardless of which
+targets are already present in the lockfile:
+
+```sh
+forge update --release-targets
+```
+
+The release matrix is `linux-x86_64`, `macos-arm64`, and `windows-x86_64`.
+`--all-targets` is lockfile-driven and preserves the set of concrete targets
+already locked. `--release-targets` is policy-driven and asserts the standard
+release platform set. Portable header-only cboxes may still resolve to one
+`target = "any"` lock entry.
+
+Upgrade a GitHub dependency's recipe version and then refresh its locks:
+
+```sh
+forge upgrade answer --latest --all-profiles --release-targets
+```
+
+Use `--to=<version>` instead of `--latest` to upgrade to a specific packaged
+version.
+
 Normal `forge build`, `forge build-and-run`, and release commands require matching
 target-specific lock entries and never re-resolve GitHub release checksums.
 They fail with an update command when the recipe and lockfile disagree.

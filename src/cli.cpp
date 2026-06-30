@@ -223,6 +223,7 @@ namespace forge::cli
 
     bool collect_update_targets(const std::filesystem::path& project_directory,
                                 const BuildOptions& options,
+                                bool release_targets,
                                 std::vector<std::string>& targets,
                                 std::ostream& error)
     {
@@ -244,6 +245,12 @@ namespace forge::cli
         error << "forge: GitHub dependency '" << *options.update_dependency
               << "' was not found\n";
         return false;
+      }
+
+      if (release_targets)
+      {
+        targets = release_dependency_targets();
+        return true;
       }
 
       std::set<std::string> locked_targets;
@@ -268,11 +275,17 @@ namespace forge::cli
     int run_dependency_update(const std::filesystem::path& working_directory,
                               const BuildOptions& options,
                               bool all_targets,
+                              bool release_targets,
                               bool all_profiles,
                               std::ostream& output,
                               std::ostream& error)
     {
-      if (all_targets && options.update_target)
+      const auto target_selector_count =
+        (options.update_target ? 1 : 0)
+        + (all_targets ? 1 : 0)
+        + (release_targets ? 1 : 0);
+
+      if (target_selector_count > 1)
       {
         print_update_usage(error);
         return 2;
@@ -286,12 +299,12 @@ namespace forge::cli
 
       if (!all_profiles)
       {
-        if (!all_targets)
+        if (!all_targets && !release_targets)
           return build_project(working_directory, options, output, error);
 
         std::vector<std::string> targets;
 
-        if (!collect_update_targets(working_directory, options, targets, error))
+        if (!collect_update_targets(working_directory, options, release_targets, targets, error))
           return 2;
 
         for (const auto& target : targets)
@@ -320,6 +333,7 @@ namespace forge::cli
           working_directory,
           profile_options,
           all_targets,
+          release_targets,
           false,
           output,
           error
@@ -1267,6 +1281,7 @@ namespace forge::cli
       options.dependencies_only = true;
       options.update_dependencies = true;
       bool all_targets = false;
+      bool release_targets = false;
       bool all_profiles = false;
 
       for (const auto argument : arguments.subspan(1))
@@ -1287,6 +1302,8 @@ namespace forge::cli
         }
         else if (argument == "--all-targets")
           all_targets = true;
+        else if (argument == "--release-targets")
+          release_targets = true;
         else if (argument == "--all-profiles")
           all_profiles = true;
         else if (!options.update_dependency)
@@ -1300,7 +1317,15 @@ namespace forge::cli
         }
       }
 
-      return run_dependency_update(working_directory, options, all_targets, all_profiles, output, error);
+      return run_dependency_update(
+        working_directory,
+        options,
+        all_targets,
+        release_targets,
+        all_profiles,
+        output,
+        error
+      );
     }
 
     if (arguments.front() == "upgrade")
@@ -1309,6 +1334,7 @@ namespace forge::cli
       options.dependencies_only = true;
       options.update_dependencies = true;
       bool all_targets = false;
+      bool release_targets = false;
       bool all_profiles = false;
       std::optional<std::string> version;
       bool latest = false;
@@ -1331,6 +1357,8 @@ namespace forge::cli
         }
         else if (argument == "--all-targets")
           all_targets = true;
+        else if (argument == "--release-targets")
+          release_targets = true;
         else if (argument == "--all-profiles")
           all_profiles = true;
         else if (argument == "--latest")
@@ -1361,7 +1389,12 @@ namespace forge::cli
         return 2;
       }
 
-      if (all_targets && options.update_target)
+      const auto target_selector_count =
+        (options.update_target ? 1 : 0)
+        + (all_targets ? 1 : 0)
+        + (release_targets ? 1 : 0);
+
+      if (target_selector_count > 1)
       {
         print_upgrade_usage(error);
         return 2;
@@ -1422,7 +1455,15 @@ namespace forge::cli
 
       output << "Upgraded dependency " << *options.update_dependency
              << " to " << *version << '\n';
-      return run_dependency_update(working_directory, options, all_targets, all_profiles, output, error);
+      return run_dependency_update(
+        working_directory,
+        options,
+        all_targets,
+        release_targets,
+        all_profiles,
+        output,
+        error
+      );
     }
 
     if (arguments.front() == "release-git" || arguments.front() == "release-github")

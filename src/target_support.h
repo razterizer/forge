@@ -2,6 +2,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace forge
 {
@@ -15,6 +16,7 @@ namespace forge
   std::string current_target();
   std::string target_os_from_target(std::string_view target);
   std::string target_arch_from_target(std::string_view target);
+  std::vector<std::string> release_dependency_targets();
   bool is_supported_dependency_target(std::string_view target);
   bool dependency_matches_target(const Dependency& dependency, std::string_view target);
   bool dependency_matches_current_target(const Dependency& dependency);

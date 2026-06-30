@@ -55,6 +55,15 @@ namespace forge
       : std::string { target.substr(separator + 1) };
   }
 
+  std::vector<std::string> release_dependency_targets()
+  {
+    return {
+      "linux-x86_64",
+      "macos-arm64",
+      "windows-x86_64"
+    };
+  }
+
   bool is_supported_dependency_target(std::string_view target)
   {
     return target == "linux-x86_64"
