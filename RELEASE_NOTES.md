@@ -2,7 +2,29 @@
 
 ## 0.9.0
 
-- Describe changes.
+- Added system-package provider hints to recipes and cbox manifests, so
+  libraries can advertise Homebrew and apt packages needed by consumers instead
+  of leaving missing native dependencies as linker mysteries.
+- Made builds diagnose missing provider-hinted system packages with the
+  platform package-manager command to install them when Forge can recognize the
+  active host.
+- Added `forge upgrade` for changing GitHub dependency versions and refreshing
+  their locks in one command, including `--latest` resolution from GitHub
+  Releases and `--to=<version>` for explicit package versions.
+- Made `forge upgrade --latest` without a dependency name upgrade every direct
+  GitHub dependency selected by the active dependency scope.
+- Added dependency lock refresh scopes for real release workflows:
+  `--all-profiles`, `--all-targets`, and `--release-targets`, allowing default
+  dependencies, dependency profiles, existing lock targets, and Forge's
+  standard Linux/macOS/Windows release matrix to be refreshed intentionally.
+- Improved dependency update and upgrade diagnostics, including clearer
+  handling of skipped local/profile-only dependencies and invalid option
+  combinations.
+- Added canonical `forge list <category>` commands for `profiles`, `targets`,
+  `deps`/`dependencies`, `boxes`, and `platforms`, replacing the older
+  `forge profile list` shape.
+- Removed the `forge init` compatibility alias, leaving `forge adopt` as the
+  single adoption command.
 
 ## 0.8.10
 
