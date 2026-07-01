@@ -2,7 +2,10 @@
 
 ## 0.9.1
 
-- Describe changes.
+- Added `forge release-git --dry-run` to preflight release tags, clean-tree state, and release notes before pushing.
+- Added `forge list boxes --platforms` / `forge box list --platforms` for compact platform visibility.
+- Classified and fixed Wine-specific unit-test failures caused by tests shelling out to host `cmake -E tar`.
+- Improved release confidence around cbox inspection and Windows/Wine portability.
 
 ## 0.9.0
 
