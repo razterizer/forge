@@ -1355,6 +1355,14 @@ namespace forge
       return 2;
     }
 
+    if (options.dry_run)
+    {
+      output << "Release preflight passed for " << tag << '\n'
+             << "Version: " << release_notes_heading(recipe) << '\n'
+             << "Tag: " << tag << '\n';
+      return 0;
+    }
+
     return create_and_push_tag(
       project_directory,
       recipe.version,

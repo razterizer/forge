@@ -413,6 +413,44 @@ namespace
     expect(error.str().empty(), "successful GitHub release does not write an error");
   }
 
+  void test_release_git_dry_run_preflights_without_tagging()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+    forge::GitReleaseOptions options;
+    options.tag_format = "release-<version>";
+    options.dry_run = true;
+
+    const forge::ProcessRunner runner =
+      [&commands](const std::vector<std::string>& command,
+                  const std::filesystem::path&,
+                  std::ostream&)
+      {
+        commands.push_back(command);
+        return command_contains(command, "show-ref") ? 1 : 0;
+      };
+
+    expect(
+      forge::release_git(directory.path(), options, runner, output, error) == 0,
+      "Git release dry-run succeeds"
+    );
+    expect(commands.size() == 4, "Git release dry-run only runs preflight commands");
+    expect(
+      !command_contains(commands.back(), "tag") && !command_contains(commands.back(), "push"),
+      "Git release dry-run does not tag or push"
+    );
+    expect(
+      contains(output.str(), "Release preflight passed for release-0.1.0")
+      && contains(output.str(), "Version: 0.1.0")
+      && contains(output.str(), "Tag: release-0.1.0"),
+      "Git release dry-run reports release identity"
+    );
+    expect(error.str().empty(), "successful Git release dry-run does not write an error");
+  }
+
   void test_release_uses_build_qualified_default_tag()
   {
     TemporaryDirectory directory;
@@ -570,6 +608,7 @@ int main()
   test_release_rejects_missing_version_notes();
   test_release_extracts_build_qualified_notes();
   test_release_creates_and_pushes_custom_tag();
+  test_release_git_dry_run_preflights_without_tagging();
   test_release_uses_build_qualified_default_tag();
   test_release_tag_rejects_dirty_tree_before_build();
   test_release_tag_requires_declared_build_number();

@@ -265,8 +265,9 @@ namespace forge::cli
       output
         << "Create and push a Git tag that triggers generated hosted workflows.\n\n"
         << "Usage:\n"
-        << "  forge release-git [--tag=<format> | --tag-force[=<format>]]\n\n"
+        << "  forge release-git [--dry-run] [--tag=<format> | --tag-force[=<format>]]\n\n"
         << "Options:\n"
+        << "  --dry-run             Check release readiness without creating a tag\n"
         << "  --tag=<format>        Use a custom release tag format\n"
         << "  --tag-force[=<format>] Replace an existing local and remote tag\n\n"
         << "The generated workflows run 'forge workflow prepare-release' on each\n"
@@ -442,6 +443,6 @@ namespace forge::cli
   {
     error
       << "forge: usage: forge release-git "
-      << "[--tag=<format> | --tag-force[=<format>]]\n";
+      << "[--dry-run] [--tag=<format> | --tag-force[=<format>]]\n";
   }
 }

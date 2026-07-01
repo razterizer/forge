@@ -14,6 +14,7 @@ namespace forge
   {
     std::optional<std::string> tag_format;
     bool force_tag = false;
+    bool dry_run = false;
   };
 
   struct PrepareReleaseOptions

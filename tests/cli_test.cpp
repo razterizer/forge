@@ -3928,6 +3928,43 @@ namespace
     expect(contains(error.str(), "usage: forge release-git"), "Git release reports valid tag forms");
   }
 
+  void test_release_git_rejects_duplicate_dry_run()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments {
+      std::string_view { "release-git" },
+      std::string_view { "--dry-run" },
+      std::string_view { "--dry-run" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "Git release rejects duplicate dry-run flags"
+    );
+    expect(contains(error.str(), "usage: forge release-git"), "duplicate dry-run reports valid tag forms");
+  }
+
+  void test_release_git_rejects_conflicting_tag_options()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments {
+      std::string_view { "release-git" },
+      std::string_view { "--dry-run" },
+      std::string_view { "--tag=release-<version>" },
+      std::string_view { "--tag-force" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "Git release rejects conflicting tag options"
+    );
+    expect(contains(error.str(), "usage: forge release-git"), "conflicting tag options report valid forms");
+  }
+
   void test_clean_removes_generated_state()
   {
     TemporaryDirectory directory;
@@ -6125,6 +6162,8 @@ int main()
   test_release_github_rejects_empty_tag_format();
   test_release_git_force_rejects_empty_tag_format();
   test_release_git_rejects_redundant_tag_argument();
+  test_release_git_rejects_duplicate_dry_run();
+  test_release_git_rejects_conflicting_tag_options();
   test_clean_removes_generated_state();
   test_clean_accepts_already_clean_project();
   test_clean_refuses_non_project_directory();

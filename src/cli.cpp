@@ -1960,38 +1960,71 @@ namespace forge::cli
     {
       GitReleaseOptions options;
       options.tag_format = "release-<version>";
+      bool tag_option_seen = false;
 
-      if (arguments.size() == 2 && arguments[1] == "--tag-force")
-        options.force_tag = true;
-      else if (const auto value = arguments.size() == 2
-                                    ? option_value(arguments[1], "--tag=")
-                                    : std::nullopt)
+      for (const auto argument : arguments.subspan(1))
       {
-        options.tag_format = std::string { *value };
-
-        if (options.tag_format->empty())
+        if (argument == "--dry-run")
         {
-          error << "forge: tag format cannot be empty\n";
+          if (options.dry_run)
+          {
+            print_release_git_usage(error);
+            return 2;
+          }
+
+          options.dry_run = true;
+        }
+        else if (argument == "--tag-force")
+        {
+          if (tag_option_seen)
+          {
+            print_release_git_usage(error);
+            return 2;
+          }
+
+          tag_option_seen = true;
+          options.force_tag = true;
+        }
+        else if (const auto value = option_value(argument, "--tag="))
+        {
+          if (tag_option_seen)
+          {
+            print_release_git_usage(error);
+            return 2;
+          }
+
+          tag_option_seen = true;
+          options.tag_format = std::string { *value };
+
+          if (options.tag_format->empty())
+          {
+            error << "forge: tag format cannot be empty\n";
+            return 2;
+          }
+        }
+        else if (const auto value = option_value(argument, "--tag-force="))
+        {
+          if (tag_option_seen)
+          {
+            print_release_git_usage(error);
+            return 2;
+          }
+
+          tag_option_seen = true;
+          options.tag_format = std::string { *value };
+          options.force_tag = true;
+
+          if (options.tag_format->empty())
+          {
+            error << "forge: tag format cannot be empty\n";
+            return 2;
+          }
+        }
+        else
+        {
+          print_release_git_usage(error);
           return 2;
         }
-      }
-      else if (const auto value = arguments.size() == 2
-                                    ? option_value(arguments[1], "--tag-force=")
-                                    : std::nullopt)
-      {
-        options.tag_format = std::string { *value };
-        options.force_tag = true;
-
-        if (options.tag_format->empty())
-        {
-          error << "forge: tag format cannot be empty\n";
-          return 2;
-        }
-      }
-      else if (arguments.size() != 1)
-      {
-        print_release_git_usage(error);
-        return 2;
       }
 
       return release_git(working_directory, options, output, error);
