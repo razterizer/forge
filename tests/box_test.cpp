@@ -3,6 +3,7 @@
 #include "sha256.h"
 #include "test_support.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -62,25 +63,62 @@ namespace
       << "runtime = \"default\"\n";
   }
 
+  void write_u16(std::ofstream& file, std::uint16_t value)
+  {
+    file.put(static_cast<char>(value & 0xff));
+    file.put(static_cast<char>((value >> 8) & 0xff));
+  }
+
+  void write_u32(std::ofstream& file, std::uint32_t value)
+  {
+    write_u16(file, static_cast<std::uint16_t>(value & 0xffff));
+    write_u16(file, static_cast<std::uint16_t>((value >> 16) & 0xffff));
+  }
+
+  void write_test_zip(const std::filesystem::path& path,
+                      const std::vector<std::string>& entries)
+  {
+    std::ofstream file { path, std::ios::binary };
+    const auto central_offset = static_cast<std::uint32_t>(file.tellp());
+
+    for (const auto& entry : entries)
+    {
+      write_u32(file, 0x02014b50);
+      write_u16(file, 20);
+      write_u16(file, 20);
+      write_u16(file, 0);
+      write_u16(file, 0);
+      write_u16(file, 0);
+      write_u16(file, 0);
+      write_u32(file, 0);
+      write_u32(file, 0);
+      write_u32(file, 0);
+      write_u16(file, static_cast<std::uint16_t>(entry.size()));
+      write_u16(file, 0);
+      write_u16(file, 0);
+      write_u16(file, 0);
+      write_u16(file, 0);
+      write_u32(file, 0);
+      write_u32(file, 0);
+      file << entry;
+    }
+
+    const auto central_size =
+      static_cast<std::uint32_t>(static_cast<std::streamoff>(file.tellp()) - central_offset);
+    write_u32(file, 0x06054b50);
+    write_u16(file, 0);
+    write_u16(file, 0);
+    write_u16(file, static_cast<std::uint16_t>(entries.size()));
+    write_u16(file, static_cast<std::uint16_t>(entries.size()));
+    write_u32(file, central_size);
+    write_u32(file, central_offset);
+    write_u16(file, 0);
+  }
+
   std::filesystem::path write_test_box(const std::filesystem::path& directory)
   {
-    const auto staging = directory / "archive-staging";
     const auto box = directory / "hello.cbox";
-    std::filesystem::create_directories(staging / "bin");
-    std::ofstream { staging / "cbox.toml" };
-    std::ofstream { staging / "bin/hello" };
-    const std::vector<std::string> arguments {
-      "cmake",
-      "-E",
-      "tar",
-      "cf",
-      box.string(),
-      "--format=zip",
-      "cbox.toml",
-      "bin"
-    };
-    std::ostringstream error;
-    forge::run_process(arguments, staging, error);
+    write_test_zip(box, { "cbox.toml", "bin/", "bin/hello" });
     return box;
   }
 
@@ -316,8 +354,8 @@ namespace
 
     const forge::ProcessRunner runner =
       [&commands, &directory](const std::vector<std::string>& command,
-                              const std::filesystem::path& working_directory,
-                              std::ostream& process_error)
+                              const std::filesystem::path&,
+                              std::ostream&)
       {
         commands.push_back(command);
 
@@ -332,9 +370,6 @@ namespace
             << "runtime = \"default\"\n";
           return 0;
         }
-
-        if (command.size() > 2 && command[1] == "-E" && command[2] == "tar")
-          return forge::run_process(command, working_directory, process_error);
 
         return 0;
       };
@@ -667,25 +702,8 @@ namespace
   void test_verify_rejects_unsafe_archive_entry()
   {
     TemporaryDirectory directory;
-    const auto staging = directory.path() / "archive-staging";
     const auto box = directory.path() / "unsafe.cbox";
-    std::filesystem::create_directories(staging / "bin");
-    std::ofstream { staging / "cbox.toml" };
-    std::ofstream { staging / "bin/hello" };
-    std::ofstream { directory.path() / "escape.txt" };
-    const std::vector<std::string> arguments {
-      "cmake",
-      "-E",
-      "tar",
-      "cf",
-      box.string(),
-      "--format=zip",
-      "cbox.toml",
-      "bin",
-      "../escape.txt"
-    };
-    std::ostringstream archive_error;
-    forge::run_process(arguments, staging, archive_error);
+    write_test_zip(box, { "cbox.toml", "bin/", "bin/hello", "../escape.txt" });
     int invocations = 0;
     std::ostringstream output;
     std::ostringstream error;

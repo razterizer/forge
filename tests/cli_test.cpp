@@ -4150,6 +4150,32 @@ namespace
       && contains(generated_list_output.str(), "executable"),
       "box list reports generated box package metadata"
     );
+    expect(
+      !contains(generated_list_output.str(), "Platforms:"),
+      "box list keeps platform summaries behind an explicit flag"
+    );
+
+    constexpr std::array list_platform_arguments {
+      std::string_view { "list" },
+      std::string_view { "boxes" },
+      std::string_view { "--platforms" }
+    };
+    std::ostringstream platform_list_output;
+    std::ostringstream platform_list_error;
+    expect(
+      forge::cli::run(
+        list_platform_arguments,
+        project_directory,
+        platform_list_output,
+        platform_list_error
+      ) == 0,
+      "list boxes accepts the platforms flag"
+    );
+    expect(
+      contains(platform_list_output.str(), "Platforms: " + current_target()),
+      "list boxes --platforms summarizes generated box platforms"
+    );
+    expect(platform_list_error.str().empty(), "list boxes --platforms does not write an error");
 
     const std::array inspect_arguments {
       std::string_view { "box" },

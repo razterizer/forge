@@ -3,10 +3,12 @@
 #include "test_support.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <map>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -90,6 +92,121 @@ namespace
       << "public_headers = [\"include/hello/hello.h\"]\n";
 
     std::ofstream { directory / "include/hello/hello.h" } << "inline int hello() { return 42; }\n";
+  }
+
+  void write_u16(std::ofstream& file, std::uint16_t value)
+  {
+    file.put(static_cast<char>(value & 0xff));
+    file.put(static_cast<char>((value >> 8) & 0xff));
+  }
+
+  void write_u32(std::ofstream& file, std::uint32_t value)
+  {
+    write_u16(file, static_cast<std::uint16_t>(value & 0xffff));
+    write_u16(file, static_cast<std::uint16_t>((value >> 16) & 0xffff));
+  }
+
+  void write_test_zip(const std::filesystem::path& path,
+                      const std::vector<std::string>& entries)
+  {
+    std::ofstream file { path, std::ios::binary };
+    const auto central_offset = static_cast<std::uint32_t>(file.tellp());
+
+    for (const auto& entry : entries)
+    {
+      write_u32(file, 0x02014b50);
+      write_u16(file, 20);
+      write_u16(file, 20);
+      write_u16(file, 0);
+      write_u16(file, 0);
+      write_u16(file, 0);
+      write_u16(file, 0);
+      write_u32(file, 0);
+      write_u32(file, 0);
+      write_u32(file, 0);
+      write_u16(file, static_cast<std::uint16_t>(entry.size()));
+      write_u16(file, 0);
+      write_u16(file, 0);
+      write_u16(file, 0);
+      write_u16(file, 0);
+      write_u32(file, 0);
+      write_u32(file, 0);
+      file << entry;
+    }
+
+    const auto central_size =
+      static_cast<std::uint32_t>(static_cast<std::streamoff>(file.tellp()) - central_offset);
+    write_u32(file, 0x06054b50);
+    write_u16(file, 0);
+    write_u16(file, 0);
+    write_u16(file, static_cast<std::uint16_t>(entries.size()));
+    write_u16(file, static_cast<std::uint16_t>(entries.size()));
+    write_u32(file, central_size);
+    write_u32(file, central_offset);
+    write_u16(file, 0);
+  }
+
+  bool fake_cmake_tar(const std::vector<std::string>& arguments,
+                      const std::filesystem::path& working_directory,
+                      std::map<std::filesystem::path, std::filesystem::path>& archives)
+  {
+    if (arguments.size() < 5 || arguments[0] != "cmake" || arguments[1] != "-E" || arguments[2] != "tar")
+      return false;
+
+    if (arguments[3] == "cf" && arguments.size() >= 7)
+    {
+      const std::filesystem::path archive = arguments[4];
+      std::vector<std::string> entries;
+
+      for (std::size_t index = 6; index < arguments.size(); ++index)
+      {
+        const auto root = std::filesystem::path { arguments[index] };
+
+        if (std::filesystem::is_directory(working_directory / root))
+        {
+          entries.push_back(root.generic_string() + "/");
+
+          for (const auto& entry : std::filesystem::recursive_directory_iterator { working_directory / root })
+          {
+            const auto relative = entry.path().lexically_relative(working_directory).generic_string();
+
+            if (entry.is_directory())
+              entries.push_back(relative + "/");
+            else if (entry.is_regular_file())
+              entries.push_back(relative);
+          }
+        }
+        else
+        {
+          entries.push_back(root.generic_string());
+        }
+      }
+
+      write_test_zip(archive, entries);
+      archives[archive] = working_directory;
+      return true;
+    }
+
+    if (arguments[3] == "xf" && arguments.size() >= 5)
+    {
+      const auto source = archives.find(arguments[4]);
+
+      if (source == archives.end())
+        return false;
+
+      for (const auto& entry : std::filesystem::directory_iterator { source->second })
+      {
+        std::filesystem::copy(
+          entry.path(),
+          working_directory / entry.path().filename(),
+          std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing
+        );
+      }
+
+      return true;
+    }
+
+    return false;
   }
 
   void write_multi_target_project(const std::filesystem::path& directory)
@@ -755,11 +872,12 @@ namespace
     std::ofstream { application / "main.cpp" } << "int main() {}\n";
     std::ostringstream output;
     std::ostringstream error;
+    std::map<std::filesystem::path, std::filesystem::path> archives;
 
     const forge::ProcessRunner runner =
-      [&application, &dependency](const std::vector<std::string>& arguments,
-                                 const std::filesystem::path& working_directory,
-                                 std::ostream& process_error)
+      [&application, &dependency, &archives](const std::vector<std::string>& arguments,
+                                             const std::filesystem::path& working_directory,
+                                             std::ostream&)
       {
         if (arguments.size() > 1 && arguments[1] == "--build")
         {
@@ -786,7 +904,7 @@ namespace
         }
 
         if (arguments.size() > 2 && arguments[1] == "-E" && arguments[2] == "tar")
-          return forge::run_process(arguments, working_directory, process_error);
+          return fake_cmake_tar(arguments, working_directory, archives) ? 0 : 2;
 
         return 0;
       };
@@ -1057,11 +1175,12 @@ namespace
     std::ofstream { application / "main.cpp" } << "int main() {}\n";
     std::ostringstream output;
     std::ostringstream error;
+    std::map<std::filesystem::path, std::filesystem::path> archives;
 
     const forge::ProcessRunner runner =
-      [&application](const std::vector<std::string>& arguments,
-                     const std::filesystem::path& working_directory,
-                     std::ostream& process_error)
+      [&application, &archives](const std::vector<std::string>& arguments,
+                                const std::filesystem::path& working_directory,
+                                std::ostream&)
       {
         if (arguments.size() > 1 && arguments[1] == "--build")
         {
@@ -1085,7 +1204,7 @@ namespace
         }
 
         if (arguments.size() > 2 && arguments[1] == "-E" && arguments[2] == "tar")
-          return forge::run_process(arguments, working_directory, process_error);
+          return fake_cmake_tar(arguments, working_directory, archives) ? 0 : 2;
 
         return 0;
       };

@@ -1366,9 +1366,17 @@ namespace forge::cli
                       std::ostream& output,
                       std::ostream& error)
     {
-      if (arguments.size() != 2)
+      if (arguments.size() < 2 || arguments.size() > 3)
       {
-        error << "forge: usage: forge list <profiles|targets|platforms|deps|dependencies|boxes>\n";
+        error << "forge: usage: forge list <profiles|targets|platforms|deps|dependencies|boxes> [--platforms]\n";
+        return 2;
+      }
+
+      const auto show_platforms = arguments.size() == 3 && arguments[2] == "--platforms";
+
+      if (arguments.size() == 3 && (arguments[1] != "boxes" || !show_platforms))
+      {
+        error << "forge: usage: forge list <profiles|targets|platforms|deps|dependencies|boxes> [--platforms]\n";
         return 2;
       }
 
@@ -1387,10 +1395,10 @@ namespace forge::cli
       }
 
       if (arguments[1] == "boxes")
-        return list_boxes(working_directory, output, error);
+        return list_boxes(working_directory, show_platforms, output, error);
 
       error << "forge: unknown list category '" << arguments[1] << "'\n";
-      error << "forge: usage: forge list <profiles|targets|platforms|deps|dependencies|boxes>\n";
+      error << "forge: usage: forge list <profiles|targets|platforms|deps|dependencies|boxes> [--platforms]\n";
       return 2;
     }
 
@@ -1481,8 +1489,18 @@ namespace forge::cli
 
     if (arguments.front() == "box")
     {
-      if (arguments.size() == 2 && arguments[1] == "list")
-        return list_boxes(working_directory, output, error);
+      if ((arguments.size() == 2 || arguments.size() == 3) && arguments[1] == "list")
+      {
+        const auto show_platforms = arguments.size() == 3 && arguments[2] == "--platforms";
+
+        if (arguments.size() == 3 && !show_platforms)
+        {
+          error << "forge: usage: forge box list [--platforms]\n";
+          return 2;
+        }
+
+        return list_boxes(working_directory, show_platforms, output, error);
+      }
 
       if ((arguments.size() == 2 || arguments.size() == 3) && arguments[1] == "create")
       {
@@ -1504,7 +1522,7 @@ namespace forge::cli
       if (arguments.size() == 3 && arguments[1] == "publish")
         return publish_box(arguments[2], working_directory, output, error);
 
-      error << "forge: usage: forge box list\n";
+      error << "forge: usage: forge box list [--platforms]\n";
       error << "forge: usage: forge box create [target]\n";
       error << "forge: usage: forge box <inspect|verify|extract|publish> <path-or-filename>\n";
       return 2;

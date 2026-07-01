@@ -97,6 +97,7 @@ namespace forge
                  std::ostream& error);
 
   int list_boxes(const std::filesystem::path& project_directory,
+                 bool show_platforms,
                  std::ostream& output,
                  std::ostream& error);
 

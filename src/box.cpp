@@ -1335,6 +1335,7 @@ namespace forge
   }
 
   int list_boxes(const std::filesystem::path& project_directory,
+                 bool show_platforms,
                  std::ostream& output,
                  std::ostream& error)
   {
@@ -1354,8 +1355,19 @@ namespace forge
 
         return result;
       };
+    const auto platform_label =
+      [](const std::filesystem::path& box, const BoxMetadata& metadata)
+      {
+        if (metadata.type == "header_only" && is_portable_header_only_filename(box))
+          return std::string { "any" };
+
+        if (!metadata.os.empty() && !metadata.arch.empty())
+          return metadata.os + '-' + metadata.arch;
+
+        return std::string { "portable" };
+      };
     const auto list_directory =
-      [&output, &error, &project_directory, &version](
+      [&output, &error, &project_directory, &version, &platform_label, show_platforms](
         std::string_view heading,
         const std::filesystem::path& directory,
         bool& valid
@@ -1381,6 +1393,7 @@ namespace forge
         if (!boxes.empty())
         {
           output << heading << ":\n";
+          std::set<std::string> platforms;
 
           for (const auto& box : boxes)
           {
@@ -1400,13 +1413,10 @@ namespace forge
 
             output << "  " << box.string() << "  " << metadata.name
                    << ' ' << version(metadata);
+            const auto platform = platform_label(box, metadata);
+            platforms.insert(platform);
 
-            if (metadata.type == "header_only" && is_portable_header_only_filename(box))
-              output << " [any]";
-            else if (!metadata.os.empty() && !metadata.arch.empty())
-              output << " [" << metadata.os << '-' << metadata.arch << ']';
-            else
-              output << " [portable]";
+            output << " [" << platform << ']';
 
             if (metadata.components.empty())
               output << "  " << metadata.type;
@@ -1417,6 +1427,16 @@ namespace forge
               for (const auto& component : metadata.components)
                 output << ' ' << component.name << " (" << component.type << ')';
             }
+
+            output << '\n';
+          }
+
+          if (show_platforms)
+          {
+            output << "  Platforms:";
+
+            for (const auto& platform : platforms)
+              output << ' ' << platform;
 
             output << '\n';
           }

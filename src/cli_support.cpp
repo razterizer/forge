@@ -95,7 +95,7 @@ namespace forge::cli
       output
         << "Create and operate on verified Forge cbox packages.\n\n"
         << "Usage:\n"
-        << "  forge box list\n"
+        << "  forge box list [--platforms]\n"
         << "  forge box create [target]\n"
         << "  forge box <inspect|verify|extract|publish> <path-or-filename>\n\n"
         << "Commands:\n"
@@ -160,14 +160,14 @@ namespace forge::cli
       output
         << "List Forge recipe and package information.\n\n"
         << "Usage:\n"
-        << "  forge list <profiles|targets|platforms|deps|dependencies|boxes>\n\n"
+        << "  forge list <profiles|targets|platforms|deps|dependencies|boxes> [--platforms]\n\n"
         << "Categories:\n"
         << "  profiles      List dependency/build profiles and variant roles\n"
         << "  targets       List buildable project targets\n"
         << "  platforms     List supported platforms\n"
         << "  deps          List direct dependencies by recipe section\n"
         << "  dependencies  Alias for deps\n"
-        << "  boxes         Alias for box list\n";
+        << "  boxes         Alias for box list; accepts --platforms\n";
       return true;
     }
 
