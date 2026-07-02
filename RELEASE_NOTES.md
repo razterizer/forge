@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.10.0
+
+- Describe changes.
+
 ## 0.9.1
 
 - Added `forge release-git --dry-run` to preflight release tags, clean-tree state, and release notes before pushing.
