@@ -636,6 +636,35 @@ namespace forge
         return false;
       }
 
+      const auto remote_existing = process_runner(
+        {
+          "git",
+          "ls-remote",
+          "--exit-code",
+          "--tags",
+          "origin",
+          "refs/tags/" + std::string { tag }
+        },
+        project_directory,
+        error
+      );
+
+      if (remote_existing == 0)
+      {
+        if (!force_tag)
+        {
+          error
+            << "forge: tag '" << tag << "' already exists on origin\n"
+            << "forge: bump the recipe version before publishing another release\n";
+          return false;
+        }
+      }
+      else if (remote_existing != 2)
+      {
+        error << "forge: could not inspect existing remote Git tags\n";
+        return false;
+      }
+
       return true;
     }
 

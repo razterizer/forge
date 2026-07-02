@@ -2,8 +2,9 @@
 
 ## 0.10.0
 
-- Started the 0.10.0 release line after the 0.9.1 release-confidence fixes.
-- No additional user-facing behavior changes beyond the version and build bump.
+- Made `forge release-git` preflight existing tags on `origin` before creating
+  the local annotated tag, so remote tag conflicts fail early without leaving a
+  stray local release tag behind.
 
 ## 0.9.1
 

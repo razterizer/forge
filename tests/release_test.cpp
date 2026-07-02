@@ -378,6 +378,8 @@ namespace
 
         if (command_contains(command, "show-ref"))
           return 1;
+        if (command_contains(command, "ls-remote"))
+          return 2;
 
         if (command.size() > 1 && command[1] == "--build")
         {
@@ -396,17 +398,17 @@ namespace
       forge::release_git(directory.path(), options, runner, output, error) == 0,
       "GitHub release succeeds"
     );
-    expect(commands.size() == 6, "GitHub release preflights, tags, and pushes");
+    expect(commands.size() == 7, "GitHub release preflights, tags, and pushes");
     expect(
-      command_contains(commands[4], "hello-0.1.0+build.7-release"),
+      command_contains(commands[5], "hello-0.1.0+build.7-release"),
       "GitHub release expands custom placeholders"
     );
     expect(
-      command_contains(commands[4], "\n- First release.\n\n"),
+      command_contains(commands[5], "\n- First release.\n\n"),
       "tag annotation uses extracted release notes"
     );
     expect(
-      command_contains(commands[5], "refs/tags/hello-0.1.0+build.7-release"),
+      command_contains(commands[6], "refs/tags/hello-0.1.0+build.7-release"),
       "GitHub release pushes the exact tag"
     );
     expect(contains(output.str(), "Tagged and pushed"), "GitHub release reports the pushed tag");
@@ -430,14 +432,18 @@ namespace
                   std::ostream&)
       {
         commands.push_back(command);
-        return command_contains(command, "show-ref") ? 1 : 0;
+        if (command_contains(command, "show-ref"))
+          return 1;
+        if (command_contains(command, "ls-remote"))
+          return 2;
+        return 0;
       };
 
     expect(
       forge::release_git(directory.path(), options, runner, output, error) == 0,
       "Git release dry-run succeeds"
     );
-    expect(commands.size() == 4, "Git release dry-run only runs preflight commands");
+    expect(commands.size() == 5, "Git release dry-run only runs preflight commands");
     expect(
       !command_contains(commands.back(), "tag") && !command_contains(commands.back(), "push"),
       "Git release dry-run does not tag or push"
@@ -474,7 +480,11 @@ namespace
                   std::ostream&)
       {
         commands.push_back(command);
-        return command_contains(command, "show-ref") ? 1 : 0;
+        if (command_contains(command, "show-ref"))
+          return 1;
+        if (command_contains(command, "ls-remote"))
+          return 2;
+        return 0;
       };
 
     expect(
@@ -482,8 +492,8 @@ namespace
       "Git release accepts a build-qualified default tag"
     );
     expect(
-      command_contains(commands[4], "release-0.1.0.7")
-      && command_contains(commands[5], "refs/tags/release-0.1.0.7"),
+      command_contains(commands[5], "release-0.1.0.7")
+      && command_contains(commands[6], "refs/tags/release-0.1.0.7"),
       "default Git release tag uses the configured dotted version"
     );
     expect(error.str().empty(), "build-qualified default tag does not write an error");
@@ -568,6 +578,34 @@ namespace
     expect(contains(error.str(), "bump the recipe version"), "GitHub release suggests a new version");
   }
 
+  void test_release_tag_explains_existing_remote_release()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+    forge::GitReleaseOptions options;
+    options.tag_format = "release-<version>";
+
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>& command,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return command_contains(command, "show-ref") ? 1 : 0;
+      };
+
+    expect(
+      forge::release_git(directory.path(), options, runner, output, error) == 2,
+      "GitHub release rejects an existing remote tag"
+    );
+    expect(invocations == 5, "remote tag conflict is rejected before tagging");
+    expect(contains(error.str(), "already exists on origin"), "GitHub release explains remote tag");
+    expect(contains(error.str(), "bump the recipe version"), "GitHub release suggests a new version");
+  }
+
   void test_release_tag_force_replaces_existing_release()
   {
     TemporaryDirectory directory;
@@ -592,8 +630,8 @@ namespace
       forge::release_git(directory.path(), options, runner, output, error) == 0,
       "forced Git release replaces an existing tag"
     );
-    expect(command_contains(commands[4], "--force"), "forced Git release replaces the local tag");
-    expect(command_contains(commands[5], "--force"), "forced Git release replaces the remote tag");
+    expect(command_contains(commands[5], "--force"), "forced Git release replaces the local tag");
+    expect(command_contains(commands[6], "--force"), "forced Git release replaces the remote tag");
     expect(contains(output.str(), "Force-tagged and pushed"), "forced Git release reports replacement");
     expect(error.str().empty(), "successful forced Git release does not write an error");
   }
@@ -613,6 +651,7 @@ int main()
   test_release_tag_rejects_dirty_tree_before_build();
   test_release_tag_requires_declared_build_number();
   test_release_tag_explains_existing_release();
+  test_release_tag_explains_existing_remote_release();
   test_release_tag_force_replaces_existing_release();
 
   return failures == 0 ? 0 : 1;

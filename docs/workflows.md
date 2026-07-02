@@ -123,10 +123,10 @@ that triggers the generated platform workflows. The default tag is
 `release-<version>`. Build-qualified releases expand `<version>` using their
 configured dotted or SemVer form. Formats may use `<name>`, `<version>`, `<build-nr>`,
 `<curr-date>`, `<target>`, and `<configuration>`. Forge validates the expanded
-tag and clean tracked Git state, then creates an annotated tag from the
-matching release notes and pushes it to `origin`. Custom formats must match
-`release-*` or `v*`, or the generated workflow triggers must be customized, to
-publish hosted artifacts.
+tag, clean tracked Git state, and existing local and remote tags before
+creating an annotated tag from the matching release notes and pushing it to
+`origin`. Custom formats must match `release-*` or `v*`, or the generated
+workflow triggers must be customized, to publish hosted artifacts.
 
 For a normal hosted release, only `forge release-git` is required. The
 generated workflows invoke `forge workflow prepare-release` on each platform.

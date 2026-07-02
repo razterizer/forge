@@ -1195,9 +1195,10 @@ date; `<target>` is the current OS and architecture; and `<configuration>` is
 `release`.
 
 GitHub releases require a Git repository with clean tracked and staged state
-and reject invalid or existing local tags. Forge creates an annotated tag from
-the matching release notes and pushes it to `origin`. If pushing fails, the
-local tag remains for inspection or a manual retry.
+and reject invalid or existing local or remote tags before tagging. Forge
+creates an annotated tag from the matching release notes and pushes it to
+`origin`. If pushing fails, the local tag remains for inspection or a manual
+retry.
 
 To deliberately replace an existing local and remote tag, use
 `forge release-git --tag-force`. This rewrites published Git history and should
