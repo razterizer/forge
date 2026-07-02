@@ -2,7 +2,8 @@
 
 ## 0.10.0
 
-- Describe changes.
+- Started the 0.10.0 release line after the 0.9.1 release-confidence fixes.
+- No additional user-facing behavior changes beyond the version and build bump.
 
 ## 0.9.1
 
