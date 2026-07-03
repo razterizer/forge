@@ -7,6 +7,7 @@
 
 #include "file_support.h"
 #include "github.h"
+#include "project_scan.h"
 #include "recipe.h"
 #include "versioning.h"
 #include "workspace.h"
@@ -159,33 +160,6 @@ namespace forge
       output << "      [" << current << '/' << total << "] " << description << '\n' << std::flush;
     }
 
-    bool is_ignored_directory(const std::filesystem::path& path)
-    {
-      const auto name = path.filename().string();
-
-      return
-        name == ".git"
-        || name == ".forge"
-        || name == "build"
-        || name == "out"
-        || name.starts_with("cmake-build-");
-    }
-
-    bool is_cpp_source(const std::filesystem::path& path)
-    {
-      const auto extension = path.extension().string();
-      return extension == ".cpp" || extension == ".cc" || extension == ".cxx";
-    }
-
-    bool is_cpp_header(const std::filesystem::path& path)
-    {
-      const auto extension = path.extension().string();
-      return extension == ".h"
-        || extension == ".hpp"
-        || extension == ".hh"
-        || extension == ".hxx";
-    }
-
     bool is_cmake_generated_xcode_project(const std::filesystem::path& path)
     {
       std::ifstream file { path / "project.pbxproj" };
@@ -309,160 +283,6 @@ namespace forge
         std::ranges::sort(*values);
         values->erase(std::unique(values->begin(), values->end()), values->end());
       }
-    }
-
-    bool contains_main_function(const std::filesystem::path& path)
-    {
-      std::ifstream file { path };
-      const std::string contents {
-        std::istreambuf_iterator<char> { file },
-        std::istreambuf_iterator<char> {}
-      };
-      bool line_comment = false;
-      bool block_comment = false;
-      char quote = '\0';
-
-      for (std::size_t index = 0; index < contents.size(); ++index)
-      {
-        const auto character = contents[index];
-        const auto next = index + 1 < contents.size() ? contents[index + 1] : '\0';
-
-        if (line_comment)
-        {
-          line_comment = character != '\n';
-          continue;
-        }
-
-        if (block_comment)
-        {
-          if (character == '*' && next == '/')
-          {
-            block_comment = false;
-            ++index;
-          }
-
-          continue;
-        }
-
-        if (quote != '\0')
-        {
-          if (character == '\\')
-            ++index;
-          else if (character == quote)
-            quote = '\0';
-
-          continue;
-        }
-
-        if (character == '/' && next == '/')
-        {
-          line_comment = true;
-          ++index;
-          continue;
-        }
-
-        if (character == '/' && next == '*')
-        {
-          block_comment = true;
-          ++index;
-          continue;
-        }
-
-        if (character == '"' || character == '\'')
-        {
-          quote = character;
-          continue;
-        }
-
-        if (contents.compare(index, std::string_view { "main" }.size(), "main") != 0
-            || (index != 0
-                && (std::isalnum(static_cast<unsigned char>(contents[index - 1]))
-                    || contents[index - 1] == '_')))
-        {
-          continue;
-        }
-
-        auto position = index + std::string_view { "main" }.size();
-
-        while (position < contents.size()
-               && std::isspace(static_cast<unsigned char>(contents[position])))
-        {
-          ++position;
-        }
-
-        if (position < contents.size() && contents[position] == '(')
-          return true;
-      }
-
-      return false;
-    }
-
-    bool discover_sources(const std::filesystem::path& project_directory,
-                          std::vector<std::string>& sources,
-                          std::vector<std::string>& public_headers,
-                          std::vector<std::string>& headers,
-                          std::vector<std::string>& entry_points,
-                          std::ostream& error)
-    {
-      std::error_code filesystem_error;
-      std::filesystem::recursive_directory_iterator iterator {
-        project_directory,
-        std::filesystem::directory_options::skip_permission_denied,
-        filesystem_error
-      };
-      const std::filesystem::recursive_directory_iterator end;
-
-      if (filesystem_error)
-      {
-        error << "forge: could not inspect '" << project_directory.string() << "'\n";
-        return false;
-      }
-
-      while (iterator != end)
-      {
-        const auto& entry = *iterator;
-
-        if (entry.is_directory(filesystem_error) && is_ignored_directory(entry.path()))
-          iterator.disable_recursion_pending();
-        else if (!filesystem_error && entry.is_regular_file(filesystem_error) && is_cpp_source(entry.path()))
-        {
-          const auto relative = entry.path().lexically_relative(project_directory).generic_string();
-          sources.push_back(relative);
-
-          if (contains_main_function(entry.path()))
-            entry_points.push_back(relative);
-        }
-        else if (!filesystem_error
-                 && entry.is_regular_file(filesystem_error)
-                 && is_cpp_header(entry.path()))
-        {
-          const auto relative = entry.path().lexically_relative(project_directory);
-          headers.push_back(relative.generic_string());
-
-          if (relative.begin()->string() == "include")
-            public_headers.push_back(relative.generic_string());
-        }
-
-        if (filesystem_error)
-        {
-          error << "forge: could not inspect '" << entry.path().string() << "'\n";
-          return false;
-        }
-
-        iterator.increment(filesystem_error);
-
-        if (filesystem_error)
-        {
-          error << "forge: could not inspect '" << project_directory.string() << "'\n";
-          return false;
-        }
-      }
-
-      std::ranges::sort(sources);
-      std::ranges::sort(public_headers);
-      std::ranges::sort(headers);
-      std::ranges::sort(entry_points);
-      return true;
     }
 
     struct VersionHeaderCandidate
@@ -1306,7 +1126,8 @@ namespace forge
       {
         const auto& entry = *iterator;
 
-        if (entry.is_directory(filesystem_error) && is_ignored_directory(entry.path()))
+        if (entry.is_directory(filesystem_error)
+            && is_ignored_project_scan_directory(entry.path()))
           iterator.disable_recursion_pending();
         else if (!filesystem_error
                  && entry.is_regular_file(filesystem_error)
@@ -1779,8 +1600,15 @@ namespace forge
     if (show_progress)
       report_progress(output, 2, 6, "Scanning sources and headers");
 
-    if (!discover_sources(project_directory, sources, public_headers, headers, entry_points, error))
+    ProjectScan scan;
+
+    if (!scan_project(project_directory, scan, error))
       return 2;
+
+    sources = scan.sources;
+    public_headers = scan.public_headers;
+    headers = scan.headers;
+    entry_points = scan.entry_points;
 
     auto runtime_headers = headers;
 
