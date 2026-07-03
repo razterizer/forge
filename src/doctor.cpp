@@ -96,6 +96,113 @@ namespace forge
       output << "warning: " << message << '\n';
     }
 
+    std::string format_runtime_file(const RuntimeFile& file)
+    {
+      if (file.source == file.destination)
+        return file.source.generic_string();
+
+      return file.source.generic_string() + " -> " + file.destination.generic_string();
+    }
+
+    bool path_contains(const std::filesystem::path& directory,
+                       const std::filesystem::path& path)
+    {
+      const auto relative = path.lexically_relative(directory);
+      return !relative.empty()
+        && relative != "."
+        && !relative.is_absolute()
+        && *relative.begin() != "..";
+    }
+
+    bool runtime_file_covers(const std::filesystem::path& project_directory,
+                             const RuntimeFile& declared,
+                             const RuntimeFile& inferred)
+    {
+      if (declared.source == inferred.source || declared.destination == inferred.destination)
+        return true;
+
+      return std::filesystem::is_directory(project_directory / declared.source)
+        && path_contains(declared.source, inferred.source);
+    }
+
+    bool runtime_file_is_declared(const std::filesystem::path& project_directory,
+                                  const std::vector<RuntimeFile>& declared,
+                                  const RuntimeFile& inferred)
+    {
+      for (const auto& runtime_file : declared)
+      {
+        if (runtime_file_covers(project_directory, runtime_file, inferred))
+          return true;
+      }
+
+      return false;
+    }
+
+    void append_runtime_files(std::vector<RuntimeFile>& runtime_files,
+                              const std::vector<RuntimeFile>& additional)
+    {
+      runtime_files.insert(runtime_files.end(), additional.begin(), additional.end());
+    }
+
+    std::vector<std::string> generic_strings(const std::vector<std::filesystem::path>& paths)
+    {
+      std::vector<std::string> strings;
+      strings.reserve(paths.size());
+
+      for (const auto& path : paths)
+        strings.push_back(path.generic_string());
+
+      return strings;
+    }
+
+    std::vector<RuntimeFile> declared_runtime_files(const Recipe& recipe)
+    {
+      std::vector<RuntimeFile> runtime_files = recipe.runtime_files;
+
+      for (const auto& target : recipe.targets)
+        append_runtime_files(runtime_files, target.runtime_files);
+
+      for (const auto& target : recipe.internal_targets)
+        append_runtime_files(runtime_files, target.runtime_files);
+
+      return runtime_files;
+    }
+
+    std::vector<RuntimeFile> inferred_runtime_files(
+      const std::filesystem::path& project_directory,
+      const Recipe& recipe,
+      const std::vector<std::string>& headers)
+    {
+      std::vector<RuntimeFile> runtime_files =
+        infer_runtime_files(project_directory, generic_strings(recipe.sources), headers);
+
+      for (const auto& target : recipe.targets)
+      {
+        const auto inferred =
+          infer_runtime_files(project_directory, generic_strings(target.sources), headers);
+        append_runtime_files(runtime_files, inferred);
+      }
+
+      for (const auto& target : recipe.internal_targets)
+      {
+        const auto inferred =
+          infer_runtime_files(project_directory, generic_strings(target.sources), headers);
+        append_runtime_files(runtime_files, inferred);
+      }
+
+      return runtime_files;
+    }
+
+    void report_inferred_runtime_files(const std::vector<RuntimeFile>& runtime_files,
+                                       std::ostream& output)
+    {
+      output << "Detected " << runtime_files.size() << " inferred runtime asset"
+             << (runtime_files.size() == 1 ? "" : "s") << '\n';
+
+      for (const auto& runtime_file : runtime_files)
+        output << "  " << format_runtime_file(runtime_file) << '\n';
+    }
+
     int doctor_unadopted_project(const std::filesystem::path& project_directory,
                                  std::ostream& output,
                                  std::ostream& error)
@@ -120,6 +227,11 @@ namespace forge
 
       if (scan.sources.empty() && scan.headers.empty())
         report_error(output, state, "no C++ sources or headers were found to adopt");
+
+      report_inferred_runtime_files(
+        infer_runtime_files(project_directory, scan.sources, scan.headers),
+        output
+      );
 
       output
         << "Forge doctor found " << state.errors << " errors and "
@@ -255,7 +367,11 @@ namespace forge
       return 2;
 
     DoctorState state;
+    ProjectScan scan;
     const auto release_heading = release_notes_heading(recipe);
+
+    if (!scan_project(project_directory, scan, error))
+      return 2;
 
     output << "Checking " << recipe.name << " " << release_heading << '\n';
 
@@ -289,6 +405,19 @@ namespace forge
     {
       count_dependencies(dependencies, state);
       check_dependencies(project_directory, dependencies, "profile '" + profile + "'", state, output);
+    }
+
+    const auto declared_runtime = declared_runtime_files(recipe);
+    const auto inferred_runtime = inferred_runtime_files(project_directory, recipe, scan.headers);
+    report_inferred_runtime_files(inferred_runtime, output);
+
+    for (const auto& runtime_file : inferred_runtime)
+    {
+      if (!runtime_file_is_declared(project_directory, declared_runtime, runtime_file))
+      {
+        report_warning(output, state, "runtime asset appears to be used but is not declared: "
+          + format_runtime_file(runtime_file));
+      }
     }
 
     if (!std::filesystem::is_regular_file(project_directory / "RELEASE_NOTES.md"))

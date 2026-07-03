@@ -435,11 +435,60 @@ namespace
     expect(error.str().empty(), "doctor project findings are reported on stdout");
   }
 
+  void test_doctor_reports_inferred_runtime_assets()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"runtime-app\"\n"
+      "version = \"0.1.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n"
+    );
+    write_file(directory.path() / "RELEASE_NOTES.md", "# Release notes\n\n## 0.1.0\n\n- Test.\n");
+    write_file(
+      directory.path() / "main.cpp",
+      "#include <fstream>\n"
+      "int main() { std::ifstream file { \"data.txt\" }; }\n"
+    );
+    write_file(directory.path() / "data.txt", "runtime data\n");
+
+    constexpr std::array arguments { std::string_view { "doctor" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "doctor accepts runtime-only warnings"
+    );
+    expect(
+      contains(output.str(), "Detected 1 inferred runtime asset")
+        && contains(output.str(), "data.txt")
+        && contains(output.str(), "warning: runtime asset appears to be used but is not declared: data.txt")
+        && contains(output.str(), "Forge doctor found 0 errors and 1 warnings"),
+      "doctor reports inferred runtime asset warnings"
+    );
+    expect(error.str().empty(), "runtime doctor findings are reported on stdout");
+  }
+
   void test_doctor_analyzes_unadopted_project()
   {
     TemporaryDirectory directory;
-    write_file(directory.path() / "main.cpp", "int main() {}\n");
-    write_file(directory.path() / "include/app.h", "#pragma once\n");
+    write_file(
+      directory.path() / "main.cpp",
+      "#include \"include/app.h\"\n"
+      "int main() { return app(); }\n"
+    );
+    write_file(
+      directory.path() / "include/app.h",
+      "#pragma once\n"
+      "#include <fstream>\n"
+      "inline int app() { std::ifstream file { \"data.bin\" }; return 0; }\n"
+    );
+    write_file(directory.path() / "include/data.bin", "runtime data\n");
 
     constexpr std::array arguments { std::string_view { "doctor" } };
     std::ostringstream output;
@@ -456,6 +505,8 @@ namespace
         && contains(output.str(), "Found 1 C++ header file")
         && contains(output.str(), "Found 1 public header under include/")
         && contains(output.str(), "Found 1 entry point")
+        && contains(output.str(), "Detected 1 inferred runtime asset")
+        && contains(output.str(), "include/data.bin -> data.bin")
         && contains(output.str(), "Forge doctor found 0 errors and 1 warnings"),
       "doctor reports unadopted project findings"
     );
@@ -6228,6 +6279,7 @@ int main()
   test_version();
   test_doctor_checks_project_health();
   test_doctor_reports_errors_and_warnings();
+  test_doctor_reports_inferred_runtime_assets();
   test_doctor_analyzes_unadopted_project();
   test_doctor_rejects_empty_unadopted_project();
   test_list_profiles();

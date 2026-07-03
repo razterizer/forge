@@ -5,6 +5,8 @@
 - Added `forge doctor` for local project health checks, including unadopted
   project scans, recipe path validation, release-note version checks, and
   dependency-kind summaries.
+- Made `forge doctor` reuse adoption scanning to report inferred runtime assets
+  and warn when adopted projects appear to use undeclared runtime files.
 
 ## 0.10.0
 
