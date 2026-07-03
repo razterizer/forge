@@ -7,6 +7,8 @@
   dependency-kind summaries.
 - Made `forge doctor` reuse adoption scanning to report inferred runtime assets
   and warn when adopted projects appear to use undeclared runtime files.
+- Made `forge doctor` report unresolved dependency includes, local sibling
+  dependency suggestions, and non-network GitHub dependency guesses.
 
 ## 0.10.0
 

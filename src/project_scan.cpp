@@ -5,9 +5,11 @@
 #include <cctype>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <ostream>
 #include <regex>
 #include <set>
+#include <sstream>
 #include <string_view>
 #include <system_error>
 
@@ -505,6 +507,313 @@ namespace forge
       }
     );
     return inferred;
+  }
+
+  namespace
+  {
+
+    bool looks_like_dependency_include(std::string_view include)
+    {
+      static const std::set<std::string_view> system_headers {
+        "assert.h", "complex.h", "conio.h", "ctype.h", "errno.h", "fenv.h", "float.h",
+        "inttypes.h", "limits.h", "locale.h", "math.h", "process.h", "setjmp.h",
+        "signal.h", "stdarg.h", "stdbool.h", "stddef.h", "stdint.h", "stdio.h",
+        "stdlib.h", "string.h", "termios.h", "time.h", "uchar.h", "unistd.h", "wchar.h",
+        "wctype.h", "windows.h", "audioclient.h", "ksmedia.h", "mmdeviceapi.h",
+        "algorithm", "any", "array", "atomic", "barrier", "bit", "bitset",
+        "cassert", "ccomplex", "cctype", "cerrno", "cfenv", "cfloat", "charconv",
+        "chrono", "cinttypes", "ciso646", "climits", "clocale", "cmath",
+        "codecvt", "compare", "complex", "concepts", "condition_variable",
+        "coroutine", "csetjmp", "csignal", "cstdarg", "cstdbool", "cstddef",
+        "cstdint", "cstdio", "cstdlib", "cstring", "ctgmath", "ctime", "cuchar",
+        "cwchar", "cwctype", "deque",
+        "exception", "execution", "filesystem", "format", "forward_list",
+        "fstream", "functional", "future", "initializer_list", "iomanip",
+        "ios", "iosfwd", "iostream", "istream", "iterator", "latch", "limits",
+        "list", "map", "memory", "memory_resource", "mutex", "new", "numbers",
+        "numeric", "optional", "ostream", "queue", "random", "ranges", "ratio",
+        "regex", "scoped_allocator", "semaphore", "set", "shared_mutex",
+        "source_location", "span", "sstream", "stack", "stdexcept", "stop_token",
+        "streambuf", "string", "string_view", "syncstream", "system_error",
+        "thread", "tuple", "type_traits", "typeindex", "typeinfo",
+        "unordered_map", "unordered_set", "utility", "valarray", "variant",
+        "vector", "version"
+      };
+
+      return
+        !system_headers.contains(include)
+        && !include.starts_with("sys/")
+        && !include.starts_with("linux/")
+        && !include.starts_with("machine/")
+        && !include.starts_with("arpa/")
+        && !include.starts_with("netinet/")
+        && !include.starts_with("alsa/")
+        && !include.starts_with("AudioToolbox/")
+        && !include.starts_with("CoreAudio/")
+        && !include.starts_with("CoreFoundation/");
+    }
+
+    std::optional<std::string> github_owner(const std::filesystem::path& project_directory)
+    {
+      std::ifstream config { project_directory / ".git" / "config" };
+      std::string line;
+      bool origin = false;
+
+      while (std::getline(config, line))
+      {
+        const auto content = std::string_view { line };
+
+        if (content.starts_with('['))
+        {
+          origin = content.find("remote \"origin\"") != std::string_view::npos;
+          continue;
+        }
+
+        const auto equals = content.find('=');
+
+        if (!origin || equals == std::string_view::npos)
+          continue;
+
+        const auto key = content.substr(0, equals);
+
+        if (key.find("url") == std::string_view::npos)
+          continue;
+
+        auto url = std::string { content.substr(equals + 1) };
+        const auto first = url.find_first_not_of(" \t");
+        url = first == std::string::npos ? std::string {} : url.substr(first);
+        std::string_view path;
+
+        if (const auto github = url.find("github.com/"); github != std::string::npos)
+          path = std::string_view { url }.substr(github + 11);
+        else if (const auto github = url.find("github.com:"); github != std::string::npos)
+          path = std::string_view { url }.substr(github + 11);
+
+        const auto slash = path.find('/');
+
+        if (slash != std::string_view::npos && slash != 0)
+          return std::string { path.substr(0, slash) };
+      }
+
+      return std::nullopt;
+    }
+
+    std::string github_repository_name(std::string_view include)
+    {
+      const auto slash = include.find('/');
+      auto name = std::string {
+        slash == std::string_view::npos ? include : include.substr(0, slash)
+      };
+
+      if (slash == std::string_view::npos)
+      {
+        const auto extension = name.rfind('.');
+
+        if (extension != std::string::npos)
+          name.resize(extension);
+      }
+
+      const auto safe =
+        !name.empty()
+        && name != "."
+        && name != ".."
+        && std::ranges::all_of(
+          name,
+          [](unsigned char character)
+          {
+            return std::isalnum(character)
+              || character == '-'
+              || character == '_'
+              || character == '.';
+          }
+        );
+      return safe ? name : std::string {};
+    }
+
+  } // namespace
+
+  std::map<std::string, std::string> unresolved_includes(
+    const std::filesystem::path& project_directory,
+    const std::vector<std::string>& sources,
+    const std::vector<std::string>& headers)
+  {
+    std::map<std::string, std::string> unresolved;
+    std::vector<std::string> scanned_files = sources;
+    scanned_files.insert(scanned_files.end(), headers.begin(), headers.end());
+
+    for (const auto& scanned_file : scanned_files)
+    {
+      for (const auto& included : included_headers(project_directory / scanned_file))
+      {
+        const auto& include = included.path;
+
+        if (!resolve_local_header(scanned_file, include, headers)
+            && looks_like_dependency_include(include))
+        {
+          unresolved.try_emplace(include, scanned_file);
+        }
+      }
+    }
+
+    return unresolved;
+  }
+
+  bool provides_include(const Recipe& recipe, std::string_view include)
+  {
+    if (!recipe.targets.empty())
+    {
+      return std::ranges::any_of(
+        recipe.targets,
+        [include](const RecipeTarget& target)
+        {
+          if (target.type != "static_library"
+              && target.type != "dynamic_library"
+              && target.type != "header_only"
+              && target.type != "imported_library")
+          {
+            return false;
+          }
+
+          return std::ranges::any_of(
+            target.public_headers,
+            [include](const std::filesystem::path& header)
+            {
+              const auto generic = header.generic_string();
+              return generic.starts_with("include/") && generic.substr(8) == include;
+            }
+          );
+        }
+      );
+    }
+
+    if (recipe.type != "static_library"
+            && recipe.type != "dynamic_library"
+            && recipe.type != "header_only"
+            && recipe.type != "imported_library")
+    {
+      return false;
+    }
+
+    for (const auto& header : recipe.public_headers)
+    {
+      const auto generic = header.generic_string();
+
+      if (generic.starts_with("include/") && generic.substr(8) == include)
+        return true;
+    }
+
+    for (const auto& profile : recipe.imports)
+    {
+      for (const auto& header : profile.public_headers)
+      {
+        const auto generic = header.generic_string();
+
+        if (generic == include || generic.ends_with('/' + std::string { include }))
+          return true;
+      }
+    }
+
+    return false;
+  }
+
+  std::vector<SiblingDependency> infer_sibling_dependencies(
+    const std::filesystem::path& project_directory,
+    std::map<std::string, std::string>& unresolved)
+  {
+    const auto parent = project_directory.parent_path();
+    std::error_code filesystem_error;
+    std::map<std::string, std::vector<SiblingDependency>> matches;
+
+    for (const auto& entry : std::filesystem::directory_iterator { parent, filesystem_error })
+    {
+      if (filesystem_error)
+        break;
+
+      if (!entry.is_directory(filesystem_error)
+          || std::filesystem::equivalent(entry.path(), project_directory, filesystem_error)
+          || !std::filesystem::is_regular_file(
+            entry.path() / "forge.recipe.toml",
+            filesystem_error
+          ))
+      {
+        filesystem_error.clear();
+        continue;
+      }
+
+      Recipe sibling;
+      std::ostringstream ignored_error;
+
+      if (!read_recipe(entry.path() / "forge.recipe.toml", sibling, ignored_error))
+        continue;
+
+      const auto relative =
+        std::filesystem::relative(entry.path(), project_directory, filesystem_error);
+
+      if (filesystem_error)
+      {
+        filesystem_error.clear();
+        continue;
+      }
+
+      for (const auto& [include, source] : unresolved)
+      {
+        if (provides_include(sibling, include))
+          matches[include].push_back(SiblingDependency { sibling.name, relative.generic_string() });
+      }
+    }
+
+    std::map<std::string, std::vector<std::pair<std::string, SiblingDependency>>> by_name;
+
+    for (const auto& [include, candidates] : matches)
+    {
+      if (candidates.size() == 1)
+        by_name[candidates.front().name].emplace_back(include, candidates.front());
+    }
+
+    std::vector<SiblingDependency> result;
+
+    for (const auto& [name, candidates] : by_name)
+    {
+      const auto path = candidates.front().second.path;
+      const auto same_project = std::ranges::all_of(
+        candidates,
+        [&path](const auto& candidate)
+        {
+          return candidate.second.path == path;
+        }
+      );
+
+      if (!same_project)
+        continue;
+
+      result.push_back(candidates.front().second);
+
+      for (const auto& [include, dependency] : candidates)
+        unresolved.erase(include);
+    }
+
+    return result;
+  }
+
+  std::map<std::string, std::vector<std::string>> github_suggestions(
+    const std::filesystem::path& project_directory,
+    const std::map<std::string, std::string>& unresolved)
+  {
+    std::map<std::string, std::vector<std::string>> suggestions;
+    const auto owner = github_owner(project_directory);
+
+    if (!owner)
+      return suggestions;
+
+    for (const auto& [include, source] : unresolved)
+    {
+      const auto name = github_repository_name(include);
+
+      if (!name.empty())
+        suggestions[*owner + "/" + name].push_back(include);
+    }
+
+    return suggestions;
   }
 
 } // namespace forge

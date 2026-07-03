@@ -474,6 +474,100 @@ namespace
     expect(error.str().empty(), "runtime doctor findings are reported on stdout");
   }
 
+  void test_doctor_reports_unadopted_dependency_suggestions()
+  {
+    TemporaryDirectory directory;
+    const auto project = directory.path() / "app";
+    const auto dependency = directory.path() / "termin8or";
+
+    write_file(
+      project / ".git/config",
+      "[remote \"origin\"]\n"
+      "\turl = git@github.com:razterizer/Asciiroid_Belt.git\n"
+    );
+    write_file(
+      project / "main.cpp",
+      "#include <termin8or/screen.h>\n"
+      "#include <pixel/game.h>\n"
+      "int main() {}\n"
+    );
+    write_file(
+      dependency / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"termin8or\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"static_library\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "public_headers = [\"include/termin8or/screen.h\"]\n"
+    );
+    write_file(dependency / "include/termin8or/screen.h", "#pragma once\n");
+
+    constexpr std::array arguments { std::string_view { "doctor" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, project, output, error) == 0,
+      "doctor analyzes unadopted dependency suggestions"
+    );
+    expect(
+      contains(output.str(), "Detected 2 unresolved dependency includes")
+        && contains(output.str(), "termin8or/screen.h from main.cpp")
+        && contains(output.str(), "pixel/game.h from main.cpp")
+        && contains(output.str(), "Suggested 1 local dependency")
+        && contains(output.str(), "termin8or at ../termin8or")
+        && contains(output.str(), "Suggested 1 GitHub dependency")
+        && contains(output.str(), "razterizer/pixel for pixel/game.h"),
+      "doctor reports local and GitHub dependency suggestions"
+    );
+    expect(error.str().empty(), "dependency suggestions do not write an error");
+  }
+
+  void test_doctor_warns_about_undeclared_github_dependency()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / ".git/config",
+      "[remote \"origin\"]\n"
+      "\turl = https://github.com/razterizer/app.git\n"
+    );
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"github-app\"\n"
+      "version = \"0.1.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n"
+    );
+    write_file(directory.path() / "RELEASE_NOTES.md", "# Release notes\n\n## 0.1.0\n\n- Test.\n");
+    write_file(
+      directory.path() / "main.cpp",
+      "#include <pixel/game.h>\n"
+      "int main() {}\n"
+    );
+
+    constexpr std::array arguments { std::string_view { "doctor" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "doctor accepts dependency suggestion warnings"
+    );
+    expect(
+      contains(output.str(), "Detected 1 unresolved dependency include")
+        && contains(output.str(), "Suggested 1 GitHub dependency")
+        && contains(output.str(), "razterizer/pixel for pixel/game.h")
+        && contains(output.str(), "warning: dependency may be available on GitHub but is not declared: razterizer/pixel")
+        && contains(output.str(), "Forge doctor found 0 errors and 1 warnings"),
+      "doctor warns about undeclared GitHub dependency suggestions"
+    );
+    expect(error.str().empty(), "GitHub dependency doctor findings are reported on stdout");
+  }
+
   void test_doctor_analyzes_unadopted_project()
   {
     TemporaryDirectory directory;
@@ -6280,6 +6374,8 @@ int main()
   test_doctor_checks_project_health();
   test_doctor_reports_errors_and_warnings();
   test_doctor_reports_inferred_runtime_assets();
+  test_doctor_reports_unadopted_dependency_suggestions();
+  test_doctor_warns_about_undeclared_github_dependency();
   test_doctor_analyzes_unadopted_project();
   test_doctor_rejects_empty_unadopted_project();
   test_list_profiles();

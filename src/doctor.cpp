@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -203,6 +204,93 @@ namespace forge
         output << "  " << format_runtime_file(runtime_file) << '\n';
     }
 
+    bool dependency_is_declared(const Recipe& recipe,
+                                std::string_view name,
+                                std::string_view path_or_repository)
+    {
+      const auto declared = [name, path_or_repository](const Dependency& dependency)
+      {
+        return dependency.name == name
+          || dependency.path.generic_string() == path_or_repository
+          || dependency.github == path_or_repository
+          || dependency.package == path_or_repository;
+      };
+
+      for (const auto& dependency : recipe.dependencies)
+      {
+        if (declared(dependency))
+          return true;
+      }
+
+      for (const auto& [profile, dependencies] : recipe.dependency_profiles)
+      {
+        for (const auto& dependency : dependencies)
+        {
+          if (declared(dependency))
+            return true;
+        }
+      }
+
+      return false;
+    }
+
+    void report_dependency_suggestions(const std::filesystem::path& project_directory,
+                                       const ProjectScan& scan,
+                                       const Recipe* recipe,
+                                       DoctorState& state,
+                                       std::ostream& output)
+    {
+      auto unresolved = unresolved_includes(project_directory, scan.sources, scan.headers);
+
+      output << "Detected " << unresolved.size() << " unresolved dependency include"
+             << (unresolved.size() == 1 ? "" : "s") << '\n';
+
+      for (const auto& [include, source] : unresolved)
+        output << "  " << include << " from " << source << '\n';
+
+      auto local_suggestions = infer_sibling_dependencies(project_directory, unresolved);
+
+      output << "Suggested " << local_suggestions.size() << " local dependenc"
+             << (local_suggestions.size() == 1 ? "y" : "ies") << '\n';
+
+      for (const auto& dependency : local_suggestions)
+      {
+        output << "  " << dependency.name << " at " << dependency.path << '\n';
+
+        if (recipe && !dependency_is_declared(*recipe, dependency.name, dependency.path))
+        {
+          report_warning(output, state, "dependency appears to be local but is not declared: "
+            + dependency.name + " at " + dependency.path);
+        }
+      }
+
+      const auto github = github_suggestions(project_directory, unresolved);
+
+      output << "Suggested " << github.size() << " GitHub dependenc"
+             << (github.size() == 1 ? "y" : "ies") << '\n';
+
+      for (const auto& [repository, includes] : github)
+      {
+        output << "  " << repository << " for ";
+
+        for (std::size_t index = 0; index < includes.size(); ++index)
+        {
+          if (index != 0)
+            output << ", ";
+
+          output << includes[index];
+        }
+
+        output << '\n';
+
+        if (recipe && !dependency_is_declared(*recipe, repository.substr(repository.find('/') + 1), repository))
+        {
+          report_warning(output, state, "dependency may be available on GitHub but is not declared: "
+            + repository);
+        }
+      }
+    }
+
     int doctor_unadopted_project(const std::filesystem::path& project_directory,
                                  std::ostream& output,
                                  std::ostream& error)
@@ -232,6 +320,7 @@ namespace forge
         infer_runtime_files(project_directory, scan.sources, scan.headers),
         output
       );
+      report_dependency_suggestions(project_directory, scan, nullptr, state, output);
 
       output
         << "Forge doctor found " << state.errors << " errors and "
@@ -419,6 +508,8 @@ namespace forge
           + format_runtime_file(runtime_file));
       }
     }
+
+    report_dependency_suggestions(project_directory, scan, &recipe, state, output);
 
     if (!std::filesystem::is_regular_file(project_directory / "RELEASE_NOTES.md"))
     {

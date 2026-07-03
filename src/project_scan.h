@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <iosfwd>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -24,6 +25,12 @@ namespace forge
   {
     std::string path;
     bool quoted = false;
+  };
+
+  struct SiblingDependency
+  {
+    std::string name;
+    std::string path;
   };
 
   bool is_ignored_project_scan_directory(const std::filesystem::path& path);
@@ -54,5 +61,20 @@ namespace forge
     const std::filesystem::path& project_directory,
     const std::vector<std::string>& target_sources,
     const std::vector<std::string>& headers);
+
+  std::map<std::string, std::string> unresolved_includes(
+    const std::filesystem::path& project_directory,
+    const std::vector<std::string>& sources,
+    const std::vector<std::string>& headers);
+
+  bool provides_include(const Recipe& recipe, std::string_view include);
+
+  std::vector<SiblingDependency> infer_sibling_dependencies(
+    const std::filesystem::path& project_directory,
+    std::map<std::string, std::string>& unresolved);
+
+  std::map<std::string, std::vector<std::string>> github_suggestions(
+    const std::filesystem::path& project_directory,
+    const std::map<std::string, std::string>& unresolved);
 
 } // namespace forge
