@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.11.0
+
+- Describe changes.
+
 ## 0.10.0
 
 - Made `forge release-git` preflight existing tags on `origin` before creating
