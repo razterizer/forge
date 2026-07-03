@@ -9,6 +9,8 @@
   and warn when adopted projects appear to use undeclared runtime files.
 - Made `forge doctor` report unresolved dependency includes, local sibling
   dependency suggestions, and non-network GitHub dependency guesses.
+- Made `forge doctor` search nearby `lib` folders for local dependency repos and
+  print GitHub cbox/source fallback hints for dependency suggestions.
 
 ## 0.10.0
 

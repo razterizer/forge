@@ -477,8 +477,9 @@ namespace
   void test_doctor_reports_unadopted_dependency_suggestions()
   {
     TemporaryDirectory directory;
-    const auto project = directory.path() / "app";
-    const auto dependency = directory.path() / "termin8or";
+    const auto workspace = directory.path() / "workspace";
+    const auto project = workspace / "games" / "Asciiroid_Belt";
+    const auto dependency = workspace / "lib" / "termin8or";
 
     write_file(
       project / ".git/config",
@@ -501,6 +502,11 @@ namespace
       "[sources]\n"
       "public_headers = [\"include/termin8or/screen.h\"]\n"
     );
+    write_file(
+      dependency / ".git/config",
+      "[remote \"origin\"]\n"
+      "\turl = https://github.com/razterizer/termin8or.git\n"
+    );
     write_file(dependency / "include/termin8or/screen.h", "#pragma once\n");
 
     constexpr std::array arguments { std::string_view { "doctor" } };
@@ -516,9 +522,13 @@ namespace
         && contains(output.str(), "termin8or/screen.h from main.cpp")
         && contains(output.str(), "pixel/game.h from main.cpp")
         && contains(output.str(), "Suggested 1 local dependency")
-        && contains(output.str(), "termin8or at ../termin8or")
+        && contains(output.str(), "termin8or at ../../lib/termin8or")
+        && contains(output.str(), "https://github.com/razterizer/termin8or/releases/download/release-1.0.0/termin8or-1.0.0-<target>.cbox")
+        && contains(output.str(), "source: https://github.com/razterizer/termin8or")
         && contains(output.str(), "Suggested 1 GitHub dependency")
-        && contains(output.str(), "razterizer/pixel for pixel/game.h"),
+        && contains(output.str(), "razterizer/pixel for pixel/game.h")
+        && contains(output.str(), "https://github.com/razterizer/pixel/releases/download/release-<version>/pixel-<version>-<target>.cbox")
+        && contains(output.str(), "source: https://github.com/razterizer/pixel"),
       "doctor reports local and GitHub dependency suggestions"
     );
     expect(error.str().empty(), "dependency suggestions do not write an error");

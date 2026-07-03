@@ -234,6 +234,29 @@ namespace forge
       return false;
     }
 
+    std::string repository_url(std::string_view repository)
+    {
+      return "https://github.com/" + std::string { repository };
+    }
+
+    std::string repository_package(std::string_view repository)
+    {
+      const auto slash = repository.find('/');
+      return slash == std::string_view::npos
+        ? std::string { repository }
+        : std::string { repository.substr(slash + 1) };
+    }
+
+    std::string cbox_release_pattern(std::string_view repository,
+                                     std::string_view package,
+                                     std::string_view version)
+    {
+      const auto resolved_version = version.empty() ? std::string { "<version>" } : std::string { version };
+      return repository_url(repository)
+        + "/releases/download/release-" + resolved_version
+        + "/" + std::string { package } + "-" + resolved_version + "-<target>.cbox";
+    }
+
     void report_dependency_suggestions(const std::filesystem::path& project_directory,
                                        const ProjectScan& scan,
                                        const Recipe* recipe,
@@ -256,6 +279,15 @@ namespace forge
       for (const auto& dependency : local_suggestions)
       {
         output << "  " << dependency.name << " at " << dependency.path << '\n';
+
+        if (!dependency.github.empty())
+        {
+          const auto package = repository_package(dependency.github);
+          output << "    cbox: "
+                 << cbox_release_pattern(dependency.github, package, dependency.version)
+                 << '\n'
+                 << "    source: " << repository_url(dependency.github) << '\n';
+        }
 
         if (recipe && !dependency_is_declared(*recipe, dependency.name, dependency.path))
         {
@@ -283,7 +315,11 @@ namespace forge
 
         output << '\n';
 
-        if (recipe && !dependency_is_declared(*recipe, repository.substr(repository.find('/') + 1), repository))
+        const auto name = repository_package(repository);
+        output << "    cbox: " << cbox_release_pattern(repository, name, {}) << '\n'
+               << "    source: " << repository_url(repository) << '\n';
+
+        if (recipe && !dependency_is_declared(*recipe, name, repository))
         {
           report_warning(output, state, "dependency may be available on GitHub but is not declared: "
             + repository);

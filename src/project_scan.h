@@ -31,6 +31,8 @@ namespace forge
   {
     std::string name;
     std::string path;
+    std::string version;
+    std::string github;
   };
 
   bool is_ignored_project_scan_directory(const std::filesystem::path& path);

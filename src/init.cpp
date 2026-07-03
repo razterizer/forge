@@ -349,7 +349,12 @@ namespace forge
 
         if (!filesystem_error)
         {
-          dependencies.push_back({ referenced->name, relative.generic_string() });
+          dependencies.push_back({
+            referenced->name,
+            relative.generic_string(),
+            referenced->version,
+            {}
+          });
         }
       }
 

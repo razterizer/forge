@@ -553,7 +553,7 @@ namespace forge
         && !include.starts_with("CoreFoundation/");
     }
 
-    std::optional<std::string> github_owner(const std::filesystem::path& project_directory)
+    std::optional<std::string> github_repository(const std::filesystem::path& project_directory)
     {
       std::ifstream config { project_directory / ".git" / "config" };
       std::string line;
@@ -589,13 +589,34 @@ namespace forge
         else if (const auto github = url.find("github.com:"); github != std::string::npos)
           path = std::string_view { url }.substr(github + 11);
 
-        const auto slash = path.find('/');
+        auto repository = std::string { path };
 
-        if (slash != std::string_view::npos && slash != 0)
-          return std::string { path.substr(0, slash) };
+        if (repository.ends_with(".git"))
+          repository.resize(repository.size() - 4);
+
+        while (!repository.empty()
+               && (repository.back() == '/' || std::isspace(static_cast<unsigned char>(repository.back()))))
+        {
+          repository.pop_back();
+        }
+
+        const auto slash = repository.find('/');
+
+        if (slash != std::string::npos && slash != 0 && slash + 1 < repository.size())
+          return repository;
       }
 
       return std::nullopt;
+    }
+
+    std::optional<std::string> github_owner(const std::filesystem::path& project_directory)
+    {
+      const auto repository = github_repository(project_directory);
+
+      if (!repository)
+        return std::nullopt;
+
+      return repository->substr(0, repository->find('/'));
     }
 
     std::string github_repository_name(std::string_view include)
@@ -628,6 +649,82 @@ namespace forge
           }
         );
       return safe ? name : std::string {};
+    }
+
+    void add_dependency_search_root(std::vector<std::filesystem::path>& roots,
+                                    const std::filesystem::path& root)
+    {
+      if (root.empty())
+        return;
+
+      std::error_code filesystem_error;
+      const auto canonical = std::filesystem::weakly_canonical(root, filesystem_error);
+
+      if (filesystem_error)
+        return;
+
+      if (!std::filesystem::is_directory(canonical, filesystem_error))
+        return;
+
+      if (std::ranges::find(roots, canonical) == roots.end())
+        roots.push_back(canonical);
+    }
+
+    std::vector<std::filesystem::path> dependency_search_roots(
+      const std::filesystem::path& project_directory)
+    {
+      std::vector<std::filesystem::path> roots;
+      auto ancestor = project_directory.parent_path();
+
+      for (int depth = 0; depth != 4 && !ancestor.empty(); ++depth)
+      {
+        if (depth == 0)
+          add_dependency_search_root(roots, ancestor);
+
+        add_dependency_search_root(roots, ancestor / "lib");
+        ancestor = ancestor.parent_path();
+      }
+
+      return roots;
+    }
+
+    void collect_dependency_candidates(const std::filesystem::path& root,
+                                       const std::filesystem::path& project_directory,
+                                       std::vector<std::filesystem::path>& candidates)
+    {
+      std::error_code filesystem_error;
+
+      const auto add_candidate = [&](const std::filesystem::path& candidate)
+      {
+        std::error_code candidate_error;
+
+        if (std::filesystem::equivalent(candidate, project_directory, candidate_error)
+            || !std::filesystem::is_regular_file(
+              candidate / "forge.recipe.toml",
+              candidate_error
+            ))
+        {
+          return;
+        }
+
+        const auto canonical = std::filesystem::weakly_canonical(candidate, candidate_error);
+
+        if (!candidate_error && std::ranges::find(candidates, canonical) == candidates.end())
+          candidates.push_back(canonical);
+      };
+
+      add_candidate(root);
+
+      for (const auto& entry : std::filesystem::directory_iterator { root, filesystem_error })
+      {
+        if (filesystem_error)
+          break;
+
+        if (entry.is_directory(filesystem_error))
+          add_candidate(entry.path());
+
+        filesystem_error.clear();
+      }
     }
 
   } // namespace
@@ -720,34 +817,23 @@ namespace forge
     const std::filesystem::path& project_directory,
     std::map<std::string, std::string>& unresolved)
   {
-    const auto parent = project_directory.parent_path();
-    std::error_code filesystem_error;
     std::map<std::string, std::vector<SiblingDependency>> matches;
+    std::vector<std::filesystem::path> candidates;
 
-    for (const auto& entry : std::filesystem::directory_iterator { parent, filesystem_error })
+    for (const auto& root : dependency_search_roots(project_directory))
+      collect_dependency_candidates(root, project_directory, candidates);
+
+    for (const auto& candidate : candidates)
     {
-      if (filesystem_error)
-        break;
-
-      if (!entry.is_directory(filesystem_error)
-          || std::filesystem::equivalent(entry.path(), project_directory, filesystem_error)
-          || !std::filesystem::is_regular_file(
-            entry.path() / "forge.recipe.toml",
-            filesystem_error
-          ))
-      {
-        filesystem_error.clear();
-        continue;
-      }
-
       Recipe sibling;
       std::ostringstream ignored_error;
 
-      if (!read_recipe(entry.path() / "forge.recipe.toml", sibling, ignored_error))
+      if (!read_recipe(candidate / "forge.recipe.toml", sibling, ignored_error))
         continue;
 
+      std::error_code filesystem_error;
       const auto relative =
-        std::filesystem::relative(entry.path(), project_directory, filesystem_error);
+        std::filesystem::relative(candidate, project_directory, filesystem_error);
 
       if (filesystem_error)
       {
@@ -758,7 +844,14 @@ namespace forge
       for (const auto& [include, source] : unresolved)
       {
         if (provides_include(sibling, include))
-          matches[include].push_back(SiblingDependency { sibling.name, relative.generic_string() });
+        {
+          matches[include].push_back(SiblingDependency {
+            sibling.name,
+            relative.generic_string(),
+            sibling.version,
+            github_repository(candidate).value_or(std::string {})
+          });
+        }
       }
     }
 
