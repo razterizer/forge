@@ -435,6 +435,53 @@ namespace
     expect(error.str().empty(), "doctor project findings are reported on stdout");
   }
 
+  void test_doctor_analyzes_unadopted_project()
+  {
+    TemporaryDirectory directory;
+    write_file(directory.path() / "main.cpp", "int main() {}\n");
+    write_file(directory.path() / "include/app.h", "#pragma once\n");
+
+    constexpr std::array arguments { std::string_view { "doctor" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "doctor analyzes an unadopted C++ project"
+    );
+    expect(
+      contains(output.str(), "Checking unadopted project")
+        && contains(output.str(), "warning: forge.recipe.toml is missing")
+        && contains(output.str(), "Found 1 C++ source file")
+        && contains(output.str(), "Found 1 C++ header file")
+        && contains(output.str(), "Found 1 public header under include/")
+        && contains(output.str(), "Found 1 entry point")
+        && contains(output.str(), "Forge doctor found 0 errors and 1 warnings"),
+      "doctor reports unadopted project findings"
+    );
+    expect(error.str().empty(), "unadopted project findings are reported on stdout");
+  }
+
+  void test_doctor_rejects_empty_unadopted_project()
+  {
+    TemporaryDirectory directory;
+
+    constexpr std::array arguments { std::string_view { "doctor" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "doctor rejects an unadopted project with no C++ files"
+    );
+    expect(
+      contains(output.str(), "error: no C++ sources or headers were found to adopt")
+        && contains(output.str(), "Forge doctor found 1 errors and 1 warnings"),
+      "doctor explains empty unadopted projects"
+    );
+    expect(error.str().empty(), "empty unadopted project findings are reported on stdout");
+  }
+
   void test_list_profiles()
   {
     TemporaryDirectory directory;
@@ -6181,6 +6228,8 @@ int main()
   test_version();
   test_doctor_checks_project_health();
   test_doctor_reports_errors_and_warnings();
+  test_doctor_analyzes_unadopted_project();
+  test_doctor_rejects_empty_unadopted_project();
   test_list_profiles();
   test_list_profiles_reports_no_profiles();
   test_list_targets_and_dependencies();

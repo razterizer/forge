@@ -2,8 +2,10 @@
 #include "file_support.h"
 #include "recipe.h"
 
+#include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -22,6 +24,14 @@ namespace forge
       int github_dependencies = 0;
       int local_dependencies = 0;
       int box_dependencies = 0;
+    };
+
+    struct UnadoptedProjectScan
+    {
+      int sources = 0;
+      int headers = 0;
+      int public_headers = 0;
+      int entry_points = 0;
     };
 
     std::string_view trim(std::string_view value)
@@ -44,6 +54,119 @@ namespace forge
 
       line.remove_prefix(2);
       return trim(line) == version;
+    }
+
+    bool is_ignored_directory(const std::filesystem::path& path)
+    {
+      const auto name = path.filename().string();
+
+      return
+        name == ".git"
+        || name == ".forge"
+        || name == "build"
+        || name == "out"
+        || name.starts_with("cmake-build-");
+    }
+
+    bool is_cpp_source(const std::filesystem::path& path)
+    {
+      const auto extension = path.extension().string();
+      return extension == ".cpp" || extension == ".cc" || extension == ".cxx";
+    }
+
+    bool is_cpp_header(const std::filesystem::path& path)
+    {
+      const auto extension = path.extension().string();
+      return extension == ".h"
+        || extension == ".hpp"
+        || extension == ".hh"
+        || extension == ".hxx";
+    }
+
+    bool contains_main_function(const std::filesystem::path& path)
+    {
+      std::ifstream file { path };
+      const std::string contents {
+        std::istreambuf_iterator<char> { file },
+        std::istreambuf_iterator<char> {}
+      };
+      bool line_comment = false;
+      bool block_comment = false;
+      char quote = '\0';
+
+      for (std::size_t index = 0; index < contents.size(); ++index)
+      {
+        const auto character = contents[index];
+        const auto next = index + 1 < contents.size() ? contents[index + 1] : '\0';
+
+        if (line_comment)
+        {
+          line_comment = character != '\n';
+          continue;
+        }
+
+        if (block_comment)
+        {
+          if (character == '*' && next == '/')
+          {
+            block_comment = false;
+            ++index;
+          }
+
+          continue;
+        }
+
+        if (quote != '\0')
+        {
+          if (character == '\\')
+            ++index;
+          else if (character == quote)
+            quote = '\0';
+
+          continue;
+        }
+
+        if (character == '/' && next == '/')
+        {
+          line_comment = true;
+          ++index;
+          continue;
+        }
+
+        if (character == '/' && next == '*')
+        {
+          block_comment = true;
+          ++index;
+          continue;
+        }
+
+        if (character == '"' || character == '\'')
+        {
+          quote = character;
+          continue;
+        }
+
+        if (contents.compare(index, std::string_view { "main" }.size(), "main") != 0
+            || (index != 0
+                && (std::isalnum(static_cast<unsigned char>(contents[index - 1]))
+                    || contents[index - 1] == '_')))
+        {
+          continue;
+        }
+
+        auto position = index + std::string_view { "main" }.size();
+
+        while (position < contents.size()
+               && std::isspace(static_cast<unsigned char>(contents[position])))
+        {
+          ++position;
+        }
+
+        if (position < contents.size() && contents[position] == '(')
+          return true;
+      }
+
+      return false;
     }
 
     std::string release_notes_heading(const Recipe& recipe)
@@ -93,6 +216,101 @@ namespace forge
     {
       ++state.warnings;
       output << "warning: " << message << '\n';
+    }
+
+    bool scan_unadopted_project(const std::filesystem::path& project_directory,
+                                UnadoptedProjectScan& scan,
+                                std::ostream& error)
+    {
+      std::error_code filesystem_error;
+      std::filesystem::recursive_directory_iterator iterator {
+        project_directory,
+        std::filesystem::directory_options::skip_permission_denied,
+        filesystem_error
+      };
+      const std::filesystem::recursive_directory_iterator end;
+
+      if (filesystem_error)
+      {
+        error << "forge: could not inspect '" << project_directory.string() << "'\n";
+        return false;
+      }
+
+      while (iterator != end)
+      {
+        const auto& entry = *iterator;
+
+        if (entry.is_directory(filesystem_error) && is_ignored_directory(entry.path()))
+        {
+          iterator.disable_recursion_pending();
+        }
+        else if (!filesystem_error
+                 && entry.is_regular_file(filesystem_error)
+                 && is_cpp_source(entry.path()))
+        {
+          ++scan.sources;
+
+          if (contains_main_function(entry.path()))
+            ++scan.entry_points;
+        }
+        else if (!filesystem_error
+                 && entry.is_regular_file(filesystem_error)
+                 && is_cpp_header(entry.path()))
+        {
+          ++scan.headers;
+
+          const auto relative = entry.path().lexically_relative(project_directory);
+
+          if (relative.begin() != relative.end() && relative.begin()->string() == "include")
+            ++scan.public_headers;
+        }
+
+        if (filesystem_error)
+        {
+          error << "forge: could not inspect '" << entry.path().string() << "'\n";
+          return false;
+        }
+
+        iterator.increment(filesystem_error);
+
+        if (filesystem_error)
+        {
+          error << "forge: could not inspect '" << project_directory.string() << "'\n";
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    int doctor_unadopted_project(const std::filesystem::path& project_directory,
+                                 std::ostream& output,
+                                 std::ostream& error)
+    {
+      DoctorState state;
+      UnadoptedProjectScan scan;
+
+      if (!scan_unadopted_project(project_directory, scan, error))
+        return 2;
+
+      output << "Checking unadopted project " << project_directory.filename().string() << '\n';
+      report_warning(output, state, "forge.recipe.toml is missing; run 'forge adopt' to create Forge metadata");
+      output
+        << "Found " << scan.sources << " C++ source file" << (scan.sources == 1 ? "" : "s") << '\n'
+        << "Found " << scan.headers << " C++ header file" << (scan.headers == 1 ? "" : "s") << '\n'
+        << "Found " << scan.public_headers << " public header"
+        << (scan.public_headers == 1 ? "" : "s") << " under include/\n"
+        << "Found " << scan.entry_points << " entry point"
+        << (scan.entry_points == 1 ? "" : "s") << '\n';
+
+      if (scan.sources == 0 && scan.headers == 0)
+        report_error(output, state, "no C++ sources or headers were found to adopt");
+
+      output
+        << "Forge doctor found " << state.errors << " errors and "
+        << state.warnings << " warnings\n";
+
+      return state.errors == 0 ? 0 : 2;
     }
 
     void check_project_path(const std::filesystem::path& project_directory,
@@ -213,6 +431,9 @@ namespace forge
                      std::ostream& output,
                      std::ostream& error)
   {
+    if (!std::filesystem::is_regular_file(project_directory / "forge.recipe.toml"))
+      return doctor_unadopted_project(project_directory, output, error);
+
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
