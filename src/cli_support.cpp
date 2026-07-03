@@ -15,6 +15,7 @@ namespace forge::cli
       std::string_view { "build-and-run" },
       std::string_view { "bump" },
       std::string_view { "clean" },
+      std::string_view { "doctor" },
       std::string_view { "list" },
       std::string_view { "run" },
       std::string_view { "test" },
@@ -45,6 +46,7 @@ namespace forge::cli
       << "  build-and-run   Build and run an executable project or target\n"
       << "  bump            Bump the project version and prepare release notes\n"
       << "  clean           Remove generated Forge state for a project or workspace\n"
+      << "  doctor          Check project metadata, paths, and release notes\n"
       << "  list            List recipe profiles, targets, dependencies, and boxes\n"
       << "  run             Run an already-built executable project or target\n"
       << "  test            Build and run marked test targets\n"
@@ -117,6 +119,19 @@ namespace forge::cli
         << "  forge new <name> [--init-version=<ver>] [--version-header-path=<path>]\n\n"
         << "Creates a new directory containing a starter source, recipe, release\n"
         << "notes, GitHub release workflows, and generated-file ignore rules.\n";
+      return true;
+    }
+
+    if (command == "doctor")
+    {
+      output
+        << "Check Forge project metadata for common local problems.\n\n"
+        << "Usage:\n"
+        << "  forge doctor\n\n"
+        << "Validates the recipe, checks configured project paths, verifies that\n"
+        << "release notes contain the current version heading, and summarizes\n"
+        << "declared dependency kinds. Missing local dependency paths are warnings\n"
+        << "because sibling projects may not be checked out on every machine.\n";
       return true;
     }
 

@@ -136,6 +136,7 @@ namespace
       std::string_view { "upgrade" },
       std::string_view { "bump" },
       std::string_view { "clean" },
+      std::string_view { "doctor" },
       std::string_view { "release" },
       std::string_view { "release-git" },
       std::string_view { "workflow" },
@@ -356,6 +357,82 @@ namespace
     expect(forge::cli::run(arguments, output, error) == 0, "version succeeds");
     expect(forge::cli::version == expected_version, "compiled version matches the synced version");
     expect(output.str() == "forge " + std::string { expected_version } + "\n", "version reports the current version");
+  }
+
+  void test_doctor_checks_project_health()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"healthy\"\n"
+      "version = \"0.1.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[runtime]\n"
+      "files = [\"config/default.toml\"]\n\n"
+      "[release]\n"
+      "files = [\"assets\"]\n\n"
+      "[dependencies]\n"
+      "Core = { github = \"example/Core\", version = \"1.0.0\" }\n"
+    );
+    write_file(directory.path() / "main.cpp", "int main() {}\n");
+    write_file(directory.path() / "config/default.toml", "color = \"blue\"\n");
+    write_file(directory.path() / "assets/readme.txt", "asset\n");
+    write_file(directory.path() / "RELEASE_NOTES.md", "# Release notes\n\n## 0.1.0\n\n- First release.\n");
+
+    constexpr std::array arguments { std::string_view { "doctor" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "doctor accepts a healthy project"
+    );
+    expect(
+      contains(output.str(), "Checking healthy 0.1.0")
+        && contains(output.str(), "Dependencies: 1 GitHub, 0 local, 0 box")
+        && contains(output.str(), "Forge doctor found no problems"),
+      "doctor reports project health and dependency summary"
+    );
+    expect(error.str().empty(), "successful doctor does not write an error");
+  }
+
+  void test_doctor_reports_errors_and_warnings()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"sick\"\n"
+      "version = \"0.1.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"missing.cpp\"]\n\n"
+      "[dependencies]\n"
+      "Sibling = { path = \"../Sibling\" }\n"
+    );
+    write_file(directory.path() / "RELEASE_NOTES.md", "# Release notes\n\n## 0.2.0\n\n- Wrong version.\n");
+
+    constexpr std::array arguments { std::string_view { "doctor" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 2,
+      "doctor rejects projects with missing configured files"
+    );
+    expect(
+      contains(output.str(), "error: source does not exist: missing.cpp")
+        && contains(output.str(), "warning: default dependency 'Sibling' path does not exist locally")
+        && contains(output.str(), "warning: RELEASE_NOTES.md has no section for 0.1.0")
+        && contains(output.str(), "Forge doctor found 1 errors and 2 warnings"),
+      "doctor reports errors and warnings"
+    );
+    expect(error.str().empty(), "doctor project findings are reported on stdout");
   }
 
   void test_list_profiles()
@@ -6102,6 +6179,8 @@ int main()
   test_cli_rejects_invalid_compile_definition();
   test_cli_runs_and_tests_workspace();
   test_version();
+  test_doctor_checks_project_health();
+  test_doctor_reports_errors_and_warnings();
   test_list_profiles();
   test_list_profiles_reports_no_profiles();
   test_list_targets_and_dependencies();

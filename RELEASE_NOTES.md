@@ -2,7 +2,8 @@
 
 ## 0.11.0
 
-- Describe changes.
+- Added `forge doctor` for local project health checks, including recipe path
+  validation, release-note version checks, and dependency-kind summaries.
 
 ## 0.10.0
 

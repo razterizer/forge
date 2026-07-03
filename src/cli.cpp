@@ -4,6 +4,7 @@
 #include "build.h"
 #include "clean.h"
 #include "cli_support.h"
+#include "doctor.h"
 #include "fprocess.h"
 #include "github.h"
 #include "init.h"
@@ -1485,6 +1486,17 @@ namespace forge::cli
       }
 
       return new_project(working_directory, *name, options, output, error);
+    }
+
+    if (arguments.front() == "doctor")
+    {
+      if (arguments.size() != 1)
+      {
+        error << "forge: usage: forge doctor\n";
+        return 2;
+      }
+
+      return doctor_project(working_directory, output, error);
     }
 
     if (arguments.front() == "box")

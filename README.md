@@ -328,6 +328,18 @@ network. `forge adopt --github` remains available as a compatibility alias.
 Forge generates CMake infrastructure under `.forge/generated/` and builds into
 `.forge/build/`.
 
+Check local Forge project health before a build or release:
+
+```sh
+forge doctor
+```
+
+`forge doctor` parses the recipe, validates configured project-relative paths,
+checks that `RELEASE_NOTES.md` contains the current version heading, and
+summarizes declared dependency kinds. Missing local dependency paths are
+reported as warnings so sibling-project workflows can still be checked on
+machines where every sibling is not available.
+
 Repositories containing multiple programs can declare named targets:
 
 ```toml
