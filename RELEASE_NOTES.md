@@ -17,6 +17,9 @@
   candidates for unresolved dependency includes without writing unverified deps.
 - Added `--local-search=nearby|off` to `forge doctor` and `forge adopt` so
   sandboxed checks can disable nearby sibling and ancestor `lib` discovery.
+- Made `forge doctor` and `forge adopt` resolve dependency-shaped includes
+  through inferred/configured include directories and report nearby Git/Forge
+  metadata for the header location before falling back to GitHub guesses.
 
 ## 0.10.0
 

@@ -36,6 +36,19 @@ namespace forge
     std::string github;
   };
 
+  struct IncludeDependencyEvidence
+  {
+    std::string include;
+    std::string source;
+    std::filesystem::path include_directory;
+    std::filesystem::path header;
+    std::filesystem::path root;
+    std::string name;
+    std::string version;
+    std::string github;
+    bool forge_recipe = false;
+  };
+
   enum class LocalDependencySearch
   {
     nearby,
@@ -82,6 +95,13 @@ namespace forge
     const std::filesystem::path& project_directory,
     std::map<std::string, std::string>& unresolved,
     LocalDependencySearch local_search = LocalDependencySearch::nearby);
+
+  std::vector<IncludeDependencyEvidence> infer_include_dependency_evidence(
+    const std::filesystem::path& project_directory,
+    std::map<std::string, std::string>& unresolved,
+    const std::vector<std::string>& include_directories,
+    const std::vector<std::string>& sources,
+    const std::vector<std::string>& headers);
 
   std::map<std::string, std::vector<std::string>> github_suggestions(
     const std::filesystem::path& project_directory,

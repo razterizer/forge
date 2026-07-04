@@ -595,6 +595,43 @@ namespace
     expect(error.str().empty(), "disabled local search does not write an error");
   }
 
+  void test_doctor_reports_include_directory_dependency_evidence()
+  {
+    TemporaryDirectory directory;
+    const auto project = directory.path();
+    write_file(
+      project / "main.cpp",
+      "#include <toml.hpp>\n"
+      "int main() { return 0; }\n"
+    );
+    write_file(project / "vendor/toml11/include/toml.hpp", "#pragma once\n");
+    write_file(
+      project / "vendor/toml11/.git/config",
+      "[remote \"origin\"]\n"
+      "\turl = https://github.com/ToruNiina/toml11.git\n"
+    );
+
+    constexpr std::array arguments { std::string_view { "doctor" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, project, output, error) == 0,
+      "doctor accepts include-directory dependency evidence"
+    );
+    expect(
+      contains(output.str(), "Detected 0 unresolved dependency includes")
+        && contains(output.str(), "Resolved 1 dependency include through include directories")
+        && contains(output.str(), "toml.hpp from main.cpp -> vendor/toml11/include/toml.hpp")
+        && contains(output.str(), "include dir: vendor/toml11/include")
+        && contains(output.str(), "root: vendor/toml11")
+        && contains(output.str(), "source: https://github.com/ToruNiina/toml11")
+        && contains(output.str(), "Suggested 0 GitHub dependencies"),
+      "doctor reports include-directory dependency metadata without GitHub guessing"
+    );
+    expect(error.str().empty(), "include-directory dependency evidence does not write an error");
+  }
+
   void test_doctor_warns_about_undeclared_github_dependency()
   {
     TemporaryDirectory directory;
@@ -1067,8 +1104,9 @@ namespace
         && contains(output.str(), "[2/6] Scanning sources and headers")
         && contains(output.str(), "[3/6] Reading project metadata")
         && contains(output.str(), "[4/6] Resolving dependencies")
-        && contains(output.str(), "      [2/6] Scanning unresolved includes")
-        && contains(output.str(), "      [6/6] Dependency resolution complete")
+        && contains(output.str(), "      [2/7] Scanning unresolved includes")
+        && contains(output.str(), "      [4/7] Checking include directories")
+        && contains(output.str(), "      [7/7] Dependency resolution complete")
         && contains(output.str(), "[5/6] Writing recipe")
         && contains(output.str(), "[6/6] Creating release support"),
       "adopt reports project adoption progress"
@@ -2117,6 +2155,45 @@ namespace
       "adopt excludes known standard and platform SDK headers from dependency candidates"
     );
     expect(error.str().empty(), "unresolved dependency includes do not fail adoption");
+  }
+
+  void test_adopt_reports_include_directory_dependency_evidence()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+    std::ostringstream output;
+    std::ostringstream error;
+    write_file(
+      directory.path() / "main.cpp",
+      "#include <toml.hpp>\n"
+      "int main() { return 0; }\n"
+    );
+    write_file(directory.path() / "vendor/toml11/include/toml.hpp", "#pragma once\n");
+    write_file(
+      directory.path() / "vendor/toml11/.git/config",
+      "[remote \"origin\"]\n"
+      "\turl = https://github.com/ToruNiina/toml11.git\n"
+    );
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt succeeds with include-directory dependency evidence"
+    );
+
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "include_dirs = [\"vendor/toml11/include\"]"),
+      "adopt writes the inferred include directory"
+    );
+    expect(
+      contains(output.str(), "Resolved 1 dependency include through include directories:")
+        && contains(output.str(), "<toml.hpp> from main.cpp -> vendor/toml11/include/toml.hpp")
+        && contains(output.str(), "include dir: vendor/toml11/include")
+        && contains(output.str(), "root: vendor/toml11")
+        && contains(output.str(), "source: https://github.com/ToruNiina/toml11"),
+      "adopt reports include-directory dependency metadata"
+    );
+    expect(error.str().empty(), "include-directory dependency evidence does not fail adoption");
   }
 
   void test_adopt_infers_sibling_project_dependencies()
@@ -6673,6 +6750,7 @@ int main()
   test_doctor_reports_inferred_runtime_assets();
   test_doctor_reports_unadopted_dependency_suggestions();
   test_doctor_can_disable_local_dependency_search();
+  test_doctor_reports_include_directory_dependency_evidence();
   test_doctor_warns_about_undeclared_github_dependency();
   test_doctor_searches_github_for_unmatched_dependencies();
   test_doctor_suppresses_noisy_github_search_when_same_owner_is_found();
@@ -6703,6 +6781,7 @@ int main()
   test_adopt_imports_cmake_superproject_as_workspace();
   test_adopt_imports_visual_studio_solution();
   test_adopt_reports_unresolved_dependency_includes();
+  test_adopt_reports_include_directory_dependency_evidence();
   test_adopt_infers_sibling_project_dependencies();
   test_adopt_can_disable_local_dependency_search();
   test_adopt_preserves_ambiguous_sibling_includes();

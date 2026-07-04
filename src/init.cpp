@@ -54,6 +54,18 @@ namespace forge
       return escaped;
     }
 
+    std::string display_project_path(const std::filesystem::path& project_directory,
+                                     const std::filesystem::path& path)
+    {
+      std::error_code filesystem_error;
+      const auto relative = std::filesystem::relative(path, project_directory, filesystem_error);
+
+      if (!filesystem_error && !relative.empty() && *relative.begin() != "..")
+        return relative.generic_string();
+
+      return path.generic_string();
+    }
+
     std::string_view trim(std::string_view value)
     {
       const auto first = value.find_first_not_of(" \t\r");
@@ -1062,7 +1074,7 @@ namespace forge
       report_progress(output, 4, 6, "Resolving dependencies");
 
     const auto verify_git_dependencies = options.dependency_style == DependencyStyle::git;
-    const std::size_t dependency_progress_total = verify_git_dependencies ? 7 : 6;
+    const std::size_t dependency_progress_total = verify_git_dependencies ? 8 : 7;
 
     if (show_progress)
       report_subprogress(output, 1, dependency_progress_total, "Inferring include directories");
@@ -1095,7 +1107,18 @@ namespace forge
       infer_sibling_dependencies(project_directory, unresolved, options.local_search);
 
     if (show_progress)
-      report_subprogress(output, 4, dependency_progress_total, "Reading project references");
+      report_subprogress(output, 4, dependency_progress_total, "Checking include directories");
+
+    const auto include_dependency_evidence = infer_include_dependency_evidence(
+      project_directory,
+      unresolved,
+      include_directories,
+      sources,
+      headers
+    );
+
+    if (show_progress)
+      report_subprogress(output, 5, dependency_progress_total, "Reading project references");
 
     if (visual_studio_project)
     {
@@ -1127,7 +1150,7 @@ namespace forge
     }
 
     if (show_progress)
-      report_subprogress(output, 5, dependency_progress_total, "Preparing GitHub suggestions");
+      report_subprogress(output, 6, dependency_progress_total, "Preparing GitHub suggestions");
 
     const auto suggestions = github_suggestions(project_directory, unresolved);
     const auto searched_suggestions = options.search_github
@@ -1135,7 +1158,7 @@ namespace forge
       : std::map<std::string, std::vector<std::string>> {};
 
     if (show_progress && verify_git_dependencies)
-      report_subprogress(output, 6, dependency_progress_total, "Verifying GitHub candidates");
+      report_subprogress(output, 7, dependency_progress_total, "Verifying GitHub candidates");
 
     const auto github_dependencies = verify_git_dependencies
       ? resolve_github_dependencies(
@@ -1632,6 +1655,39 @@ namespace forge
 
       for (const auto& [include, source] : unresolved)
         output << "  <" << include << "> from " << source << '\n';
+    }
+
+    if (!include_dependency_evidence.empty())
+    {
+      output << "Resolved " << include_dependency_evidence.size()
+             << " dependency include";
+      output << (include_dependency_evidence.size() == 1
+        ? " through include directories:\n"
+        : "s through include directories:\n");
+
+      for (const auto& evidence : include_dependency_evidence)
+      {
+        output << "  <" << evidence.include << "> from " << evidence.source
+               << " -> " << display_project_path(project_directory, evidence.header) << '\n'
+               << "    include dir: " << evidence.include_directory.generic_string()
+               << '\n';
+
+        if (!evidence.root.empty())
+          output << "    root: " << display_project_path(project_directory, evidence.root) << '\n';
+
+        if (evidence.forge_recipe)
+        {
+          output << "    recipe: " << evidence.name;
+
+          if (!evidence.version.empty())
+            output << ' ' << evidence.version;
+
+          output << '\n';
+        }
+
+        if (!evidence.github.empty())
+          output << "    source: https://github.com/" << evidence.github << '\n';
+      }
     }
 
     if (!sibling_dependencies.empty())

@@ -746,6 +746,98 @@ namespace forge
       return status == 0;
     }
 
+    std::filesystem::path absolute_include_directory(
+      const std::filesystem::path& project_directory,
+      const std::filesystem::path& include_directory)
+    {
+      return include_directory.is_absolute()
+        ? include_directory
+        : project_directory / include_directory;
+    }
+
+    std::optional<std::filesystem::path> find_dependency_metadata_root(
+      const std::filesystem::path& project_directory,
+      const std::filesystem::path& path)
+    {
+      std::error_code filesystem_error;
+      const auto project_root = std::filesystem::weakly_canonical(
+        project_directory,
+        filesystem_error
+      );
+      filesystem_error.clear();
+      auto current = std::filesystem::is_directory(path, filesystem_error)
+        ? path
+        : path.parent_path();
+
+      while (!current.empty())
+      {
+        if (!project_root.empty()
+            && std::filesystem::equivalent(current, project_root, filesystem_error))
+        {
+          filesystem_error.clear();
+          break;
+        }
+
+        if (std::filesystem::is_regular_file(current / "forge.recipe.toml", filesystem_error)
+            || std::filesystem::is_directory(current / ".git", filesystem_error))
+        {
+          return current;
+        }
+
+        const auto parent = current.parent_path();
+
+        if (parent == current)
+          break;
+
+        current = parent;
+      }
+
+      return std::nullopt;
+    }
+
+    IncludeDependencyEvidence include_dependency_evidence(
+      const std::filesystem::path& project_directory,
+      const std::string& include,
+      const std::string& source,
+      const std::filesystem::path& include_directory,
+      const std::filesystem::path& header)
+    {
+      IncludeDependencyEvidence evidence {
+        include,
+        source,
+        include_directory,
+        header,
+        {},
+        {},
+        {},
+        {},
+        false
+      };
+
+      const auto root = find_dependency_metadata_root(project_directory, header);
+
+      if (!root)
+        return evidence;
+
+      evidence.root = *root;
+      evidence.github = github_repository(*root).value_or(std::string {});
+
+      if (std::filesystem::is_regular_file(*root / "forge.recipe.toml"))
+      {
+        Recipe recipe;
+        std::ostringstream ignored_error;
+
+        if (read_recipe(*root / "forge.recipe.toml", recipe, ignored_error))
+        {
+          evidence.name = recipe.name;
+          evidence.version = recipe.version;
+          evidence.forge_recipe = true;
+        }
+      }
+
+      return evidence;
+    }
+
     void add_dependency_search_root(std::vector<std::filesystem::path>& roots,
                                     const std::filesystem::path& root)
     {
@@ -982,6 +1074,80 @@ namespace forge
 
       for (const auto& [include, dependency] : candidates)
         unresolved.erase(include);
+    }
+
+    return result;
+  }
+
+  std::vector<IncludeDependencyEvidence> infer_include_dependency_evidence(
+    const std::filesystem::path& project_directory,
+    std::map<std::string, std::string>& unresolved,
+    const std::vector<std::string>& include_directories,
+    const std::vector<std::string>& sources,
+    const std::vector<std::string>& headers)
+  {
+    std::vector<IncludeDependencyEvidence> result;
+    std::map<std::string, std::string> candidates = unresolved;
+    std::vector<std::string> scanned_files = sources;
+    scanned_files.insert(scanned_files.end(), headers.begin(), headers.end());
+
+    for (const auto& scanned_file : scanned_files)
+    {
+      for (const auto& included : included_headers(project_directory / scanned_file))
+      {
+        if (looks_like_dependency_include(included.path))
+          candidates.try_emplace(included.path, scanned_file);
+      }
+    }
+
+    for (const auto& [include, source] : candidates)
+    {
+      std::vector<IncludeDependencyEvidence> matches;
+      const auto unresolved_entry = unresolved.find(include);
+      const auto is_unresolved = unresolved_entry != unresolved.end();
+
+      for (const auto& include_directory : include_directories)
+      {
+        const auto directory = std::filesystem::path { include_directory };
+        const auto absolute_directory = absolute_include_directory(project_directory, directory);
+        std::error_code filesystem_error;
+        const auto header = std::filesystem::weakly_canonical(
+          absolute_directory / include,
+          filesystem_error
+        );
+
+        if (filesystem_error || !std::filesystem::is_regular_file(header, filesystem_error))
+          continue;
+
+        matches.push_back(
+          include_dependency_evidence(
+            project_directory,
+            include,
+            source,
+            directory,
+            header
+          )
+        );
+      }
+
+      if (!is_unresolved)
+      {
+        std::erase_if(
+          matches,
+          [](const IncludeDependencyEvidence& evidence)
+          {
+            return evidence.root.empty();
+          }
+        );
+      }
+
+      if (matches.empty())
+      {
+        continue;
+      }
+
+      result.insert(result.end(), matches.begin(), matches.end());
+      unresolved.erase(include);
     }
 
     return result;

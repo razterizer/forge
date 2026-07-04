@@ -3,10 +3,12 @@
 #include "project_scan.h"
 #include "recipe.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <map>
 #include <ostream>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -113,6 +115,73 @@ namespace forge
         && relative != "."
         && !relative.is_absolute()
         && *relative.begin() != "..";
+    }
+
+    std::string display_project_path(const std::filesystem::path& project_directory,
+                                     const std::filesystem::path& path)
+    {
+      std::error_code filesystem_error;
+      const auto relative = std::filesystem::relative(path, project_directory, filesystem_error);
+
+      if (!filesystem_error && !relative.empty() && *relative.begin() != "..")
+        return relative.generic_string();
+
+      return path.generic_string();
+    }
+
+    void append_include_directories(std::vector<std::string>& include_directories,
+                                    const std::vector<std::filesystem::path>& paths)
+    {
+      for (const auto& path : paths)
+        include_directories.push_back(path.generic_string());
+    }
+
+    std::vector<std::string> doctor_include_directories(
+      const std::filesystem::path& project_directory,
+      const ProjectScan& scan,
+      const Recipe* recipe)
+    {
+      auto include_directories =
+        infer_include_directories(project_directory, scan.sources, scan.headers);
+
+      if (recipe)
+      {
+        append_include_directories(include_directories, recipe->include_directories);
+        append_include_directories(include_directories, recipe->macos_system_include_directories);
+        append_include_directories(include_directories, recipe->linux_system_include_directories);
+        append_include_directories(include_directories, recipe->windows_system_include_directories);
+
+        for (const auto& target : recipe->targets)
+        {
+          append_include_directories(include_directories, target.include_directories);
+          append_include_directories(include_directories, target.macos_system_include_directories);
+          append_include_directories(include_directories, target.linux_system_include_directories);
+          append_include_directories(include_directories, target.windows_system_include_directories);
+        }
+
+        for (const auto& target : recipe->internal_targets)
+        {
+          append_include_directories(include_directories, target.include_directories);
+          append_include_directories(include_directories, target.macos_system_include_directories);
+          append_include_directories(include_directories, target.linux_system_include_directories);
+          append_include_directories(include_directories, target.windows_system_include_directories);
+        }
+
+        for (const auto& profile : recipe->build_profiles | std::views::values)
+        {
+          append_include_directories(include_directories, profile.include_directories);
+          append_include_directories(include_directories, profile.macos_system_include_directories);
+          append_include_directories(include_directories, profile.linux_system_include_directories);
+          append_include_directories(include_directories, profile.windows_system_include_directories);
+        }
+      }
+
+      std::ranges::sort(include_directories);
+      include_directories.erase(
+        std::unique(include_directories.begin(), include_directories.end()),
+        include_directories.end()
+      );
+      return include_directories;
     }
 
     bool runtime_file_covers(const std::filesystem::path& project_directory,
@@ -276,6 +345,13 @@ namespace forge
 
       auto local_suggestions =
         infer_sibling_dependencies(project_directory, unresolved, options.local_search);
+      const auto include_evidence = infer_include_dependency_evidence(
+        project_directory,
+        unresolved,
+        doctor_include_directories(project_directory, scan, recipe),
+        scan.sources,
+        scan.headers
+      );
 
       output << "Suggested " << local_suggestions.size() << " local dependenc"
              << (local_suggestions.size() == 1 ? "y" : "ies") << '\n';
@@ -298,6 +374,35 @@ namespace forge
           report_warning(output, state, "dependency appears to be local but is not declared: "
             + dependency.name + " at " + dependency.path);
         }
+      }
+
+      output << "Resolved " << include_evidence.size()
+             << " dependency include"
+             << (include_evidence.size() == 1 ? "" : "s")
+             << " through include directories\n";
+
+      for (const auto& evidence : include_evidence)
+      {
+        output << "  " << evidence.include << " from " << evidence.source
+               << " -> " << display_project_path(project_directory, evidence.header) << '\n'
+               << "    include dir: " << evidence.include_directory.generic_string()
+               << '\n';
+
+        if (!evidence.root.empty())
+          output << "    root: " << display_project_path(project_directory, evidence.root) << '\n';
+
+        if (evidence.forge_recipe)
+        {
+          output << "    recipe: " << evidence.name;
+
+          if (!evidence.version.empty())
+            output << ' ' << evidence.version;
+
+          output << '\n';
+        }
+
+        if (!evidence.github.empty())
+          output << "    source: " << repository_url(evidence.github) << '\n';
       }
 
       const auto github = github_suggestions(project_directory, unresolved);
