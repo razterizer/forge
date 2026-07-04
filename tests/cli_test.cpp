@@ -1,4 +1,5 @@
 #include "cli.h"
+#include "doctor.h"
 #include "fprocess.h"
 #include "init.h"
 #include "sha256.h"
@@ -221,6 +222,18 @@ namespace
         && contains(update_output.str(), "--release-targets")
         && contains(update_output.str(), "forge.lock.toml"),
       "update help documents multi-target and multi-profile updates"
+    );
+
+    constexpr std::array doctor_arguments {
+      std::string_view { "doctor" },
+      std::string_view { "--help" }
+    };
+    std::ostringstream doctor_output;
+    std::ostringstream doctor_error;
+    forge::cli::run(doctor_arguments, doctor_output, doctor_error);
+    expect(
+      contains(doctor_output.str(), "--search-github"),
+      "doctor help documents opt-in GitHub search"
     );
   }
 
@@ -576,6 +589,70 @@ namespace
       "doctor warns about undeclared GitHub dependency suggestions"
     );
     expect(error.str().empty(), "GitHub dependency doctor findings are reported on stdout");
+  }
+
+  void test_doctor_searches_github_for_unmatched_dependencies()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "main.cpp",
+      "#include <SDL3/SDL.h>\n"
+      "int main() {}\n"
+    );
+
+    bool searched = false;
+    const forge::ProcessRunner runner =
+      [&searched](const std::vector<std::string>& arguments,
+                  const std::filesystem::path&,
+                  std::ostream&) -> int
+      {
+        std::filesystem::path destination;
+        std::filesystem::path status;
+
+        for (const auto& argument : arguments)
+        {
+          if (argument.starts_with("-DURL=")
+              && argument.find("https://api.github.com/search/repositories?q=SDL3+in:name") != std::string::npos)
+          {
+            searched = true;
+          }
+          else if (argument.starts_with("-DDESTINATION="))
+            destination = argument.substr(std::string_view { "-DDESTINATION=" }.size());
+          else if (argument.starts_with("-DSTATUS_FILE="))
+            status = argument.substr(std::string_view { "-DSTATUS_FILE=" }.size());
+        }
+
+        if (destination.empty() || status.empty())
+          return 2;
+
+        write_file(
+          destination,
+          "{ \"items\": ["
+          "{ \"full_name\": \"libsdl-org/SDL\" },"
+          "{ \"full_name\": \"vendor/SDL3-wrapper\" }"
+          "] }\n"
+        );
+        write_file(status, "0\n");
+        return 0;
+      };
+    forge::DoctorOptions options;
+    options.search_github = true;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::doctor_project(directory.path(), options, runner, output, error) == 0,
+      "doctor accepts GitHub search candidates"
+    );
+    expect(searched, "doctor searches GitHub for unmatched dependency includes");
+    expect(
+      contains(output.str(), "Found 2 GitHub search candidates")
+        && contains(output.str(), "libsdl-org/SDL for SDL3/SDL.h")
+        && contains(output.str(), "source: https://github.com/libsdl-org/SDL")
+        && contains(output.str(), "vendor/SDL3-wrapper for SDL3/SDL.h"),
+      "doctor reports GitHub search candidates"
+    );
+    expect(error.str().empty(), "GitHub search doctor findings are reported on stdout");
   }
 
   void test_doctor_analyzes_unadopted_project()
@@ -6386,6 +6463,7 @@ int main()
   test_doctor_reports_inferred_runtime_assets();
   test_doctor_reports_unadopted_dependency_suggestions();
   test_doctor_warns_about_undeclared_github_dependency();
+  test_doctor_searches_github_for_unmatched_dependencies();
   test_doctor_analyzes_unadopted_project();
   test_doctor_rejects_empty_unadopted_project();
   test_list_profiles();

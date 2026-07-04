@@ -1490,13 +1490,29 @@ namespace forge::cli
 
     if (arguments.front() == "doctor")
     {
-      if (arguments.size() != 1)
+      DoctorOptions options;
+
+      for (std::size_t index = 1; index < arguments.size(); ++index)
       {
-        error << "forge: usage: forge doctor\n";
+        const auto argument = arguments[index];
+
+        if (argument == "--search-github")
+          options.search_github = true;
+        else
+        {
+          print_unknown_option(argument, error);
+          error << "forge: usage: forge doctor [--search-github]\n";
+          return 2;
+        }
+      }
+
+      if (arguments.size() > 2)
+      {
+        error << "forge: usage: forge doctor [--search-github]\n";
         return 2;
       }
 
-      return doctor_project(working_directory, output, error);
+      return doctor_project(working_directory, options, run_process, output, error);
     }
 
     if (arguments.front() == "box")

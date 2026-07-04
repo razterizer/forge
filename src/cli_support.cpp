@@ -127,7 +127,9 @@ namespace forge::cli
       output
         << "Check Forge project metadata for common local problems.\n\n"
         << "Usage:\n"
-        << "  forge doctor\n\n"
+        << "  forge doctor [--search-github]\n\n"
+        << "Options:\n"
+        << "  --search-github   Search GitHub for unresolved dependency includes\n\n"
         << "Validates the recipe, checks configured project paths, verifies that\n"
         << "release notes contain the current version heading, and summarizes\n"
         << "declared dependency kinds. Missing local dependency paths are warnings\n"

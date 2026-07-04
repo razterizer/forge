@@ -11,6 +11,8 @@
   dependency suggestions, and non-network GitHub dependency guesses.
 - Made `forge doctor` search nearby `lib` folders for local dependency repos and
   print GitHub cbox/source fallback hints for dependency suggestions.
+- Added `forge doctor --search-github` to perform opt-in GitHub repository
+  searches for unresolved dependency includes that local scanning cannot match.
 
 ## 0.10.0
 
