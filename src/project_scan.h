@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "fprocess.h"
 #include "recipe.h"
 
 namespace forge
@@ -78,5 +79,11 @@ namespace forge
   std::map<std::string, std::vector<std::string>> github_suggestions(
     const std::filesystem::path& project_directory,
     const std::map<std::string, std::string>& unresolved);
+
+  std::map<std::string, std::vector<std::string>> github_search_candidates(
+    const std::filesystem::path& project_directory,
+    const std::map<std::string, std::string>& unresolved,
+    const ProcessRunner& process_runner,
+    std::ostream& error);
 
 } // namespace forge

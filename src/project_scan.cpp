@@ -651,6 +651,91 @@ namespace forge
       return safe ? name : std::string {};
     }
 
+    std::string github_search_term(std::string_view include)
+    {
+      return github_repository_name(include);
+    }
+
+    std::vector<std::string> parse_github_repositories(std::string_view json)
+    {
+      std::vector<std::string> repositories;
+      std::set<std::string> seen;
+      const std::regex pattern { R"json("full_name"[[:space:]]*:[[:space:]]*"([^"]+/[^"]+)")json" };
+      const auto begin = std::cregex_iterator { json.begin(), json.end(), pattern };
+      const auto end = std::cregex_iterator {};
+
+      for (auto match = begin; match != end && repositories.size() != 5; ++match)
+      {
+        auto repository = (*match)[1].str();
+
+        if (seen.insert(repository).second)
+          repositories.push_back(std::move(repository));
+      }
+
+      return repositories;
+    }
+
+    bool download_github_search(const std::filesystem::path& project_directory,
+                                std::string_view term,
+                                const ProcessRunner& process_runner,
+                                std::filesystem::path& destination,
+                                std::ostream& error)
+    {
+      const auto cache_directory = project_directory / ".forge" / "cache" / "github-search";
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(cache_directory, filesystem_error);
+
+      if (filesystem_error)
+        return false;
+
+      destination = cache_directory / (std::string { term } + ".json");
+      auto status_path = destination;
+      status_path += ".status";
+      const auto script = cache_directory / "github-search.cmake";
+      std::ofstream file { script };
+
+      if (!file)
+        return false;
+
+      file
+        << "file(DOWNLOAD \"${URL}\" \"${DESTINATION}.tmp\" STATUS status TLS_VERIFY ON)\n"
+        << "list(GET status 0 code)\n"
+        << "file(WRITE \"${STATUS_FILE}\" \"${code}\")\n"
+        << "if(NOT code EQUAL 0)\n"
+        << "  file(REMOVE \"${DESTINATION}.tmp\")\n"
+        << "  return()\n"
+        << "endif()\n"
+        << "file(REMOVE \"${DESTINATION}\")\n"
+        << "file(RENAME \"${DESTINATION}.tmp\" \"${DESTINATION}\")\n";
+      file.close();
+
+      const auto query = std::string { term } + "+in:name&per_page=5";
+      const auto result = process_runner(
+        {
+          "cmake",
+          "-DURL=https://api.github.com/search/repositories?q=" + query,
+          "-DDESTINATION=" + destination.generic_string(),
+          "-DSTATUS_FILE=" + status_path.generic_string(),
+          "-P",
+          script.string()
+        },
+        project_directory,
+        error
+      );
+
+      if (result != 0)
+        return false;
+
+      std::ifstream status_file { status_path };
+      int status = 0;
+
+      if (!status_file || !(status_file >> status))
+        return false;
+
+      std::filesystem::remove(status_path, filesystem_error);
+      return status == 0;
+    }
+
     void add_dependency_search_root(std::vector<std::filesystem::path>& roots,
                                     const std::filesystem::path& root)
     {
@@ -907,6 +992,48 @@ namespace forge
     }
 
     return suggestions;
+  }
+
+  std::map<std::string, std::vector<std::string>> github_search_candidates(
+    const std::filesystem::path& project_directory,
+    const std::map<std::string, std::string>& unresolved,
+    const ProcessRunner& process_runner,
+    std::ostream& error)
+  {
+    std::map<std::string, std::vector<std::string>> candidates;
+    std::map<std::string, std::vector<std::string>> includes_by_term;
+
+    for (const auto& [include, source] : unresolved)
+    {
+      const auto term = github_search_term(include);
+
+      if (!term.empty())
+        includes_by_term[term].push_back(include);
+    }
+
+    for (const auto& [term, includes] : includes_by_term)
+    {
+      std::filesystem::path response_path;
+
+      if (!download_github_search(project_directory, term, process_runner, response_path, error))
+        continue;
+
+      std::ifstream response { response_path };
+      const auto repositories = parse_github_repositories(
+        std::string {
+          std::istreambuf_iterator<char> { response },
+          std::istreambuf_iterator<char> {}
+        }
+      );
+
+      for (const auto& repository : repositories)
+      {
+        auto& repository_includes = candidates[repository];
+        repository_includes.insert(repository_includes.end(), includes.begin(), includes.end());
+      }
+    }
+
+    return candidates;
   }
 
 } // namespace forge

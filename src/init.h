@@ -22,6 +22,7 @@ namespace forge
     std::optional<std::string> library_type;
     std::optional<std::string> initial_version;
     std::optional<std::filesystem::path> version_header_path;
+    bool search_github = false;
   };
 
   int adopt_project(const std::filesystem::path& project_directory,

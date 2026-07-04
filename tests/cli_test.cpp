@@ -208,6 +208,10 @@ namespace
       && contains(adopt_output.str(), "prebuilt binaries"),
       "adopt help explains imported libraries are recipe-level prebuilt binaries"
     );
+    expect(
+      contains(adopt_output.str(), "--search-github"),
+      "adopt help documents opt-in GitHub search"
+    );
 
     constexpr std::array update_arguments {
       std::string_view { "update" },
@@ -2144,6 +2148,65 @@ namespace
       "default adoption does not access GitHub"
     );
     expect(error.str().empty(), "GitHub suggestions do not fail adoption");
+  }
+
+  void test_adopt_searches_github_for_unmatched_dependencies()
+  {
+    TemporaryDirectory directory;
+    write_file(directory.path() / "main.cpp", "#include <SDL3/SDL.h>\nint main() {}\n");
+    bool searched = false;
+    const forge::ProcessRunner runner =
+      [&searched](const std::vector<std::string>& arguments,
+                  const std::filesystem::path&,
+                  std::ostream&) -> int
+      {
+        std::filesystem::path destination;
+        std::filesystem::path status;
+
+        for (const auto& argument : arguments)
+        {
+          if (argument.starts_with("-DURL=")
+              && argument.find("https://api.github.com/search/repositories?q=SDL3+in:name") != std::string::npos)
+          {
+            searched = true;
+          }
+          else if (argument.starts_with("-DDESTINATION="))
+            destination = argument.substr(std::string_view { "-DDESTINATION=" }.size());
+          else if (argument.starts_with("-DSTATUS_FILE="))
+            status = argument.substr(std::string_view { "-DSTATUS_FILE=" }.size());
+        }
+
+        if (destination.empty() || status.empty())
+          return 2;
+
+        write_file(
+          destination,
+          "{ \"items\": ["
+          "{ \"full_name\": \"libsdl-org/SDL\" },"
+          "{ \"full_name\": \"vendor/SDL3-wrapper\" }"
+          "] }\n"
+        );
+        write_file(status, "0\n");
+        return 0;
+      };
+    forge::AdoptOptions options;
+    options.search_github = true;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::adopt_project(directory.path(), options, runner, output, error) == 0,
+      "adopt accepts GitHub search candidates"
+    );
+    expect(searched, "adopt searches GitHub for unmatched dependency includes");
+    expect(
+      contains(output.str(), "GitHub search candidates:")
+        && contains(output.str(), "libsdl-org/SDL for <SDL3/SDL.h>")
+        && contains(output.str(), "vendor/SDL3-wrapper for <SDL3/SDL.h>")
+        && !contains(read_file(directory.path() / "forge.recipe.toml"), "[dependencies]"),
+      "adopt reports external GitHub candidates without writing unverified dependencies"
+    );
+    expect(error.str().empty(), "GitHub search adoption findings are reported on stdout");
   }
 
   void test_adopt_github_verifies_and_pins_dependency()
@@ -6494,6 +6557,7 @@ int main()
   test_adopt_infers_sibling_project_dependencies();
   test_adopt_preserves_ambiguous_sibling_includes();
   test_adopt_suggests_github_dependencies_without_network();
+  test_adopt_searches_github_for_unmatched_dependencies();
   test_adopt_github_verifies_and_pins_dependency();
   test_init_empty_project();
   test_init_infers_library_projects();

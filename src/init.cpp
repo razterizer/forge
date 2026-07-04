@@ -1129,6 +1129,9 @@ namespace forge
       report_subprogress(output, 5, dependency_progress_total, "Preparing GitHub suggestions");
 
     const auto suggestions = github_suggestions(project_directory, unresolved);
+    const auto searched_suggestions = options.search_github
+      ? github_search_candidates(project_directory, unresolved, process_runner, output)
+      : std::map<std::string, std::vector<std::string>> {};
 
     if (show_progress && verify_git_dependencies)
       report_subprogress(output, 6, dependency_progress_total, "Verifying GitHub candidates");
@@ -1659,6 +1662,23 @@ namespace forge
       }
 
       output << "Run 'forge adopt --dependency-style=git' to verify and pin suggestions\n";
+    }
+
+    if (!searched_suggestions.empty())
+    {
+      output << "GitHub search candidates:\n";
+
+      for (const auto& [repository, includes] : searched_suggestions)
+      {
+        output << "  " << repository << " for";
+
+        for (const auto& include : includes)
+          output << " <" << include << ">";
+
+        output << '\n';
+      }
+
+      output << "Add the matching dependency manually or rerun with an explicit dependency style after choosing one\n";
     }
 
     if (entry_points.empty() && !sources.empty() && public_headers.empty())

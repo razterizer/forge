@@ -13,6 +13,8 @@
   print GitHub cbox/source fallback hints for dependency suggestions.
 - Added `forge doctor --search-github` to perform opt-in GitHub repository
   searches for unresolved dependency includes that local scanning cannot match.
+- Added `forge adopt --search-github` to report external GitHub repository
+  candidates for unresolved dependency includes without writing unverified deps.
 
 ## 0.10.0
 

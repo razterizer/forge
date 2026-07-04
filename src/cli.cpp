@@ -2303,6 +2303,10 @@ namespace forge::cli
 
           options.library_type = std::string { *type };
         }
+        else if (argument == "--search-github")
+        {
+          options.search_github = true;
+        }
         else if (const auto value = option_value(argument, "--init-version=");
                  value && set_once(options.initial_version, *value))
         {

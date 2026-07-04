@@ -66,13 +66,15 @@ namespace forge::cli
         << "Discover an existing C++ project and create Forge metadata.\n\n"
         << "Usage:\n"
         << "  forge adopt [--dependency-style=<style>] [--library-type=<type>]\n"
-        << "              [--init-version=<ver>] [--version-header-path=<path>]\n\n"
+        << "              [--init-version=<ver>] [--version-header-path=<path>]\n"
+        << "              [--search-github]\n\n"
         << "Options:\n"
         << "  --dependency-style=<style>\n"
         << "                         Dependency style: local or git\n"
         << "                         local keeps verified sibling dependencies as paths;\n"
         << "                         git verifies inferred GitHub source dependencies\n"
         << "  --github               Alias for --dependency-style=git\n"
+        << "  --search-github        Search GitHub for unresolved dependency includes\n"
         << "  --library-type=<type>  Resolve an ambiguous library as header_only,\n"
         << "                         static_library, or dynamic_library\n"
         << "                         Use imported_library in the recipe for\n"
@@ -88,7 +90,8 @@ namespace forge::cli
         << "Examples:\n"
         << "  forge adopt\n"
         << "  forge adopt --library-type=static_library\n"
-        << "  forge adopt --dependency-style=git\n";
+        << "  forge adopt --dependency-style=git\n"
+        << "  forge adopt --search-github\n";
       return true;
     }
 
@@ -421,7 +424,7 @@ namespace forge::cli
     error
       << "forge: usage: forge adopt [--dependency-style=<style>] "
       << "[--library-type=<type>] [--init-version=<ver>] "
-      << "[--version-header-path=<path>]\n";
+      << "[--version-header-path=<path>] [--search-github]\n";
   }
 
   void print_update_usage(std::ostream& error)
