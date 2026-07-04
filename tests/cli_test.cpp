@@ -703,6 +703,73 @@ namespace
     expect(error.str().empty(), "GitHub search doctor findings are reported on stdout");
   }
 
+  void test_doctor_suppresses_noisy_github_search_when_same_owner_is_found()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / ".git/config",
+      "[remote \"origin\"]\n"
+      "\turl = https://github.com/razterizer/app.git\n"
+    );
+    write_file(directory.path() / "main.cpp", "#include <8Beat/SFX.h>\nint main() {}\n");
+    bool searched = false;
+    const forge::ProcessRunner runner =
+      [&searched](const std::vector<std::string>& arguments,
+                  const std::filesystem::path&,
+                  std::ostream&) -> int
+      {
+        std::filesystem::path destination;
+        std::filesystem::path status;
+
+        for (const auto& argument : arguments)
+        {
+          if (argument.starts_with("-DURL=")
+              && argument.find("https://api.github.com/search/repositories?q=8Beat+in:name") != std::string::npos)
+          {
+            searched = true;
+          }
+          else if (argument.starts_with("-DDESTINATION="))
+            destination = argument.substr(std::string_view { "-DDESTINATION=" }.size());
+          else if (argument.starts_with("-DSTATUS_FILE="))
+            status = argument.substr(std::string_view { "-DSTATUS_FILE=" }.size());
+        }
+
+        if (destination.empty() || status.empty())
+          return 2;
+
+        write_file(
+          destination,
+          "{ \"items\": ["
+          "{ \"full_name\": \"JimTrebbien/8beat\" },"
+          "{ \"full_name\": \"razterizer/8Beat\" },"
+          "{ \"full_name\": \"plugnburn/8beat\" }"
+          "] }\n"
+        );
+        write_file(status, "0\n");
+        return 0;
+      };
+    forge::DoctorOptions options;
+    options.search_github = true;
+    options.local_search = forge::LocalDependencySearch::off;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::doctor_project(directory.path(), options, runner, output, error) == 0,
+      "doctor accepts same-owner GitHub search confirmation"
+    );
+    expect(searched, "doctor still searches GitHub for same-owner confirmations");
+    expect(
+      contains(output.str(), "Suggested 1 GitHub dependency")
+        && contains(output.str(), "razterizer/8Beat for 8Beat/SFX.h")
+        && contains(output.str(), "Found 0 GitHub search candidates")
+        && !contains(output.str(), "JimTrebbien/8beat")
+        && !contains(output.str(), "plugnburn/8beat"),
+      "doctor suppresses noisy search alternatives when the same-owner guess is found"
+    );
+    expect(error.str().empty(), "suppressed GitHub search candidates do not write an error");
+  }
+
   void test_doctor_analyzes_unadopted_project()
   {
     TemporaryDirectory directory;
@@ -6608,6 +6675,7 @@ int main()
   test_doctor_can_disable_local_dependency_search();
   test_doctor_warns_about_undeclared_github_dependency();
   test_doctor_searches_github_for_unmatched_dependencies();
+  test_doctor_suppresses_noisy_github_search_when_same_owner_is_found();
   test_doctor_analyzes_unadopted_project();
   test_doctor_rejects_empty_unadopted_project();
   test_list_profiles();

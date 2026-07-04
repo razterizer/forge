@@ -675,6 +675,16 @@ namespace forge
       return repositories;
     }
 
+    bool is_generic_github_search_term(std::string_view term)
+    {
+      return term == "Core"
+        || term == "core"
+        || term == "Common"
+        || term == "common"
+        || term == "Base"
+        || term == "base";
+    }
+
     bool download_github_search(const std::filesystem::path& project_directory,
                                 std::string_view term,
                                 const ProcessRunner& process_runner,
@@ -1017,6 +1027,9 @@ namespace forge
 
     for (const auto& [term, includes] : includes_by_term)
     {
+      if (is_generic_github_search_term(term))
+        continue;
+
       std::filesystem::path response_path;
 
       if (!download_github_search(project_directory, term, process_runner, response_path, error))
@@ -1029,6 +1042,17 @@ namespace forge
           std::istreambuf_iterator<char> {}
         }
       );
+
+      const auto owner = github_owner(project_directory);
+      const auto same_owner_repository = owner
+        ? std::optional { *owner + "/" + term }
+        : std::nullopt;
+
+      if (same_owner_repository
+          && std::ranges::find(repositories, *same_owner_repository) != repositories.end())
+      {
+        continue;
+      }
 
       for (const auto& repository : repositories)
       {
