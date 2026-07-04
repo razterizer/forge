@@ -4,6 +4,7 @@
 #include <iosfwd>
 
 #include "fprocess.h"
+#include "project_scan.h"
 
 namespace forge
 {
@@ -11,6 +12,7 @@ namespace forge
   struct DoctorOptions
   {
     bool search_github = false;
+    LocalDependencySearch local_search = LocalDependencySearch::nearby;
   };
 
   int doctor_project(const std::filesystem::path& project_directory,

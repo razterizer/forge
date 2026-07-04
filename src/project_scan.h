@@ -36,6 +36,12 @@ namespace forge
     std::string github;
   };
 
+  enum class LocalDependencySearch
+  {
+    nearby,
+    off
+  };
+
   bool is_ignored_project_scan_directory(const std::filesystem::path& path);
   bool is_cpp_source(const std::filesystem::path& path);
   bool is_cpp_header(const std::filesystem::path& path);
@@ -74,7 +80,8 @@ namespace forge
 
   std::vector<SiblingDependency> infer_sibling_dependencies(
     const std::filesystem::path& project_directory,
-    std::map<std::string, std::string>& unresolved);
+    std::map<std::string, std::string>& unresolved,
+    LocalDependencySearch local_search = LocalDependencySearch::nearby);
 
   std::map<std::string, std::vector<std::string>> github_suggestions(
     const std::filesystem::path& project_directory,

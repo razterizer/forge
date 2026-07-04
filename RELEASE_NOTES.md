@@ -15,6 +15,8 @@
   searches for unresolved dependency includes that local scanning cannot match.
 - Added `forge adopt --search-github` to report external GitHub repository
   candidates for unresolved dependency includes without writing unverified deps.
+- Added `--local-search=nearby|off` to `forge doctor` and `forge adopt` so
+  sandboxed checks can disable nearby sibling and ancestor `lib` discovery.
 
 ## 0.10.0
 

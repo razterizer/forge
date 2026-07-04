@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fprocess.h"
+#include "project_scan.h"
 
 #include <filesystem>
 #include <iosfwd>
@@ -23,6 +24,7 @@ namespace forge
     std::optional<std::string> initial_version;
     std::optional<std::filesystem::path> version_header_path;
     bool search_github = false;
+    LocalDependencySearch local_search = LocalDependencySearch::nearby;
   };
 
   int adopt_project(const std::filesystem::path& project_directory,

@@ -900,10 +900,14 @@ namespace forge
 
   std::vector<SiblingDependency> infer_sibling_dependencies(
     const std::filesystem::path& project_directory,
-    std::map<std::string, std::string>& unresolved)
+    std::map<std::string, std::string>& unresolved,
+    LocalDependencySearch local_search)
   {
     std::map<std::string, std::vector<SiblingDependency>> matches;
     std::vector<std::filesystem::path> candidates;
+
+    if (local_search == LocalDependencySearch::off)
+      return {};
 
     for (const auto& root : dependency_search_roots(project_directory))
       collect_dependency_candidates(root, project_directory, candidates);

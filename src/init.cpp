@@ -1091,7 +1091,8 @@ namespace forge
     if (show_progress)
       report_subprogress(output, 3, dependency_progress_total, "Matching sibling Forge projects");
 
-    auto sibling_dependencies = infer_sibling_dependencies(project_directory, unresolved);
+    auto sibling_dependencies =
+      infer_sibling_dependencies(project_directory, unresolved, options.local_search);
 
     if (show_progress)
       report_subprogress(output, 4, dependency_progress_total, "Reading project references");

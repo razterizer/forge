@@ -67,7 +67,7 @@ namespace forge::cli
         << "Usage:\n"
         << "  forge adopt [--dependency-style=<style>] [--library-type=<type>]\n"
         << "              [--init-version=<ver>] [--version-header-path=<path>]\n"
-        << "              [--search-github]\n\n"
+        << "              [--search-github] [--local-search=<mode>]\n\n"
         << "Options:\n"
         << "  --dependency-style=<style>\n"
         << "                         Dependency style: local or git\n"
@@ -75,6 +75,7 @@ namespace forge::cli
         << "                         git verifies inferred GitHub source dependencies\n"
         << "  --github               Alias for --dependency-style=git\n"
         << "  --search-github        Search GitHub for unresolved dependency includes\n"
+        << "  --local-search=<mode>  Local dependency search: nearby or off\n"
         << "  --library-type=<type>  Resolve an ambiguous library as header_only,\n"
         << "                         static_library, or dynamic_library\n"
         << "                         Use imported_library in the recipe for\n"
@@ -91,7 +92,8 @@ namespace forge::cli
         << "  forge adopt\n"
         << "  forge adopt --library-type=static_library\n"
         << "  forge adopt --dependency-style=git\n"
-        << "  forge adopt --search-github\n";
+        << "  forge adopt --search-github\n"
+        << "  forge adopt --local-search=off\n";
       return true;
     }
 
@@ -130,9 +132,11 @@ namespace forge::cli
       output
         << "Check Forge project metadata for common local problems.\n\n"
         << "Usage:\n"
-        << "  forge doctor [--search-github]\n\n"
+        << "  forge doctor [--search-github] [--local-search=<mode>]\n\n"
         << "Options:\n"
-        << "  --search-github   Search GitHub for unresolved dependency includes\n\n"
+        << "  --search-github   Search GitHub for unresolved dependency includes\n"
+        << "  --local-search=<mode>\n"
+        << "                    Local dependency search: nearby or off\n\n"
         << "Validates the recipe, checks configured project paths, verifies that\n"
         << "release notes contain the current version heading, and summarizes\n"
         << "declared dependency kinds. Missing local dependency paths are warnings\n"
@@ -424,7 +428,8 @@ namespace forge::cli
     error
       << "forge: usage: forge adopt [--dependency-style=<style>] "
       << "[--library-type=<type>] [--init-version=<ver>] "
-      << "[--version-header-path=<path>] [--search-github]\n";
+      << "[--version-header-path=<path>] [--search-github] "
+      << "[--local-search=<mode>]\n";
   }
 
   void print_update_usage(std::ostream& error)

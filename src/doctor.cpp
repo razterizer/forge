@@ -274,7 +274,8 @@ namespace forge
       for (const auto& [include, source] : unresolved)
         output << "  " << include << " from " << source << '\n';
 
-      auto local_suggestions = infer_sibling_dependencies(project_directory, unresolved);
+      auto local_suggestions =
+        infer_sibling_dependencies(project_directory, unresolved, options.local_search);
 
       output << "Suggested " << local_suggestions.size() << " local dependenc"
              << (local_suggestions.size() == 1 ? "y" : "ies") << '\n';

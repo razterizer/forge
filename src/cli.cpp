@@ -70,6 +70,26 @@ namespace forge::cli
       error << '\n';
     }
 
+    bool parse_local_search(std::string_view value,
+                            LocalDependencySearch& local_search,
+                            std::ostream& error)
+    {
+      if (value == "nearby")
+      {
+        local_search = LocalDependencySearch::nearby;
+        return true;
+      }
+
+      if (value == "off")
+      {
+        local_search = LocalDependencySearch::off;
+        return true;
+      }
+
+      error << "forge: local search must be nearby or off\n";
+      return false;
+    }
+
     std::string selected_dependency_scope(const std::optional<std::string>& profile)
     {
       return profile
@@ -1498,18 +1518,17 @@ namespace forge::cli
 
         if (argument == "--search-github")
           options.search_github = true;
+        else if (const auto local_search = option_value(argument, "--local-search="))
+        {
+          if (!parse_local_search(*local_search, options.local_search, error))
+            return 2;
+        }
         else
         {
           print_unknown_option(argument, error);
-          error << "forge: usage: forge doctor [--search-github]\n";
+          error << "forge: usage: forge doctor [--search-github] [--local-search=<mode>]\n";
           return 2;
         }
-      }
-
-      if (arguments.size() > 2)
-      {
-        error << "forge: usage: forge doctor [--search-github]\n";
-        return 2;
       }
 
       return doctor_project(working_directory, options, run_process, output, error);
@@ -2306,6 +2325,11 @@ namespace forge::cli
         else if (argument == "--search-github")
         {
           options.search_github = true;
+        }
+        else if (const auto local_search = option_value(argument, "--local-search="))
+        {
+          if (!parse_local_search(*local_search, options.local_search, error))
+            return 2;
         }
         else if (const auto value = option_value(argument, "--init-version=");
                  value && set_once(options.initial_version, *value))

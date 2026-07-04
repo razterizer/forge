@@ -212,6 +212,10 @@ namespace
       contains(adopt_output.str(), "--search-github"),
       "adopt help documents opt-in GitHub search"
     );
+    expect(
+      contains(adopt_output.str(), "--local-search"),
+      "adopt help documents local dependency search modes"
+    );
 
     constexpr std::array update_arguments {
       std::string_view { "update" },
@@ -238,6 +242,10 @@ namespace
     expect(
       contains(doctor_output.str(), "--search-github"),
       "doctor help documents opt-in GitHub search"
+    );
+    expect(
+      contains(doctor_output.str(), "--local-search"),
+      "doctor help documents local dependency search modes"
     );
   }
 
@@ -549,6 +557,42 @@ namespace
       "doctor reports local and GitHub dependency suggestions"
     );
     expect(error.str().empty(), "dependency suggestions do not write an error");
+  }
+
+  void test_doctor_can_disable_local_dependency_search()
+  {
+    TemporaryDirectory directory;
+    const auto project = directory.path() / "app";
+    const auto dependency = directory.path() / "answer";
+    write_file(project / "main.cpp", "#include <answer/answer.h>\nint main() {}\n");
+    write_file(
+      dependency / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"answer\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/answer/answer.h\"]\n"
+    );
+    write_file(dependency / "include/answer/answer.h", "#pragma once\n");
+    forge::DoctorOptions options;
+    options.local_search = forge::LocalDependencySearch::off;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::doctor_project(project, options, forge::run_process, output, error) == 0,
+      "doctor accepts disabled local dependency search"
+    );
+    expect(
+      contains(output.str(), "Detected 1 unresolved dependency include")
+        && contains(output.str(), "answer/answer.h from main.cpp")
+        && contains(output.str(), "Suggested 0 local dependencies"),
+      "doctor leaves nearby dependencies unresolved when local search is disabled"
+    );
+    expect(error.str().empty(), "disabled local search does not write an error");
   }
 
   void test_doctor_warns_about_undeclared_github_dependency()
@@ -2070,6 +2114,42 @@ namespace
       "adopted project builds with its inferred sibling dependency"
     );
     expect(build_error.str().empty(), "inferred sibling dependency build does not write an error");
+  }
+
+  void test_adopt_can_disable_local_dependency_search()
+  {
+    TemporaryDirectory directory;
+    const auto application = directory.path() / "app";
+    const auto answer = directory.path() / "answer";
+    write_file(
+      answer / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"answer\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/answer/answer.h\"]\n"
+    );
+    write_file(answer / "include/answer/answer.h", "#pragma once\n");
+    write_file(application / "main.cpp", "#include <answer/answer.h>\nint main() {}\n");
+    forge::AdoptOptions options;
+    options.local_search = forge::LocalDependencySearch::off;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::adopt_project(application, options, forge::run_process, output, error) == 0,
+      "adopt accepts disabled local dependency search"
+    );
+    expect(
+      contains(output.str(), "<answer/answer.h> from main.cpp")
+        && !contains(output.str(), "Inferred 1 sibling project dependency")
+        && !contains(read_file(application / "forge.recipe.toml"), "[dependencies]"),
+      "adopt leaves nearby dependencies unresolved when local search is disabled"
+    );
+    expect(error.str().empty(), "disabled local dependency search does not write an error");
   }
 
   void test_adopt_preserves_ambiguous_sibling_includes()
@@ -6525,6 +6605,7 @@ int main()
   test_doctor_reports_errors_and_warnings();
   test_doctor_reports_inferred_runtime_assets();
   test_doctor_reports_unadopted_dependency_suggestions();
+  test_doctor_can_disable_local_dependency_search();
   test_doctor_warns_about_undeclared_github_dependency();
   test_doctor_searches_github_for_unmatched_dependencies();
   test_doctor_analyzes_unadopted_project();
@@ -6555,6 +6636,7 @@ int main()
   test_adopt_imports_visual_studio_solution();
   test_adopt_reports_unresolved_dependency_includes();
   test_adopt_infers_sibling_project_dependencies();
+  test_adopt_can_disable_local_dependency_search();
   test_adopt_preserves_ambiguous_sibling_includes();
   test_adopt_suggests_github_dependencies_without_network();
   test_adopt_searches_github_for_unmatched_dependencies();
