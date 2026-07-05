@@ -70,7 +70,7 @@ namespace forge::cli
         << "              [--search-github] [--local-search=<mode>]\n\n"
         << "Options:\n"
         << "  --dependency-style=<style>\n"
-        << "                         Dependency style: local or git\n"
+        << "                         Dependency style: local or git; default: local\n"
         << "                         local keeps verified sibling dependencies as paths;\n"
         << "                         git verifies inferred GitHub source dependencies\n"
         << "  --search-github        Search GitHub for unresolved dependency includes\n"
