@@ -375,7 +375,7 @@ namespace
   void test_version()
   {
     constexpr std::array arguments { std::string_view { "--version" } };
-    constexpr std::string_view expected_version = "0.11.0+build.22";
+    constexpr std::string_view expected_version = "0.11.1+build.23";
     std::ostringstream output;
     std::ostringstream error;
 

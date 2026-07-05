@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.11.1
+
+- Made `forge doctor` show declared runtime asset entries, including whether
+  each target stages or exports them and how many files directory mappings
+  expand to.
+- Made `forge doctor --search-github` derive cbox hints from the actual latest
+  release asset name, so build-qualified header-only boxes such as
+  `Core-1.5.0+build.8-ho.cbox` are reported with their concrete URL.
+
 ## 0.11.0
 
 - Added `forge doctor` for local project health checks, including unadopted
