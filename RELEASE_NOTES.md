@@ -4,6 +4,9 @@
 
 - Removed the deprecated `forge adopt --github` alias; use
   `forge adopt --dependency-style=git` instead.
+- Made `forge adopt` infer sibling dependencies by the library target that
+  provides the matched include, so projects whose display name differs from
+  their target name are adopted as buildable local dependencies.
 - Made `forge doctor` show declared runtime asset entries, including whether
   each target stages or exports them and how many files directory mappings
   expand to.

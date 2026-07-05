@@ -944,48 +944,50 @@ namespace forge
     return unresolved;
   }
 
-  bool provides_include(const Recipe& recipe, std::string_view include)
+  bool is_library_target(const std::string& type)
+  {
+    return type == "static_library"
+      || type == "dynamic_library"
+      || type == "header_only"
+      || type == "imported_library";
+  }
+
+  std::optional<std::string> library_target_providing_include(
+    const Recipe& recipe,
+    std::string_view include)
   {
     if (!recipe.targets.empty())
     {
-      return std::ranges::any_of(
-        recipe.targets,
-        [include](const RecipeTarget& target)
-        {
-          if (target.type != "static_library"
-              && target.type != "dynamic_library"
-              && target.type != "header_only"
-              && target.type != "imported_library")
+      for (const auto& target : recipe.targets)
+      {
+        if (!is_library_target(target.type))
+          continue;
+
+        const auto provides = std::ranges::any_of(
+          target.public_headers,
+          [include](const std::filesystem::path& header)
           {
-            return false;
+            const auto generic = header.generic_string();
+            return generic.starts_with("include/") && generic.substr(8) == include;
           }
+        );
 
-          return std::ranges::any_of(
-            target.public_headers,
-            [include](const std::filesystem::path& header)
-            {
-              const auto generic = header.generic_string();
-              return generic.starts_with("include/") && generic.substr(8) == include;
-            }
-          );
-        }
-      );
+        if (provides)
+          return target.name;
+      }
+
+      return std::nullopt;
     }
 
-    if (recipe.type != "static_library"
-            && recipe.type != "dynamic_library"
-            && recipe.type != "header_only"
-            && recipe.type != "imported_library")
-    {
-      return false;
-    }
+    if (!is_library_target(recipe.type))
+      return std::nullopt;
 
     for (const auto& header : recipe.public_headers)
     {
       const auto generic = header.generic_string();
 
       if (generic.starts_with("include/") && generic.substr(8) == include)
-        return true;
+        return recipe.name;
     }
 
     for (const auto& profile : recipe.imports)
@@ -995,11 +997,16 @@ namespace forge
         const auto generic = header.generic_string();
 
         if (generic == include || generic.ends_with('/' + std::string { include }))
-          return true;
+          return recipe.name;
       }
     }
 
-    return false;
+    return std::nullopt;
+  }
+
+  bool provides_include(const Recipe& recipe, std::string_view include)
+  {
+    return library_target_providing_include(recipe, include).has_value();
   }
 
   std::vector<SiblingDependency> infer_sibling_dependencies(
@@ -1036,10 +1043,10 @@ namespace forge
 
       for (const auto& [include, source] : unresolved)
       {
-        if (provides_include(sibling, include))
+        if (const auto target = library_target_providing_include(sibling, include))
         {
           matches[include].push_back(SiblingDependency {
-            sibling.name,
+            *target,
             relative.generic_string(),
             sibling.version,
             github_repository(candidate).value_or(std::string {})

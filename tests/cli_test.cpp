@@ -2410,6 +2410,61 @@ namespace
     expect(build_error.str().empty(), "inferred sibling dependency build does not write an error");
   }
 
+  void test_adopt_infers_named_target_sibling_project_dependencies()
+  {
+    TemporaryDirectory directory;
+    const auto application = directory.path() / "app";
+    const auto dependency = directory.path() / "dependency";
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      dependency / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"Package Display Name\"\n"
+      "version = \"1.0.0\"\n\n"
+      "[target.targetlib]\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n"
+      "public_headers = [\"include/targetlib/targetlib.h\"]\n"
+    );
+    write_file(
+      dependency / "include/targetlib/targetlib.h",
+      "#pragma once\n"
+      "inline int target_answer() { return 42; }\n"
+    );
+    write_file(
+      application / "main.cpp",
+      "#include <targetlib/targetlib.h>\n"
+      "int main() { return target_answer() == 42 ? 0 : 1; }\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, application, output, error) == 0,
+      "adopt infers a named-target sibling Forge dependency"
+    );
+    const auto recipe = read_file(application / "forge.recipe.toml");
+    expect(
+      contains(recipe, "[dependencies]\ntargetlib = { path = \"../dependency\" }"),
+      "adopt writes the sibling dependency using the matched library target"
+    );
+    expect(
+      contains(output.str(), "targetlib = ../dependency"),
+      "adopt reports the matched library target dependency"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, application, build_output, build_error) == 0,
+      "adopted project builds with its named-target sibling dependency"
+    );
+    expect(
+      build_error.str().empty(),
+      "named-target sibling dependency build does not write an error"
+    );
+  }
+
   void test_adopt_can_disable_local_dependency_search()
   {
     TemporaryDirectory directory;
@@ -6935,6 +6990,7 @@ int main()
   test_adopt_reports_unresolved_dependency_includes();
   test_adopt_reports_include_directory_dependency_evidence();
   test_adopt_infers_sibling_project_dependencies();
+  test_adopt_infers_named_target_sibling_project_dependencies();
   test_adopt_can_disable_local_dependency_search();
   test_adopt_preserves_ambiguous_sibling_includes();
   test_adopt_suggests_github_dependencies_without_network();
