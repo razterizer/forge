@@ -1270,6 +1270,26 @@ namespace forge
     if (!resolve(resolve, *selected))
       return false;
 
+    const auto base_include_directories = recipe.include_directories;
+    const auto base_macos_system_include_directories = recipe.macos_system_include_directories;
+    const auto base_linux_system_include_directories = recipe.linux_system_include_directories;
+    const auto base_windows_system_include_directories = recipe.windows_system_include_directories;
+    const auto base_macos_system_library_directories = recipe.macos_system_library_directories;
+    const auto base_linux_system_library_directories = recipe.linux_system_library_directories;
+    const auto base_windows_system_library_directories = recipe.windows_system_library_directories;
+    const auto base_compile_definitions = recipe.compile_definitions;
+    const auto base_macos_frameworks = recipe.macos_frameworks;
+    const auto base_macos_libraries = recipe.macos_libraries;
+    const auto base_macos_brew_packages = recipe.macos_brew_packages;
+    const auto base_linux_libraries = recipe.linux_libraries;
+    const auto base_linux_apt_packages = recipe.linux_apt_packages;
+    const auto base_windows_libraries = recipe.windows_libraries;
+    const auto append =
+      [](auto& values, const auto& additional)
+      {
+        values.insert(values.end(), additional.begin(), additional.end());
+      };
+
     recipe.selected_target = selected->name;
     recipe.selected_internal_dependencies = selected->dependencies;
     recipe.name = selected->name;
@@ -1292,6 +1312,20 @@ namespace forge
     recipe.linux_apt_packages = selected->linux_apt_packages;
     recipe.windows_libraries = selected->windows_libraries;
     recipe.runtime_files = selected->runtime_files;
+    append(recipe.include_directories, base_include_directories);
+    append(recipe.macos_system_include_directories, base_macos_system_include_directories);
+    append(recipe.linux_system_include_directories, base_linux_system_include_directories);
+    append(recipe.windows_system_include_directories, base_windows_system_include_directories);
+    append(recipe.macos_system_library_directories, base_macos_system_library_directories);
+    append(recipe.linux_system_library_directories, base_linux_system_library_directories);
+    append(recipe.windows_system_library_directories, base_windows_system_library_directories);
+    append(recipe.compile_definitions, base_compile_definitions);
+    append(recipe.macos_frameworks, base_macos_frameworks);
+    append(recipe.macos_libraries, base_macos_libraries);
+    append(recipe.macos_brew_packages, base_macos_brew_packages);
+    append(recipe.linux_libraries, base_linux_libraries);
+    append(recipe.linux_apt_packages, base_linux_apt_packages);
+    append(recipe.windows_libraries, base_windows_libraries);
     return true;
   }
 

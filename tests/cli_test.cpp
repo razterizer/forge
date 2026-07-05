@@ -3628,6 +3628,9 @@ namespace
       "name = \"suite\"\n"
       "version = \"0.1.0\"\n"
       "\n"
+      "[build]\n"
+      "defines = [\"SUITE_FEATURE\"]\n"
+      "\n"
       "[target.suite]\n"
       "type = \"header_only\"\n"
       "cpp_std = 20\n"
@@ -3656,6 +3659,9 @@ namespace
     write_file(
       directory.path() / "include/suite/message.h",
       "#pragma once\n"
+      "#ifndef SUITE_FEATURE\n"
+      "#error missing root build definition\n"
+      "#endif\n"
       "inline const char* message() { return \"examples\"; }\n"
     );
     write_file(

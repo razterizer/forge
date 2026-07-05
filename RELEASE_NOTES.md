@@ -10,6 +10,8 @@
   `forge test`, with mutual exclusion against user-defined `--profile`.
 - Made system profiles flow through dependency resolution, workspace builds,
   launch-after-build commands, tests, and on-demand dependency box creation.
+- Made root `[build]` settings inherited by named targets, so project-wide
+  defines and platform requirements are not dropped during target selection.
 - Made `forge list profiles` show system profile roles separately as
   `system dependencies` and `system build`.
 - Kept existing `[profile.Debug]`, `[profile.Release]`, and legacy
