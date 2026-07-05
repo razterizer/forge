@@ -867,6 +867,79 @@ namespace
     expect(error.str().empty(), "suppressed GitHub search candidates do not write an error");
   }
 
+  void test_doctor_reports_build_qualified_latest_cbox_hint()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / ".git/config",
+      "[remote \"origin\"]\n"
+      "\turl = https://github.com/razterizer/app.git\n"
+    );
+    write_file(directory.path() / "main.cpp", "#include <Core/Vec2.h>\nint main() {}\n");
+    bool checked_latest_release = false;
+    const forge::ProcessRunner runner =
+      [&checked_latest_release](const std::vector<std::string>& arguments,
+                                const std::filesystem::path&,
+                                std::ostream&) -> int
+      {
+        std::filesystem::path destination;
+        std::filesystem::path status;
+        std::string url;
+
+        for (const auto& argument : arguments)
+        {
+          if (argument.starts_with("-DURL="))
+            url = argument.substr(std::string_view { "-DURL=" }.size());
+          else if (argument.starts_with("-DDESTINATION="))
+            destination = argument.substr(std::string_view { "-DDESTINATION=" }.size());
+          else if (argument.starts_with("-DSTATUS_FILE="))
+            status = argument.substr(std::string_view { "-DSTATUS_FILE=" }.size());
+        }
+
+        if (destination.empty() || status.empty())
+          return 2;
+
+        if (url == "https://api.github.com/repos/razterizer/Core/releases/latest")
+        {
+          checked_latest_release = true;
+          write_file(
+            destination,
+            "{"
+            "\"tag_name\": \"release-1.5.0.8\","
+            "\"assets\": ["
+            "{ \"name\": \"Core-1.5.0+build.8-ho.cbox\" }"
+            "]"
+            "}\n"
+          );
+        }
+        else if (url.find("https://api.github.com/search/repositories?q=Core+in:name") != std::string::npos)
+        {
+          write_file(destination, "{ \"items\": [] }\n");
+        }
+        else
+          return 2;
+
+        write_file(status, "0\n");
+        return 0;
+      };
+    forge::DoctorOptions options;
+    options.search_github = true;
+    options.local_search = forge::LocalDependencySearch::off;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::doctor_project(directory.path(), options, runner, output, error) == 0,
+      "doctor accepts build-qualified latest cbox hint"
+    );
+    expect(checked_latest_release, "doctor checks Core latest release for cbox hints");
+    expect(
+      contains(output.str(), "https://github.com/razterizer/Core/releases/download/release-1.5.0.8/Core-1.5.0+build.8-ho.cbox"),
+      "doctor reports the build-qualified cbox version from the latest release asset"
+    );
+    expect(error.str().empty(), "build-qualified latest cbox hints do not write an error");
+  }
+
   void test_doctor_analyzes_unadopted_project()
   {
     TemporaryDirectory directory;
@@ -6815,6 +6888,7 @@ int main()
   test_doctor_warns_about_undeclared_github_dependency();
   test_doctor_searches_github_for_unmatched_dependencies();
   test_doctor_suppresses_noisy_github_search_when_same_owner_is_found();
+  test_doctor_reports_build_qualified_latest_cbox_hint();
   test_doctor_analyzes_unadopted_project();
   test_doctor_rejects_empty_unadopted_project();
   test_list_profiles();

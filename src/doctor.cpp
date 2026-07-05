@@ -412,6 +412,99 @@ namespace forge
         + "/" + std::string { package } + "-" + resolved_version + "-<target>.cbox";
     }
 
+    struct CboxReleaseHint
+    {
+      std::string tag_version;
+      std::string package_version;
+      std::string suffix;
+    };
+
+    bool is_target_suffix(std::string_view suffix)
+    {
+      return suffix == "linux-x86_64"
+        || suffix == "macos-arm64"
+        || suffix == "windows-x86_64";
+    }
+
+    std::string cbox_release_pattern(std::string_view repository,
+                                     std::string_view package,
+                                     const CboxReleaseHint& release)
+    {
+      const auto suffix =
+        release.suffix == "ho" || !is_target_suffix(release.suffix)
+          ? release.suffix
+          : std::string { "<target>" };
+
+      return repository_url(repository)
+        + "/releases/download/release-" + release.tag_version
+        + "/" + std::string { package } + "-" + release.package_version
+        + "-" + suffix + ".cbox";
+    }
+
+    bool consume_digits(std::string_view text, std::size_t& position)
+    {
+      const auto start = position;
+
+      while (position < text.size() && text[position] >= '0' && text[position] <= '9')
+        ++position;
+
+      return position != start;
+    }
+
+    bool consume_character(std::string_view text,
+                           std::size_t& position,
+                           char expected)
+    {
+      if (position >= text.size() || text[position] != expected)
+        return false;
+
+      ++position;
+      return true;
+    }
+
+    std::optional<CboxReleaseHint> parse_cbox_asset_name(std::string_view tag_version,
+                                                         std::string_view package,
+                                                         std::string_view asset)
+    {
+      const auto prefix = std::string { package } + "-";
+      const auto extension = std::string_view { ".cbox" };
+
+      if (!asset.starts_with(prefix) || !asset.ends_with(extension))
+        return std::nullopt;
+
+      const auto details =
+        asset.substr(prefix.size(), asset.size() - prefix.size() - extension.size());
+      std::size_t position = 0;
+
+      if (!consume_digits(details, position)
+          || !consume_character(details, position, '.')
+          || !consume_digits(details, position)
+          || !consume_character(details, position, '.')
+          || !consume_digits(details, position))
+      {
+        return std::nullopt;
+      }
+
+      if (details.substr(position).starts_with("+build."))
+      {
+        position += std::string_view { "+build." }.size();
+
+        if (!consume_digits(details, position))
+          return std::nullopt;
+      }
+
+      const auto version_end = position;
+
+      if (!consume_character(details, position, '-') || position >= details.size())
+        return std::nullopt;
+
+      return CboxReleaseHint {
+        std::string { tag_version },
+        std::string { details.substr(0, version_end) },
+        std::string { details.substr(position) }
+      };
+    }
+
     bool download_latest_github_release(const std::filesystem::path& project_directory,
                                         std::string_view repository,
                                         const ProcessRunner& process_runner,
@@ -475,8 +568,8 @@ namespace forge
       return status == 0;
     }
 
-    std::optional<std::string> latest_cbox_version(std::string_view json,
-                                                   std::string_view package)
+    std::optional<CboxReleaseHint> latest_cbox_release(std::string_view json,
+                                                       std::string_view package)
     {
       std::cmatch tag_match;
       const std::regex tag_pattern {
@@ -486,9 +579,7 @@ namespace forge
       if (!std::regex_search(json.begin(), json.end(), tag_match, tag_pattern))
         return std::nullopt;
 
-      const auto version = tag_match[1].str();
-      const auto expected_prefix =
-        std::string { package } + "-" + version + "-";
+      const auto tag_version = tag_match[1].str();
       const std::regex asset_pattern {
         R"json("name"[[:space:]]*:[[:space:]]*"([^"]+\.cbox)")json"
       };
@@ -498,15 +589,17 @@ namespace forge
       for (auto match = begin; match != end; ++match)
       {
         const auto asset = (*match)[1].str();
+        const auto release =
+          parse_cbox_asset_name(tag_version, package, asset);
 
-        if (asset.starts_with(expected_prefix))
-          return version;
+        if (release)
+          return release;
       }
 
       return std::nullopt;
     }
 
-    std::optional<std::string> latest_cbox_version(
+    std::optional<CboxReleaseHint> latest_cbox_release(
       const std::filesystem::path& project_directory,
       std::string_view repository,
       std::string_view package,
@@ -527,7 +620,7 @@ namespace forge
       }
 
       std::ifstream response { response_path };
-      return latest_cbox_version(
+      return latest_cbox_release(
         std::string {
           std::istreambuf_iterator<char> { response },
           std::istreambuf_iterator<char> {}
@@ -616,29 +709,29 @@ namespace forge
       }
 
       const auto github = github_suggestions(project_directory, unresolved);
-      std::map<std::string, std::optional<std::string>> latest_cbox_versions;
-      const auto resolved_cbox_version =
+      std::map<std::string, std::optional<CboxReleaseHint>> latest_cbox_releases;
+      const auto resolved_cbox_release =
         [&](std::string_view repository, std::string_view package)
-          -> std::optional<std::string>
+          -> std::optional<CboxReleaseHint>
         {
           if (!options.search_github)
             return std::nullopt;
 
           const auto key = std::string { repository };
-          const auto existing = latest_cbox_versions.find(key);
+          const auto existing = latest_cbox_releases.find(key);
 
-          if (existing != latest_cbox_versions.end())
+          if (existing != latest_cbox_releases.end())
             return existing->second;
 
-          auto version = latest_cbox_version(
+          auto release = latest_cbox_release(
             project_directory,
             repository,
             package,
             process_runner,
             error
           );
-          latest_cbox_versions.emplace(key, version);
-          return version;
+          latest_cbox_releases.emplace(key, release);
+          return release;
         };
 
       output << "Suggested " << github.size() << " GitHub dependenc"
@@ -659,8 +752,12 @@ namespace forge
         output << '\n';
 
         const auto name = repository_package(repository);
-        const auto version = resolved_cbox_version(repository, name).value_or(std::string {});
-        output << "    cbox: " << cbox_release_pattern(repository, name, version) << '\n'
+        const auto release = resolved_cbox_release(repository, name);
+        output << "    cbox: "
+               << (release
+                 ? cbox_release_pattern(repository, name, *release)
+                 : cbox_release_pattern(repository, name, std::string_view {}))
+               << '\n'
                << "    source: " << repository_url(repository) << '\n';
 
         if (recipe && !dependency_is_declared(*recipe, name, repository))
