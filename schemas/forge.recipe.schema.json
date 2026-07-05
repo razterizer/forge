@@ -447,7 +447,7 @@
       "type": "object",
       "description": "Named dependency and build-setting overrides selected with --profile=<name>.",
       "propertyNames": {
-        "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
+        "pattern": "^(?!(?:local-debug|local-release|git-debug|git-release|github-cbox-debug|github-cbox-release)$)(?!\\.{1,2}$)[^/\\\\]+$"
       },
       "additionalProperties": {
         "type": "object",
@@ -497,6 +497,24 @@
             }
           }
         }
+      }
+    },
+    "sysprofile": {
+      "type": "object",
+      "description": "Forge-owned reserved dependency and build-setting overrides selected with --sysprofile=<name>.",
+      "propertyNames": {
+        "enum": [
+          "workflow-release",
+          "local-debug",
+          "local-release",
+          "git-debug",
+          "git-release",
+          "github-cbox-debug",
+          "github-cbox-release"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/properties/profile/additionalProperties"
       }
     },
     "import": {

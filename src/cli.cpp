@@ -1155,6 +1155,12 @@ namespace forge::cli
       for (const auto& [name, _] : recipe.build_profiles)
         profiles.insert(name);
 
+      for (const auto& [name, _] : recipe.system_dependency_profiles)
+        profiles.insert(name);
+
+      for (const auto& [name, _] : recipe.system_build_profiles)
+        profiles.insert(name);
+
       for (const auto& variant : recipe.release_variants)
         profiles.insert(variant.profile);
 
@@ -1192,6 +1198,12 @@ namespace forge::cli
 
         if (recipe.build_profiles.contains(profile))
           add_role("build");
+
+        if (recipe.system_dependency_profiles.contains(profile))
+          add_role("system dependencies");
+
+        if (recipe.system_build_profiles.contains(profile))
+          add_role("system build");
 
         for (const auto& variant : recipe.release_variants)
         {
@@ -1587,6 +1599,7 @@ namespace forge::cli
         return 2;
 
       std::optional<std::string> profile;
+      std::optional<std::string> system_profile;
       std::optional<std::string> target;
       std::vector<std::string_view> program_arguments;
       bool forwarding = false;
@@ -1606,12 +1619,29 @@ namespace forge::cli
           if (!read_profile_option(argument, profile, error))
             return 2;
         }
+        else if (!forwarding && argument.starts_with("--sysprofile="))
+        {
+          if (!build_first)
+          {
+            error << "forge: --sysprofile applies to build commands; use 'forge build-and-run'\n";
+            return 2;
+          }
+
+          if (!read_system_profile_option(argument, system_profile, error))
+            return 2;
+        }
         else if (!forwarding && (workspace || !recipe.targets.empty()) && !target)
         {
           target = std::string { argument };
         }
         else
           program_arguments.push_back(argument);
+      }
+
+      if (profile && system_profile)
+      {
+        error << "forge: --profile and --sysprofile cannot be used together\n";
+        return 2;
       }
 
       if (workspace)
@@ -1629,6 +1659,7 @@ namespace forge::cli
             working_directory,
             *target,
             profile,
+            system_profile,
             program_arguments,
             output,
             error
@@ -1653,6 +1684,7 @@ namespace forge::cli
             working_directory,
             std::nullopt,
             profile,
+            system_profile,
             program_arguments,
             output,
             error
@@ -1668,6 +1700,7 @@ namespace forge::cli
           working_directory,
           target,
           profile,
+          system_profile,
           program_arguments,
           output,
           error
@@ -1688,6 +1721,7 @@ namespace forge::cli
     {
       std::optional<std::string> target;
       std::optional<std::string> profile;
+      std::optional<std::string> system_profile;
       std::vector<std::string_view> test_arguments;
       bool forwarding = false;
 
@@ -1700,12 +1734,23 @@ namespace forge::cli
           if (!read_profile_option(argument, profile, error))
             return 2;
         }
+        else if (!forwarding && argument.starts_with("--sysprofile="))
+        {
+          if (!read_system_profile_option(argument, system_profile, error))
+            return 2;
+        }
         else if (!forwarding && !target)
         {
           target = std::string { argument };
         }
         else
           test_arguments.push_back(argument);
+      }
+
+      if (profile && system_profile)
+      {
+        error << "forge: --profile and --sysprofile cannot be used together\n";
+        return 2;
       }
 
       if (!std::filesystem::exists(working_directory / "forge.recipe.toml")
@@ -1715,13 +1760,22 @@ namespace forge::cli
           working_directory,
           target,
           profile,
+          system_profile,
           test_arguments,
           output,
           error
         );
       }
 
-      return test_project(working_directory, target, profile, test_arguments, output, error);
+      return test_project(
+        working_directory,
+        target,
+        profile,
+        system_profile,
+        test_arguments,
+        output,
+        error
+      );
     }
 
     if (arguments.front() == "bump")
@@ -2088,6 +2142,11 @@ namespace forge::cli
           if (!read_profile_option(argument, options.profile, error))
             return 2;
         }
+        else if (argument.starts_with("--sysprofile="))
+        {
+          if (!read_system_profile_option(argument, options.system_profile, error))
+            return 2;
+        }
         else if (argument.starts_with("--define="))
         {
           const auto definition = *option_value(argument, "--define=");
@@ -2111,6 +2170,12 @@ namespace forge::cli
         }
       }
 
+      if (options.profile && options.system_profile)
+      {
+        error << "forge: --profile and --sysprofile cannot be used together\n";
+        return 2;
+      }
+
       if (!std::filesystem::exists(working_directory / "forge.recipe.toml")
           && std::filesystem::exists(working_directory / "forge.workspace.toml"))
       {
@@ -2118,6 +2183,7 @@ namespace forge::cli
           working_directory,
           options.target,
           options.profile,
+          options.system_profile,
           options.compile_definitions,
           output,
           error

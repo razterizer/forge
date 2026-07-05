@@ -26,6 +26,9 @@ namespace forge::cli
   bool read_profile_option(std::string_view argument,
                            std::optional<std::string>& profile,
                            std::ostream& error);
+  bool read_system_profile_option(std::string_view argument,
+                                  std::optional<std::string>& profile,
+                                  std::ostream& error);
 
   void print_new_usage(std::ostream& error);
   void print_adopt_usage(std::ostream& error);

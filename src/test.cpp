@@ -25,7 +25,36 @@ namespace forge
                    std::ostream& output,
                    std::ostream& error)
   {
-    return test_project(project_directory, target, profile, arguments, run_process, output, error);
+    return test_project(
+      project_directory,
+      target,
+      profile,
+      std::nullopt,
+      arguments,
+      run_process,
+      output,
+      error
+    );
+  }
+
+  int test_project(const std::filesystem::path& project_directory,
+                   const std::optional<std::string>& target,
+                   const std::optional<std::string>& profile,
+                   const std::optional<std::string>& system_profile,
+                   std::span<const std::string_view> arguments,
+                   std::ostream& output,
+                   std::ostream& error)
+  {
+    return test_project(
+      project_directory,
+      target,
+      profile,
+      system_profile,
+      arguments,
+      run_process,
+      output,
+      error
+    );
   }
 
   int test_project(const std::filesystem::path& project_directory,
@@ -39,6 +68,7 @@ namespace forge
       project_directory,
       target,
       std::nullopt,
+      std::nullopt,
       arguments,
       process_runner,
       output,
@@ -49,6 +79,27 @@ namespace forge
   int test_project(const std::filesystem::path& project_directory,
                    const std::optional<std::string>& target,
                    const std::optional<std::string>& profile,
+                   std::span<const std::string_view> arguments,
+                   const ProcessRunner& process_runner,
+                   std::ostream& output,
+                   std::ostream& error)
+  {
+    return test_project(
+      project_directory,
+      target,
+      profile,
+      std::nullopt,
+      arguments,
+      process_runner,
+      output,
+      error
+    );
+  }
+
+  int test_project(const std::filesystem::path& project_directory,
+                   const std::optional<std::string>& target,
+                   const std::optional<std::string>& profile,
+                   const std::optional<std::string>& system_profile,
                    std::span<const std::string_view> arguments,
                    const ProcessRunner& process_runner,
                    std::ostream& output,
@@ -126,6 +177,7 @@ namespace forge
         project_directory,
         test,
         profile,
+        system_profile,
         arguments,
         process_runner,
         output,

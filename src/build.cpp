@@ -63,6 +63,7 @@ namespace forge
       Recipe recipe;
       std::optional<std::string> target;
       std::optional<std::string> profile;
+      std::optional<std::string> system_profile;
       std::filesystem::path box;
       std::optional<BoxMetadata> box_metadata;
     };
@@ -1007,6 +1008,8 @@ namespace forge
 
         if (dependency_session->options.profile)
           error << " --profile=" << *dependency_session->options.profile;
+        else if (dependency_session->options.system_profile)
+          error << " --sysprofile=" << *dependency_session->options.system_profile;
 
         error << '\n';
         return false;
@@ -1024,6 +1027,8 @@ namespace forge
 
         if (dependency_session->options.profile)
           error << " --profile=" << *dependency_session->options.profile;
+        else if (dependency_session->options.system_profile)
+          error << " --sysprofile=" << *dependency_session->options.system_profile;
 
         error << '\n';
         return false;
@@ -2219,11 +2224,28 @@ namespace forge
               || dependency_recipe.build_profiles.contains(*dependency_session->options.profile))
             ? dependency_session->options.profile
             : std::optional<std::string> {};
+        const auto selected_dependency_system_profile =
+          !is_box
+          && dependency_session->options.system_profile
+          && (dependency_recipe.system_dependency_profiles.contains(*dependency_session->options.system_profile)
+              || dependency_recipe.system_build_profiles.contains(*dependency_session->options.system_profile))
+            ? dependency_session->options.system_profile
+            : std::optional<std::string> {};
 
         if (!is_box
             && !select_dependency_profile(
               dependency_recipe,
               dependency_session->options.profile,
+              false,
+              error
+            ))
+        {
+          return false;
+        }
+        if (!is_box
+            && !select_system_dependency_profile(
+              dependency_recipe,
+              dependency_session->options.system_profile,
               false,
               error
             ))
@@ -2285,6 +2307,7 @@ namespace forge
               std::move(dependency_recipe),
               dependency_target,
               selected_dependency_profile,
+              selected_dependency_system_profile,
               is_box ? directory : std::filesystem::path {},
               std::move(box_metadata)
             }
@@ -2328,6 +2351,7 @@ namespace forge
         node.directory,
         node.target,
         node.profile,
+        node.system_profile,
         process_runner,
         output,
         error
@@ -2973,6 +2997,15 @@ namespace forge
     {
       return 2;
     }
+    if (!select_system_dependency_profile(
+      recipe,
+      dependency_session->options.system_profile,
+      is_root_project,
+      error
+    ))
+    {
+      return 2;
+    }
 
     auto requested_target = options.target
       ? options.target
@@ -2996,6 +3029,16 @@ namespace forge
     if (!select_build_profile(
       recipe,
       dependency_session->options.profile,
+      is_root_project,
+      configuration,
+      error
+    ))
+    {
+      return 2;
+    }
+    if (!select_system_build_profile(
+      recipe,
+      dependency_session->options.system_profile,
       is_root_project,
       configuration,
       error

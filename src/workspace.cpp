@@ -145,6 +145,7 @@ namespace forge
                         const std::map<std::filesystem::path, Recipe>& recipes,
                         const std::optional<std::string>& selected,
                         const std::optional<std::string>& profile,
+                        const std::optional<std::string>& system_profile,
                         std::vector<const WorkspaceProject*>& ordered,
                         std::ostream& error)
     {
@@ -170,6 +171,8 @@ namespace forge
         auto recipe = recipes.at(project.path);
 
         if (!select_dependency_profile(recipe, profile, false, error))
+          return false;
+        if (!select_system_dependency_profile(recipe, system_profile, false, error))
           return false;
 
         for (const auto& dependency : recipe.dependencies)
@@ -375,6 +378,7 @@ namespace forge
       workspace_directory,
       project,
       profile,
+      std::nullopt,
       {},
       run_process,
       output,
@@ -393,6 +397,7 @@ namespace forge
       workspace_directory,
       project,
       profile,
+      std::nullopt,
       {},
       process_runner,
       output,
@@ -411,6 +416,27 @@ namespace forge
       workspace_directory,
       project,
       profile,
+      std::nullopt,
+      compile_definitions,
+      run_process,
+      output,
+      error
+    );
+  }
+
+  int build_workspace(const std::filesystem::path& workspace_directory,
+                      const std::optional<std::string>& project,
+                      const std::optional<std::string>& profile,
+                      const std::optional<std::string>& system_profile,
+                      const std::vector<std::string>& compile_definitions,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    return build_workspace(
+      workspace_directory,
+      project,
+      profile,
+      system_profile,
       compile_definitions,
       run_process,
       output,
@@ -426,6 +452,27 @@ namespace forge
                       std::ostream& output,
                       std::ostream& error)
   {
+    return build_workspace(
+      workspace_directory,
+      project,
+      profile,
+      std::nullopt,
+      compile_definitions,
+      process_runner,
+      output,
+      error
+    );
+  }
+
+  int build_workspace(const std::filesystem::path& workspace_directory,
+                      const std::optional<std::string>& project,
+                      const std::optional<std::string>& profile,
+                      const std::optional<std::string>& system_profile,
+                      const std::vector<std::string>& compile_definitions,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
     Workspace workspace;
 
     std::map<std::filesystem::path, Recipe> recipes;
@@ -435,7 +482,7 @@ namespace forge
 
     std::vector<const WorkspaceProject*> ordered;
 
-    if (!order_projects(workspace, recipes, project, profile, ordered, error))
+    if (!order_projects(workspace, recipes, project, profile, system_profile, ordered, error))
       return 2;
 
     std::set<std::filesystem::path> dependency_projects;
@@ -445,6 +492,8 @@ namespace forge
       auto recipe = recipes.at(current->path);
 
       if (!select_dependency_profile(recipe, profile, false, error))
+        return 2;
+      if (!select_system_dependency_profile(recipe, system_profile, false, error))
         return 2;
 
       for (const auto& dependency : recipe.dependencies)
@@ -477,6 +526,7 @@ namespace forge
       {
         BuildOptions options;
         options.profile = profile;
+        options.system_profile = system_profile;
         options.compile_definitions = compile_definitions;
 
         if (build_project(current->path, options, process_runner, output, error) != 0)
@@ -488,6 +538,7 @@ namespace forge
         {
           BuildOptions options;
           options.profile = profile;
+          options.system_profile = system_profile;
           options.target = target.name;
           options.compile_definitions = compile_definitions;
 
@@ -566,6 +617,7 @@ namespace forge
       workspace_directory,
       selection,
       profile,
+      std::nullopt,
       arguments,
       run_process,
       output,
@@ -576,6 +628,47 @@ namespace forge
   int build_and_run_workspace(const std::filesystem::path& workspace_directory,
                               std::string_view selection,
                               const std::optional<std::string>& profile,
+                              std::span<const std::string_view> arguments,
+                              const ProcessRunner& process_runner,
+                              std::ostream& output,
+                              std::ostream& error)
+  {
+    return build_and_run_workspace(
+      workspace_directory,
+      selection,
+      profile,
+      std::nullopt,
+      arguments,
+      process_runner,
+      output,
+      error
+    );
+  }
+
+  int build_and_run_workspace(const std::filesystem::path& workspace_directory,
+                              std::string_view selection,
+                              const std::optional<std::string>& profile,
+                              const std::optional<std::string>& system_profile,
+                              std::span<const std::string_view> arguments,
+                              std::ostream& output,
+                              std::ostream& error)
+  {
+    return build_and_run_workspace(
+      workspace_directory,
+      selection,
+      profile,
+      system_profile,
+      arguments,
+      run_process,
+      output,
+      error
+    );
+  }
+
+  int build_and_run_workspace(const std::filesystem::path& workspace_directory,
+                              std::string_view selection,
+                              const std::optional<std::string>& profile,
+                              const std::optional<std::string>& system_profile,
                               std::span<const std::string_view> arguments,
                               const ProcessRunner& process_runner,
                               std::ostream& output,
@@ -602,6 +695,7 @@ namespace forge
       project->path,
       target,
       profile,
+      system_profile,
       arguments,
       process_runner,
       output,
@@ -635,6 +729,47 @@ namespace forge
                      std::ostream& output,
                      std::ostream& error)
   {
+    return test_workspace(
+      workspace_directory,
+      selection,
+      profile,
+      std::nullopt,
+      arguments,
+      process_runner,
+      output,
+      error
+    );
+  }
+
+  int test_workspace(const std::filesystem::path& workspace_directory,
+                     const std::optional<std::string>& selection,
+                     const std::optional<std::string>& profile,
+                     const std::optional<std::string>& system_profile,
+                     std::span<const std::string_view> arguments,
+                     std::ostream& output,
+                     std::ostream& error)
+  {
+    return test_workspace(
+      workspace_directory,
+      selection,
+      profile,
+      system_profile,
+      arguments,
+      run_process,
+      output,
+      error
+    );
+  }
+
+  int test_workspace(const std::filesystem::path& workspace_directory,
+                     const std::optional<std::string>& selection,
+                     const std::optional<std::string>& profile,
+                     const std::optional<std::string>& system_profile,
+                     std::span<const std::string_view> arguments,
+                     const ProcessRunner& process_runner,
+                     std::ostream& output,
+                     std::ostream& error)
+  {
     Workspace workspace;
     std::map<std::filesystem::path, Recipe> recipes;
 
@@ -658,6 +793,7 @@ namespace forge
         project->path,
         target,
         profile,
+        system_profile,
         arguments,
         process_runner,
         output,
@@ -679,6 +815,7 @@ namespace forge
         project.path,
         std::nullopt,
         profile,
+        system_profile,
         arguments,
         process_runner,
         output,

@@ -659,6 +659,7 @@ namespace forge
     int create_container_box(const std::filesystem::path& project_directory,
                              const Recipe& recipe,
                              const std::optional<std::string>& profile,
+                             const std::optional<std::string>& system_profile,
                              const ProcessRunner& process_runner,
                              std::ostream& output,
                              std::ostream& error)
@@ -688,6 +689,7 @@ namespace forge
           project_directory,
           target.name,
           profile,
+          system_profile,
           process_runner,
           output,
           error
@@ -822,23 +824,53 @@ namespace forge
                  std::ostream& output,
                  std::ostream& error)
   {
+    return create_box(
+      project_directory,
+      target,
+      profile,
+      std::nullopt,
+      process_runner,
+      output,
+      error
+    );
+  }
+
+  int create_box(const std::filesystem::path& project_directory,
+                 const std::optional<std::string>& target,
+                 const std::optional<std::string>& profile,
+                 const std::optional<std::string>& system_profile,
+                 const ProcessRunner& process_runner,
+                 std::ostream& output,
+                 std::ostream& error)
+  {
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
       return 2;
 
     if (!target && recipe.targets.size() > 1)
-      return create_container_box(project_directory, recipe, profile, process_runner, output, error);
+      return create_container_box(
+        project_directory,
+        recipe,
+        profile,
+        system_profile,
+        process_runner,
+        output,
+        error
+      );
 
     if (!select_recipe_target(recipe, target, error))
       return 2;
 
     if (!select_dependency_profile(recipe, profile, true, error))
       return 2;
+    if (!select_system_dependency_profile(recipe, system_profile, true, error))
+      return 2;
 
     BuildOptions options;
     options.target = target;
     options.profile = profile;
+    options.system_profile = system_profile;
 
     if (profile == workflow_release_profile)
       options.configuration = "Release";
@@ -1191,6 +1223,7 @@ namespace forge
             project_directory,
             dependency_name,
             profile,
+            system_profile,
             process_runner,
             output,
             error

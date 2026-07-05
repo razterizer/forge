@@ -2,7 +2,19 @@
 
 ## 0.12.0
 
-- Describe changes.
+- Added Forge-owned `[sysprofile.<name>.dependencies]` and
+  `[sysprofile.<name>.build]` sections for reserved build flavours such as
+  `local-debug`, `local-release`, `git-debug`, `git-release`,
+  `github-cbox-debug`, and `github-cbox-release`.
+- Added `--sysprofile=<name>` to `forge build`, `forge build-and-run`, and
+  `forge test`, with mutual exclusion against user-defined `--profile`.
+- Made system profiles flow through dependency resolution, workspace builds,
+  launch-after-build commands, tests, and on-demand dependency box creation.
+- Made `forge list profiles` show system profile roles separately as
+  `system dependencies` and `system build`.
+- Kept existing `[profile.Debug]`, `[profile.Release]`, and legacy
+  `[profile.workflow-release]` recipes compatible while rejecting new reserved
+  system profile names under `[profile.*]`.
 
 ## 0.11.1
 

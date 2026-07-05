@@ -89,6 +89,13 @@ rules:
   `cpp_std`, `include_dirs`, platform system include dirs, and `defines`
   overrides. Both are selected by `forge build`, `forge build-and-run`, or
   `forge test` with `--profile=<name>`.
+- Forge-owned `[sysprofile.<name>.dependencies]` and
+  `[sysprofile.<name>.build]` sections use reserved names such as
+  `local-debug`, `local-release`, `git-debug`, `git-release`,
+  `github-cbox-debug`, and `github-cbox-release`. They are selected by
+  `forge build`, `forge build-and-run`, or `forge test` with
+  `--sysprofile=<name>` and are intentionally separate from custom
+  `[profile.*]` names.
 - Downloadable cbox dependencies require both `url` and lowercase `sha256`.
 - GitHub Release cbox dependencies require `github = "owner/repository"` and a
   packaged `version`. `forge update` writes their exact target-specific

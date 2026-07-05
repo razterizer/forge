@@ -483,6 +483,17 @@ namespace forge
       );
     }
 
+    bool is_reserved_system_profile(std::string_view value)
+    {
+      return value == workflow_release_profile
+        || value == "local-debug"
+        || value == "local-release"
+        || value == "git-debug"
+        || value == "git-release"
+        || value == "github-cbox-debug"
+        || value == "github-cbox-release";
+    }
+
     bool parse_package_names(std::string_view value, std::vector<std::string>& names)
     {
       std::vector<std::filesystem::path> paths;
@@ -933,9 +944,12 @@ namespace forge
         else
           valid = false;
       }
-      else if (section == "dependencies" || section.starts_with("profile."))
+      else if (section == "dependencies"
+               || section.starts_with("profile.")
+               || section.starts_with("sysprofile."))
       {
         const auto profile_prefix = std::string_view { "profile." };
+        const auto system_profile_prefix = std::string_view { "sysprofile." };
         const auto profile_suffix = std::string_view { ".dependencies" };
         const auto build_suffix = std::string_view { ".build" };
         const auto is_profile =
@@ -946,26 +960,46 @@ namespace forge
           section.starts_with(profile_prefix)
           && section.ends_with(build_suffix)
           && section.size() > profile_prefix.size() + build_suffix.size();
+        const auto is_system_profile =
+          section.starts_with(system_profile_prefix)
+          && section.ends_with(profile_suffix)
+          && section.size() > system_profile_prefix.size() + profile_suffix.size();
+        const auto is_system_build_profile =
+          section.starts_with(system_profile_prefix)
+          && section.ends_with(build_suffix)
+          && section.size() > system_profile_prefix.size() + build_suffix.size();
         Dependency dependency;
         dependency.name = std::string { key };
         valid =
-          (section == "dependencies" || is_profile || is_build_profile)
+          (section == "dependencies"
+           || is_profile
+           || is_build_profile
+           || is_system_profile
+           || is_system_build_profile)
           && !dependency.name.empty()
-          && (is_build_profile || parse_dependency(value, dependency));
+          && ((is_build_profile || is_system_build_profile)
+              || parse_dependency(value, dependency));
 
         if (valid)
         {
-          if (is_build_profile)
+          if (is_build_profile || is_system_build_profile)
           {
+            const auto prefix = is_system_build_profile ? system_profile_prefix : profile_prefix;
             const auto profile = section.substr(
-              profile_prefix.size(),
-              section.size() - profile_prefix.size() - build_suffix.size()
+              prefix.size(),
+              section.size() - prefix.size() - build_suffix.size()
             );
-            valid = is_safe_name(profile);
+            valid = is_safe_name(profile)
+              && (is_system_build_profile
+                  ? is_reserved_system_profile(profile)
+                  : (!is_reserved_system_profile(profile) || profile == workflow_release_profile));
 
             if (valid)
             {
-              auto& build = recipe.build_profiles[std::string { profile }];
+              auto& build =
+                is_system_build_profile
+                  ? recipe.system_build_profiles[std::string { profile }]
+                  : recipe.build_profiles[std::string { profile }];
 
               if (key == "configuration")
                 valid = parse_string(value, build.configuration);
@@ -991,16 +1025,25 @@ namespace forge
                 valid = false;
             }
           }
-          else if (is_profile)
+          else if (is_profile || is_system_profile)
           {
+            const auto prefix = is_system_profile ? system_profile_prefix : profile_prefix;
             const auto profile = section.substr(
-              profile_prefix.size(),
-              section.size() - profile_prefix.size() - profile_suffix.size()
+              prefix.size(),
+              section.size() - prefix.size() - profile_suffix.size()
             );
-            valid = is_safe_name(profile);
+            valid = is_safe_name(profile)
+              && (is_system_profile
+                  ? is_reserved_system_profile(profile)
+                  : (!is_reserved_system_profile(profile) || profile == workflow_release_profile));
 
             if (valid)
-              recipe.dependency_profiles[profile].push_back(std::move(dependency));
+            {
+              if (is_system_profile)
+                recipe.system_dependency_profiles[profile].push_back(std::move(dependency));
+              else
+                recipe.dependency_profiles[profile].push_back(std::move(dependency));
+            }
           }
           else
             recipe.dependencies.push_back(std::move(dependency));
@@ -1277,29 +1320,39 @@ namespace forge
     return true;
   }
 
-  bool select_build_profile(Recipe& recipe,
-                            const std::optional<std::string>& requested,
-                            bool required,
-                            std::string& configuration,
-                            std::ostream& error)
+  bool select_system_dependency_profile(Recipe& recipe,
+                                        const std::optional<std::string>& requested,
+                                        bool required,
+                                        std::ostream& error)
   {
     if (!requested)
       return true;
 
-    const auto profile = recipe.build_profiles.find(*requested);
-
-    if (profile == recipe.build_profiles.end())
+    if (!is_reserved_system_profile(*requested))
     {
-      if (required && !recipe.dependency_profiles.contains(*requested))
+      error << "forge: unknown system profile '" << *requested << "'\n";
+      return false;
+    }
+
+    const auto profile = recipe.system_dependency_profiles.find(*requested);
+
+    if (profile == recipe.system_dependency_profiles.end())
+    {
+      if (required && !recipe.system_build_profiles.contains(*requested))
       {
-        error << "forge: recipe has no profile named '" << *requested << "'\n";
+        error << "forge: recipe has no system profile named '" << *requested << "'\n";
         return false;
       }
 
       return true;
     }
 
-    const auto& build = profile->second;
+    recipe.dependencies = profile->second;
+    return true;
+  }
+
+  void apply_build_profile(Recipe& recipe, const BuildProfile& build, std::string& configuration)
+  {
     recipe.include_directories.insert(
       recipe.include_directories.end(),
       build.include_directories.begin(),
@@ -1346,7 +1399,63 @@ namespace forge
 
     if (!build.configuration.empty())
       configuration = build.configuration;
+  }
 
+  bool select_build_profile(Recipe& recipe,
+                            const std::optional<std::string>& requested,
+                            bool required,
+                            std::string& configuration,
+                            std::ostream& error)
+  {
+    if (!requested)
+      return true;
+
+    const auto profile = recipe.build_profiles.find(*requested);
+
+    if (profile == recipe.build_profiles.end())
+    {
+      if (required && !recipe.dependency_profiles.contains(*requested))
+      {
+        error << "forge: recipe has no profile named '" << *requested << "'\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    apply_build_profile(recipe, profile->second, configuration);
+    return true;
+  }
+
+  bool select_system_build_profile(Recipe& recipe,
+                                   const std::optional<std::string>& requested,
+                                   bool required,
+                                   std::string& configuration,
+                                   std::ostream& error)
+  {
+    if (!requested)
+      return true;
+
+    if (!is_reserved_system_profile(*requested))
+    {
+      error << "forge: unknown system profile '" << *requested << "'\n";
+      return false;
+    }
+
+    const auto profile = recipe.system_build_profiles.find(*requested);
+
+    if (profile == recipe.system_build_profiles.end())
+    {
+      if (required && !recipe.system_dependency_profiles.contains(*requested))
+      {
+        error << "forge: recipe has no system profile named '" << *requested << "'\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    apply_build_profile(recipe, profile->second, configuration);
     return true;
   }
 

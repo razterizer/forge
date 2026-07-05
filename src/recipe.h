@@ -134,6 +134,8 @@ namespace forge
     std::vector<Dependency> dependencies;
     std::map<std::string, std::vector<Dependency>> dependency_profiles;
     std::map<std::string, BuildProfile> build_profiles;
+    std::map<std::string, std::vector<Dependency>> system_dependency_profiles;
+    std::map<std::string, BuildProfile> system_build_profiles;
     std::vector<RuntimeFile> runtime_files;
     std::vector<std::filesystem::path> release_files;
     std::optional<std::string> release_bundle_name;
@@ -162,11 +164,22 @@ namespace forge
                                  bool required,
                                  std::ostream& error);
 
+  bool select_system_dependency_profile(Recipe& recipe,
+                                        const std::optional<std::string>& profile,
+                                        bool required,
+                                        std::ostream& error);
+
   bool select_build_profile(Recipe& recipe,
                             const std::optional<std::string>& profile,
                             bool required,
                             std::string& configuration,
                             std::ostream& error);
+
+  bool select_system_build_profile(Recipe& recipe,
+                                   const std::optional<std::string>& profile,
+                                   bool required,
+                                   std::string& configuration,
+                                   std::ostream& error);
 
   bool is_valid_compile_definition(std::string_view definition);
 

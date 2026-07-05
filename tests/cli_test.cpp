@@ -6266,6 +6266,144 @@ namespace
     );
   }
 
+  void test_system_profiles()
+  {
+    TemporaryDirectory directory;
+    const auto development = directory.path() / "answer-dev";
+    const auto system = directory.path() / "answer-system";
+    const auto application = directory.path() / "app";
+
+    const auto write_answer =
+      [](const std::filesystem::path& project, int value)
+      {
+        write_file(
+          project / "forge.recipe.toml",
+          "[project]\n"
+          "name = \"answer\"\n"
+          "version = \"1.0.0\"\n"
+          "type = \"static_library\"\n"
+          "cpp_std = 20\n\n"
+          "[sources]\n"
+          "paths = [\"src/answer.cpp\"]\n"
+          "public_headers = [\"include/answer/answer.h\"]\n"
+        );
+        write_file(project / "include/answer/answer.h", "int answer();\n");
+        write_file(
+          project / "src/answer.cpp",
+          "#include <answer/answer.h>\n"
+          "int answer() { return " + std::to_string(value) + "; }\n"
+        );
+      };
+
+    write_answer(development, 7);
+    write_answer(system, 42);
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[dependencies]\n"
+      "answer = { path = \"../answer-dev\" }\n\n"
+      "[sysprofile.local-debug.dependencies]\n"
+      "answer = { path = \"../answer-system\" }\n\n"
+      "[sysprofile.local-debug.build]\n"
+      "defines = [\"USE_SYSTEM_ANSWER\"]\n"
+    );
+    write_file(
+      application / "main.cpp",
+      "#include <answer/answer.h>\n"
+      "#ifndef USE_SYSTEM_ANSWER\n"
+      "#error missing system profile definition\n"
+      "#endif\n"
+      "int main() { return answer() == 42 ? 0 : 1; }\n"
+    );
+
+    constexpr std::array build_arguments {
+      std::string_view { "build-and-run" },
+      std::string_view { "--sysprofile=local-debug" }
+    };
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, application, build_output, build_error) == 0,
+      "system profile selects dependency and build settings"
+    );
+    expect(build_error.str().empty(), "system profile build does not write an error");
+
+    constexpr std::array list_arguments {
+      std::string_view { "list" },
+      std::string_view { "profiles" }
+    };
+    std::ostringstream list_output;
+    std::ostringstream list_error;
+    expect(
+      forge::cli::run(list_arguments, application, list_output, list_error) == 0,
+      "list profiles includes system profiles"
+    );
+    expect(
+      contains(list_output.str(), "local-debug  system dependencies, system build"),
+      "system profile roles are reported separately"
+    );
+
+    constexpr std::array mixed_arguments {
+      std::string_view { "build" },
+      std::string_view { "--profile=dev" },
+      std::string_view { "--sysprofile=local-debug" }
+    };
+    std::ostringstream mixed_output;
+    std::ostringstream mixed_error;
+    expect(
+      forge::cli::run(mixed_arguments, application, mixed_output, mixed_error) == 2,
+      "profile and system profile are mutually exclusive"
+    );
+    expect(
+      contains(mixed_error.str(), "--profile and --sysprofile cannot be used together"),
+      "mixed profile error is explained"
+    );
+
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[sysprofile.custom.dependencies]\n"
+      "answer = { path = \"../answer-system\" }\n"
+    );
+    std::ostringstream unknown_output;
+    std::ostringstream unknown_error;
+    expect(
+      forge::cli::run(list_arguments, application, unknown_output, unknown_error) == 2,
+      "unknown system profile names are rejected"
+    );
+
+    write_file(
+      application / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"app\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[profile.local-debug.dependencies]\n"
+      "answer = { path = \"../answer-system\" }\n"
+    );
+    std::ostringstream reserved_output;
+    std::ostringstream reserved_error;
+    expect(
+      forge::cli::run(list_arguments, application, reserved_output, reserved_error) == 2,
+      "reserved system profile names are rejected under profile"
+    );
+  }
+
   void test_run_with_local_box_dependency()
   {
     TemporaryDirectory directory;
@@ -7045,6 +7183,7 @@ int main()
   test_run_rejects_conflicting_transitive_dependency_versions();
   test_run_with_pinned_git_dependency();
   test_dependency_profiles();
+  test_system_profiles();
   test_run_with_local_box_dependency();
   test_run_with_downloadable_box_dependency();
   test_run_and_release_with_dynamic_dependency();

@@ -150,10 +150,12 @@ namespace forge::cli
       output
         << "Build the current project, selected target, or workspace selection.\n\n"
         << "Usage:\n"
-        << "  forge build [target] [--profile=<name>] [--define=<symbol> ...]\n\n"
+        << "  forge build [target] [--profile=<name> | --sysprofile=<name>] "
+        << "[--define=<symbol> ...]\n\n"
         << "Options:\n"
-        << "  --profile=<name>   Select matching dependency and build profiles\n"
-        << "  --define=<symbol>  Add a temporary NAME or NAME=value definition\n";
+        << "  --profile=<name>     Select matching dependency and build profiles\n"
+        << "  --sysprofile=<name>  Select a reserved Forge system profile\n"
+        << "  --define=<symbol>    Add a temporary NAME or NAME=value definition\n";
       return true;
     }
 
@@ -174,7 +176,8 @@ namespace forge::cli
       output
         << "Build and run an executable project or target.\n\n"
         << "Usage:\n"
-        << "  forge build-and-run [target|project[/target]] [--profile=<name>] [-- arguments...]\n\n"
+        << "  forge build-and-run [target|project[/target]] "
+        << "[--profile=<name> | --sysprofile=<name>] [-- arguments...]\n\n"
         << "Arguments after '--' are forwarded to the executable. Workspace runs\n"
         << "require a project or project/target selection.\n";
       return true;
@@ -201,7 +204,8 @@ namespace forge::cli
       output
         << "Build and run marked test targets.\n\n"
         << "Usage:\n"
-        << "  forge test [target|project[/target]] [--profile=<name>] [-- arguments...]\n\n"
+        << "  forge test [target|project[/target]] "
+        << "[--profile=<name> | --sysprofile=<name>] [-- arguments...]\n\n"
         << "Without a selection, runs every executable target marked test = true.\n"
         << "Arguments after '--' are forwarded to each selected test executable.\n";
       return true;
@@ -417,6 +421,32 @@ namespace forge::cli
     return true;
   }
 
+  bool read_system_profile_option(std::string_view argument,
+                                  std::optional<std::string>& profile,
+                                  std::ostream& error)
+  {
+    const auto value = option_value(argument, "--sysprofile=");
+
+    if (!value)
+      return false;
+
+    if (profile)
+    {
+      error << "forge: system profile may only be specified once\n";
+      return false;
+    }
+
+    profile = std::string { *value };
+
+    if (profile->empty())
+    {
+      error << "forge: system profile cannot be empty\n";
+      return false;
+    }
+
+    return true;
+  }
+
   void print_new_usage(std::ostream& error)
   {
     error
@@ -450,7 +480,8 @@ namespace forge::cli
 
   void print_build_usage(std::ostream& error)
   {
-    error << "forge: usage: forge build [target] [--profile=<name>] [--define=<symbol> ...]\n";
+    error << "forge: usage: forge build [target] "
+          << "[--profile=<name> | --sysprofile=<name>] [--define=<symbol> ...]\n";
   }
 
   void print_workflow_feature_usage(std::string_view operation, std::ostream& error)
