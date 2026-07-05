@@ -575,15 +575,17 @@ namespace forge
       const std::regex tag_pattern {
         R"json("tag_name"[[:space:]]*:[[:space:]]*"release-([^"]+)")json"
       };
+      const auto json_begin = json.data();
+      const auto json_end = json.data() + json.size();
 
-      if (!std::regex_search(json.begin(), json.end(), tag_match, tag_pattern))
+      if (!std::regex_search(json_begin, json_end, tag_match, tag_pattern))
         return std::nullopt;
 
       const auto tag_version = tag_match[1].str();
       const std::regex asset_pattern {
         R"json("name"[[:space:]]*:[[:space:]]*"([^"]+\.cbox)")json"
       };
-      const auto begin = std::cregex_iterator { json.begin(), json.end(), asset_pattern };
+      const auto begin = std::cregex_iterator { json_begin, json_end, asset_pattern };
       const auto end = std::cregex_iterator {};
 
       for (auto match = begin; match != end; ++match)
