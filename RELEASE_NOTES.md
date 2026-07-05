@@ -20,6 +20,8 @@
 - Made `forge doctor` and `forge adopt` resolve dependency-shaped includes
   through inferred/configured include directories and report nearby Git/Forge
   metadata for the header location before falling back to GitHub guesses.
+- Made `forge doctor --search-github` check latest GitHub releases for matching
+  cbox assets so same-owner dependency guesses can show concrete cbox versions.
 
 ## 0.10.0
 

@@ -750,21 +750,20 @@ namespace
     );
     write_file(directory.path() / "main.cpp", "#include <8Beat/SFX.h>\nint main() {}\n");
     bool searched = false;
+    bool checked_latest_release = false;
     const forge::ProcessRunner runner =
-      [&searched](const std::vector<std::string>& arguments,
-                  const std::filesystem::path&,
-                  std::ostream&) -> int
+      [&searched, &checked_latest_release](const std::vector<std::string>& arguments,
+                                           const std::filesystem::path&,
+                                           std::ostream&) -> int
       {
         std::filesystem::path destination;
         std::filesystem::path status;
+        std::string url;
 
         for (const auto& argument : arguments)
         {
-          if (argument.starts_with("-DURL=")
-              && argument.find("https://api.github.com/search/repositories?q=8Beat+in:name") != std::string::npos)
-          {
-            searched = true;
-          }
+          if (argument.starts_with("-DURL="))
+            url = argument.substr(std::string_view { "-DURL=" }.size());
           else if (argument.starts_with("-DDESTINATION="))
             destination = argument.substr(std::string_view { "-DDESTINATION=" }.size());
           else if (argument.starts_with("-DSTATUS_FILE="))
@@ -774,14 +773,34 @@ namespace
         if (destination.empty() || status.empty())
           return 2;
 
-        write_file(
-          destination,
-          "{ \"items\": ["
-          "{ \"full_name\": \"JimTrebbien/8beat\" },"
-          "{ \"full_name\": \"razterizer/8Beat\" },"
-          "{ \"full_name\": \"plugnburn/8beat\" }"
-          "] }\n"
-        );
+        if (url.find("https://api.github.com/search/repositories?q=8Beat+in:name") != std::string::npos)
+        {
+          searched = true;
+          write_file(
+            destination,
+            "{ \"items\": ["
+            "{ \"full_name\": \"JimTrebbien/8beat\" },"
+            "{ \"full_name\": \"razterizer/8Beat\" },"
+            "{ \"full_name\": \"plugnburn/8beat\" }"
+            "] }\n"
+          );
+        }
+        else if (url == "https://api.github.com/repos/razterizer/8Beat/releases/latest")
+        {
+          checked_latest_release = true;
+          write_file(
+            destination,
+            "{"
+            "\"tag_name\": \"release-1.0.3\","
+            "\"assets\": ["
+            "{ \"name\": \"8Beat-1.0.3-macos-arm64.cbox\" }"
+            "]"
+            "}\n"
+          );
+        }
+        else
+          return 2;
+
         write_file(status, "0\n");
         return 0;
       };
@@ -796,9 +815,11 @@ namespace
       "doctor accepts same-owner GitHub search confirmation"
     );
     expect(searched, "doctor still searches GitHub for same-owner confirmations");
+    expect(checked_latest_release, "doctor checks latest release for same-owner cbox hints");
     expect(
       contains(output.str(), "Suggested 1 GitHub dependency")
         && contains(output.str(), "razterizer/8Beat for 8Beat/SFX.h")
+        && contains(output.str(), "https://github.com/razterizer/8Beat/releases/download/release-1.0.3/8Beat-1.0.3-<target>.cbox")
         && contains(output.str(), "Found 0 GitHub search candidates")
         && !contains(output.str(), "JimTrebbien/8beat")
         && !contains(output.str(), "plugnburn/8beat"),

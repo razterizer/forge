@@ -6,9 +6,12 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <map>
+#include <optional>
 #include <ostream>
 #include <ranges>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -326,6 +329,130 @@ namespace forge
         + "/" + std::string { package } + "-" + resolved_version + "-<target>.cbox";
     }
 
+    bool download_latest_github_release(const std::filesystem::path& project_directory,
+                                        std::string_view repository,
+                                        const ProcessRunner& process_runner,
+                                        std::filesystem::path& destination,
+                                        std::ostream& error)
+    {
+      const auto cache_directory =
+        project_directory / ".forge" / "cache" / "github-release"
+          / std::filesystem::path { repository };
+      std::error_code filesystem_error;
+      std::filesystem::create_directories(cache_directory, filesystem_error);
+
+      if (filesystem_error)
+        return false;
+
+      destination = cache_directory / "latest.json";
+      auto status_path = destination;
+      status_path += ".status";
+      const auto script = cache_directory / "latest-release.cmake";
+      std::ofstream file { script };
+
+      if (!file)
+        return false;
+
+      file
+        << "file(DOWNLOAD \"${URL}\" \"${DESTINATION}.tmp\" STATUS status TLS_VERIFY ON)\n"
+        << "list(GET status 0 code)\n"
+        << "file(WRITE \"${STATUS_FILE}\" \"${code}\")\n"
+        << "if(NOT code EQUAL 0)\n"
+        << "  file(REMOVE \"${DESTINATION}.tmp\")\n"
+        << "  return()\n"
+        << "endif()\n"
+        << "file(REMOVE \"${DESTINATION}\")\n"
+        << "file(RENAME \"${DESTINATION}.tmp\" \"${DESTINATION}\")\n";
+      file.close();
+
+      std::filesystem::remove(status_path, filesystem_error);
+      const auto result = process_runner(
+        {
+          "cmake",
+          "-DURL=https://api.github.com/repos/" + std::string { repository } + "/releases/latest",
+          "-DDESTINATION=" + destination.generic_string(),
+          "-DSTATUS_FILE=" + status_path.generic_string(),
+          "-P",
+          script.string()
+        },
+        project_directory,
+        error
+      );
+
+      if (result != 0)
+        return false;
+
+      std::ifstream status_file { status_path };
+      int status = 0;
+
+      if (!(status_file >> status))
+        return false;
+
+      std::filesystem::remove(status_path, filesystem_error);
+      return status == 0;
+    }
+
+    std::optional<std::string> latest_cbox_version(std::string_view json,
+                                                   std::string_view package)
+    {
+      std::cmatch tag_match;
+      const std::regex tag_pattern {
+        R"json("tag_name"[[:space:]]*:[[:space:]]*"release-([^"]+)")json"
+      };
+
+      if (!std::regex_search(json.begin(), json.end(), tag_match, tag_pattern))
+        return std::nullopt;
+
+      const auto version = tag_match[1].str();
+      const auto expected_prefix =
+        std::string { package } + "-" + version + "-";
+      const std::regex asset_pattern {
+        R"json("name"[[:space:]]*:[[:space:]]*"([^"]+\.cbox)")json"
+      };
+      const auto begin = std::cregex_iterator { json.begin(), json.end(), asset_pattern };
+      const auto end = std::cregex_iterator {};
+
+      for (auto match = begin; match != end; ++match)
+      {
+        const auto asset = (*match)[1].str();
+
+        if (asset.starts_with(expected_prefix))
+          return version;
+      }
+
+      return std::nullopt;
+    }
+
+    std::optional<std::string> latest_cbox_version(
+      const std::filesystem::path& project_directory,
+      std::string_view repository,
+      std::string_view package,
+      const ProcessRunner& process_runner,
+      std::ostream& error)
+    {
+      std::filesystem::path response_path;
+
+      if (!download_latest_github_release(
+        project_directory,
+        repository,
+        process_runner,
+        response_path,
+        error
+      ))
+      {
+        return std::nullopt;
+      }
+
+      std::ifstream response { response_path };
+      return latest_cbox_version(
+        std::string {
+          std::istreambuf_iterator<char> { response },
+          std::istreambuf_iterator<char> {}
+        },
+        package
+      );
+    }
+
     void report_dependency_suggestions(const std::filesystem::path& project_directory,
                                        const ProjectScan& scan,
                                        const Recipe* recipe,
@@ -406,6 +533,30 @@ namespace forge
       }
 
       const auto github = github_suggestions(project_directory, unresolved);
+      std::map<std::string, std::optional<std::string>> latest_cbox_versions;
+      const auto resolved_cbox_version =
+        [&](std::string_view repository, std::string_view package)
+          -> std::optional<std::string>
+        {
+          if (!options.search_github)
+            return std::nullopt;
+
+          const auto key = std::string { repository };
+          const auto existing = latest_cbox_versions.find(key);
+
+          if (existing != latest_cbox_versions.end())
+            return existing->second;
+
+          auto version = latest_cbox_version(
+            project_directory,
+            repository,
+            package,
+            process_runner,
+            error
+          );
+          latest_cbox_versions.emplace(key, version);
+          return version;
+        };
 
       output << "Suggested " << github.size() << " GitHub dependenc"
              << (github.size() == 1 ? "y" : "ies") << '\n';
@@ -425,7 +576,8 @@ namespace forge
         output << '\n';
 
         const auto name = repository_package(repository);
-        output << "    cbox: " << cbox_release_pattern(repository, name, {}) << '\n'
+        const auto version = resolved_cbox_version(repository, name).value_or(std::string {});
+        output << "    cbox: " << cbox_release_pattern(repository, name, version) << '\n'
                << "    source: " << repository_url(repository) << '\n';
 
         if (recipe && !dependency_is_declared(*recipe, name, repository))
