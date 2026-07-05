@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.12.0
+
+- Describe changes.
+
 ## 0.11.1
 
 - Removed the deprecated `forge adopt --github` alias; use
