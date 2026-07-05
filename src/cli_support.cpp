@@ -77,6 +77,7 @@ namespace forge::cli
         << "  --local-search=<mode>  Local dependency search: nearby or off; default: nearby\n"
         << "  --library-type=<type>  Resolve an ambiguous library as header_only,\n"
         << "                         static_library, or dynamic_library\n"
+        << "                         default: infer from project contents\n"
         << "                         Use imported_library in the recipe for\n"
         << "                         prebuilt binaries with import profiles\n\n"
         << "  --init-version=<ver>   Override the initial version; a fourth dotted\n"
