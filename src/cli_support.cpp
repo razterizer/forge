@@ -73,7 +73,6 @@ namespace forge::cli
         << "                         Dependency style: local or git\n"
         << "                         local keeps verified sibling dependencies as paths;\n"
         << "                         git verifies inferred GitHub source dependencies\n"
-        << "  --github               Alias for --dependency-style=git\n"
         << "  --search-github        Search GitHub for unresolved dependency includes\n"
         << "  --local-search=<mode>  Local dependency search: nearby or off\n"
         << "  --library-type=<type>  Resolve an ambiguous library as header_only,\n"

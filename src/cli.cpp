@@ -2276,18 +2276,7 @@ namespace forge::cli
 
       for (const auto argument : arguments.subspan(1))
       {
-        if (argument == "--github")
-        {
-          if (dependency_style_set)
-          {
-            error << "forge: dependency style specified more than once\n";
-            return 2;
-          }
-
-          options.dependency_style = DependencyStyle::git;
-          dependency_style_set = true;
-        }
-        else if (const auto style = option_value(argument, "--dependency-style="))
+        if (const auto style = option_value(argument, "--dependency-style="))
         {
           if (dependency_style_set)
           {

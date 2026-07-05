@@ -2,6 +2,8 @@
 
 ## 0.11.1
 
+- Removed the deprecated `forge adopt --github` alias; use
+  `forge adopt --dependency-style=git` instead.
 - Made `forge doctor` show declared runtime asset entries, including whether
   each target stages or exports them and how many files directory mappings
   expand to.
@@ -90,9 +92,8 @@
 - Added `github` fallback metadata for local source dependencies, so local
   development recipes can also record the hosted repository Forge should use
   when adopting or locking reproducible dependency graphs.
-- Added `forge adopt --dependency-style=git` as the clearer spelling for
-  verifying inferred GitHub source dependencies, with `--github` retained as a
-  compatibility alias.
+- Added `forge adopt --dependency-style=git` for verifying inferred GitHub
+  source dependencies.
 - Renamed the build-then-launch workflow to `forge build-and-run`, while
   keeping `forge run` focused on launching an already-built executable.
 - Made launch commands print the selected profile before running the executable,

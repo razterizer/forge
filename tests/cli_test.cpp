@@ -1854,7 +1854,7 @@ namespace
     constexpr std::array duplicate_arguments {
       std::string_view { "adopt" },
       std::string_view { "--dependency-style=git" },
-      std::string_view { "--github" }
+      std::string_view { "--dependency-style=local" }
     };
     std::ostringstream duplicate_output;
     std::ostringstream duplicate_error;
@@ -1871,6 +1871,23 @@ namespace
     expect(
       contains(duplicate_error.str(), "dependency style specified more than once"),
       "duplicate dependency styles are explained"
+    );
+
+    TemporaryDirectory alias_directory;
+    constexpr std::array alias_arguments {
+      std::string_view { "adopt" },
+      std::string_view { "--github" }
+    };
+    std::ostringstream alias_output;
+    std::ostringstream alias_error;
+
+    expect(
+      forge::cli::run(alias_arguments, alias_directory.path(), alias_output, alias_error) == 2,
+      "adopt rejects the removed github dependency style alias"
+    );
+    expect(
+      contains(alias_error.str(), "forge: usage: forge adopt"),
+      "removed github dependency style alias prints adopt usage"
     );
   }
 

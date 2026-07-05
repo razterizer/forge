@@ -323,7 +323,7 @@ prefixes produce non-destructive same-owner repository suggestions. Run
 `forge adopt --dependency-style=git` to explicitly clone suggested
 repositories, verify their Forge recipes and public headers, and write accepted
 dependencies as exact Git commit pins. Normal `forge adopt` never accesses the
-network. `forge adopt --github` remains available as a compatibility alias.
+network.
 
 Forge generates CMake infrastructure under `.forge/generated/` and builds into
 `.forge/build/`.
