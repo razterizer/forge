@@ -9,6 +9,7 @@
 
 ![Top Languages](https://img.shields.io/github/languages/top/razterizer/forge)
 ![GitHub repo size](https://img.shields.io/github/repo-size/razterizer/forge)
+![C++ LOC](https://raw.githubusercontent.com/razterizer/forge/badges/loc-badge.svg)
 ![Commit Activity](https://img.shields.io/github/commit-activity/t/razterizer/forge)
 ![Last Commit](https://img.shields.io/github/last-commit/razterizer/forge?color=blue)
 ![Contributors](https://img.shields.io/github/contributors/razterizer/forge?color=blue)
