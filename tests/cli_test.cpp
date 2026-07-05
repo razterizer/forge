@@ -499,6 +499,45 @@ namespace
     expect(error.str().empty(), "runtime doctor findings are reported on stdout");
   }
 
+  void test_doctor_reports_declared_runtime_assets()
+  {
+    TemporaryDirectory directory;
+    write_file(
+      directory.path() / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"runtime-lib\"\n"
+      "version = \"0.1.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/runtime_lib/runtime_lib.h\"]\n\n"
+      "[runtime]\n"
+      "files = [{ source = \"data/fonts\", destination = \"runtime-lib/fonts\" }]\n"
+    );
+    write_file(directory.path() / "include/runtime_lib/runtime_lib.h", "#pragma once\n");
+    write_file(directory.path() / "data/fonts/regular.txt", "regular\n");
+    write_file(directory.path() / "data/fonts/bold.txt", "bold\n");
+    write_file(directory.path() / "RELEASE_NOTES.md", "# Release notes\n\n## 0.1.0\n\n- Test.\n");
+
+    constexpr std::array arguments { std::string_view { "doctor" } };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "doctor accepts declared runtime assets"
+    );
+    expect(
+      contains(output.str(), "Declared 1 runtime asset entry")
+        && contains(output.str(), "project exports 2 runtime assets from 1 entry")
+        && contains(output.str(), "data/fonts -> runtime-lib/fonts")
+        && contains(output.str(), "Forge doctor found no problems"),
+      "doctor reports declared exported runtime assets"
+    );
+    expect(error.str().empty(), "declared runtime doctor findings are reported on stdout");
+  }
+
   void test_doctor_reports_unadopted_dependency_suggestions()
   {
     TemporaryDirectory directory;
@@ -6769,6 +6808,7 @@ int main()
   test_doctor_checks_project_health();
   test_doctor_reports_errors_and_warnings();
   test_doctor_reports_inferred_runtime_assets();
+  test_doctor_reports_declared_runtime_assets();
   test_doctor_reports_unadopted_dependency_suggestions();
   test_doctor_can_disable_local_dependency_search();
   test_doctor_reports_include_directory_dependency_evidence();

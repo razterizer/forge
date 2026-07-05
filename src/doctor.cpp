@@ -2,6 +2,7 @@
 #include "file_support.h"
 #include "project_scan.h"
 #include "recipe.h"
+#include "runtime_assets.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -12,6 +13,7 @@
 #include <ostream>
 #include <ranges>
 #include <regex>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -274,6 +276,87 @@ namespace forge
 
       for (const auto& runtime_file : runtime_files)
         output << "  " << format_runtime_file(runtime_file) << '\n';
+    }
+
+    std::string plural(std::size_t count,
+                       std::string_view singular,
+                       std::string_view plural)
+    {
+      return std::string { count == 1 ? singular : plural };
+    }
+
+    std::string runtime_asset_action(std::string_view type)
+    {
+      return type == "executable" ? "stages" : "exports";
+    }
+
+    struct RuntimeFileScope
+    {
+      std::string label;
+      std::string type;
+      std::vector<RuntimeFile> files;
+    };
+
+    void report_declared_runtime_files(const std::filesystem::path& project_directory,
+                                       const Recipe& recipe,
+                                       DoctorState& state,
+                                       std::ostream& output)
+    {
+      std::vector<RuntimeFileScope> scopes {
+        { "project", recipe.type, recipe.runtime_files }
+      };
+      std::size_t entry_count = recipe.runtime_files.size();
+
+      for (const auto& target : recipe.targets)
+      {
+        scopes.push_back({ "target '" + target.name + "'", target.type, target.runtime_files });
+        entry_count += target.runtime_files.size();
+      }
+
+      for (const auto& target : recipe.internal_targets)
+      {
+        scopes.push_back({ "internal target '" + target.name + "'", target.type, target.runtime_files });
+        entry_count += target.runtime_files.size();
+      }
+
+      output << "Declared " << entry_count << " runtime asset "
+             << plural(entry_count, "entry", "entries") << '\n';
+
+      for (const auto& scope : scopes)
+      {
+        if (scope.files.empty())
+          continue;
+
+        std::vector<RuntimeAsset> assets;
+        std::ostringstream collect_error;
+        const auto collected =
+          collect_runtime_assets(project_directory, scope.files, assets, collect_error);
+
+        output << "  " << scope.label << ' ' << runtime_asset_action(scope.type) << ' ';
+
+        if (collected)
+        {
+          output << assets.size() << " runtime "
+                 << plural(assets.size(), "asset", "assets")
+                 << " from " << scope.files.size() << ' '
+                 << plural(scope.files.size(), "entry", "entries") << '\n';
+        }
+        else
+        {
+          output << scope.files.size() << " invalid runtime "
+                 << plural(scope.files.size(), "entry", "entries") << '\n';
+
+          auto message = std::string { trim(collect_error.str()) };
+
+          if (message.starts_with("forge: "))
+            message.erase(0, std::string_view { "forge: " }.size());
+
+          report_error(output, state, "runtime asset declaration is invalid: " + message);
+        }
+
+        for (const auto& runtime_file : scope.files)
+          output << "    " << format_runtime_file(runtime_file) << '\n';
+      }
     }
 
     bool dependency_is_declared(const Recipe& recipe,
@@ -844,6 +927,7 @@ namespace forge
 
     const auto declared_runtime = declared_runtime_files(recipe);
     const auto inferred_runtime = inferred_runtime_files(project_directory, recipe, scan.headers);
+    report_declared_runtime_files(project_directory, recipe, state, output);
     report_inferred_runtime_files(inferred_runtime, output);
 
     for (const auto& runtime_file : inferred_runtime)
