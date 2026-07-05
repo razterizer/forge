@@ -661,7 +661,9 @@ namespace forge
       std::vector<std::string> repositories;
       std::set<std::string> seen;
       const std::regex pattern { R"json("full_name"[[:space:]]*:[[:space:]]*"([^"]+/[^"]+)")json" };
-      const auto begin = std::cregex_iterator { json.begin(), json.end(), pattern };
+      const auto json_begin = json.data();
+      const auto json_end = json.data() + json.size();
+      const auto begin = std::cregex_iterator { json_begin, json_end, pattern };
       const auto end = std::cregex_iterator {};
 
       for (auto match = begin; match != end && repositories.size() != 5; ++match)
