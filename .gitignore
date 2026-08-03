@@ -2,3 +2,6 @@
 /build/
 /out/
 **/xcuserdata/
+
+# Misc MacOS
+.DS_Store
