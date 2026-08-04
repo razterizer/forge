@@ -1,6 +1,6 @@
 # Release notes
 
-## Next
+## 0.13.0
 
 - Added independently composable `build.<argument>.<value>...` and
   `dependencies.<argument>.<value>...` selector rules for dependency style,
