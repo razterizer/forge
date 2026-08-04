@@ -65,12 +65,12 @@ namespace forge::cli
       output
         << "Discover an existing C++ project and create Forge metadata.\n\n"
         << "Usage:\n"
-        << "  forge adopt [--dependency-style=<style>] [--library-type=<type>]\n"
+        << "  forge adopt [--style=<style>] [--library-type=<type>]\n"
         << "              [--init-version=<ver>] [--version-header-path=<path>]\n"
         << "              [--search-github] [--local-search=<mode>]\n\n"
         << "Options:\n"
-        << "  --dependency-style=<style>\n"
-        << "                         Dependency style: local or git; default: local\n"
+        << "  --style=<style>       Dependency style: local-source or git-source;\n"
+        << "                         default: local-source\n"
         << "                         local keeps verified sibling dependencies as paths;\n"
         << "                         git verifies inferred GitHub source dependencies\n"
         << "  --search-github        Search GitHub for unresolved dependency includes\n"
@@ -92,7 +92,7 @@ namespace forge::cli
         << "Examples:\n"
         << "  forge adopt\n"
         << "  forge adopt --library-type=static_library\n"
-        << "  forge adopt --dependency-style=git\n"
+        << "  forge adopt --style=git-source\n"
         << "  forge adopt --search-github\n"
         << "  forge adopt --local-search=off\n";
       return true;
@@ -150,11 +150,14 @@ namespace forge::cli
       output
         << "Build the current project, selected target, or workspace selection.\n\n"
         << "Usage:\n"
-        << "  forge build [target] [--profile=<name> | --sysprofile=<name>] "
-        << "[--define=<symbol> ...]\n\n"
+        << "  forge build [target] [--style=<name>] [--platform=<os-arch>] "
+        << "[--config=<name>] [--profile=<name>] [--define=<symbol> ...]\n\n"
         << "Options:\n"
-        << "  --profile=<name>     Select matching dependency and build profiles\n"
-        << "  --sysprofile=<name>  Select a reserved Forge system profile\n"
+        << "  --style=<name>       Select a dependency style\n"
+        << "  --platform=<os-arch> Select platform-specific selector rules\n"
+        << "  --config=<name>      Select a build configuration\n"
+        << "  --profile=<name>     Select a software profile (legacy recipes select a combined profile)\n"
+        << "  --sysprofile=<name>  Select a legacy reserved Forge system profile\n"
         << "  --define=<symbol>    Add a temporary NAME or NAME=value definition\n";
       return true;
     }
@@ -177,7 +180,8 @@ namespace forge::cli
         << "Build and run an executable project or target.\n\n"
         << "Usage:\n"
         << "  forge build-and-run [target|project[/target]] "
-        << "[--profile=<name> | --sysprofile=<name>] [-- arguments...]\n\n"
+        << "[--style=<name>] [--platform=<os-arch>] [--config=<name>] "
+        << "[--profile=<name>] [-- arguments...]\n\n"
         << "Arguments after '--' are forwarded to the executable. Workspace runs\n"
         << "require a project or project/target selection.\n";
       return true;
@@ -457,7 +461,7 @@ namespace forge::cli
   void print_adopt_usage(std::ostream& error)
   {
     error
-      << "forge: usage: forge adopt [--dependency-style=<style>] "
+      << "forge: usage: forge adopt [--style=<style>] "
       << "[--library-type=<type>] [--init-version=<ver>] "
       << "[--version-header-path=<path>] [--search-github] "
       << "[--local-search=<mode>]\n";
@@ -481,6 +485,7 @@ namespace forge::cli
   void print_build_usage(std::ostream& error)
   {
     error << "forge: usage: forge build [target] "
+          << "[--style=<name>] [--platform=<os-arch>] [--config=<name>] "
           << "[--profile=<name> | --sysprofile=<name>] [--define=<symbol> ...]\n";
   }
 

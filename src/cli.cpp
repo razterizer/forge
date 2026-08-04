@@ -1600,6 +1600,9 @@ namespace forge::cli
 
       std::optional<std::string> profile;
       std::optional<std::string> system_profile;
+      std::optional<std::string> style;
+      std::optional<std::string> platform;
+      std::optional<std::string> config;
       std::optional<std::string> target;
       std::vector<std::string_view> program_arguments;
       bool forwarding = false;
@@ -1630,6 +1633,42 @@ namespace forge::cli
           if (!read_system_profile_option(argument, system_profile, error))
             return 2;
         }
+        else if (!forwarding && argument.starts_with("--style="))
+        {
+          const auto value = *option_value(argument, "--style=");
+
+          if (!build_first || style || value.empty())
+          {
+            error << "forge: --style requires one non-empty value on build-and-run\n";
+            return 2;
+          }
+
+          style = std::string { value };
+        }
+        else if (!forwarding && argument.starts_with("--platform="))
+        {
+          const auto value = *option_value(argument, "--platform=");
+
+          if (!build_first || platform || value.empty())
+          {
+            error << "forge: --platform requires one non-empty value on build-and-run\n";
+            return 2;
+          }
+
+          platform = std::string { value };
+        }
+        else if (!forwarding && argument.starts_with("--config="))
+        {
+          const auto value = *option_value(argument, "--config=");
+
+          if (!build_first || config || value.empty())
+          {
+            error << "forge: --config requires one non-empty value on build-and-run\n";
+            return 2;
+          }
+
+          config = std::string { value };
+        }
         else if (!forwarding && (workspace || !recipe.targets.empty()) && !target)
         {
           target = std::string { argument };
@@ -1655,6 +1694,24 @@ namespace forge::cli
 
         if (build_first)
         {
+          if (style || platform || config)
+          {
+            BuildOptions options;
+            options.profile = profile;
+            options.system_profile = system_profile;
+            options.style = style;
+            options.platform = platform;
+            options.config = config;
+            return build_and_run_workspace(
+              working_directory,
+              *target,
+              options,
+              program_arguments,
+              output,
+              error
+            );
+          }
+
           return build_and_run_workspace(
             working_directory,
             *target,
@@ -1680,15 +1737,13 @@ namespace forge::cli
       {
         if (build_first)
         {
-          return build_and_run_project(
-            working_directory,
-            std::nullopt,
-            profile,
-            system_profile,
-            program_arguments,
-            output,
-            error
-          );
+          BuildOptions options;
+          options.profile = profile;
+          options.system_profile = system_profile;
+          options.style = style;
+          options.platform = platform;
+          options.config = config;
+          return build_and_run_project(working_directory, options, program_arguments, output, error);
         }
 
         return run_project(working_directory, std::nullopt, profile, program_arguments, output, error);
@@ -1696,15 +1751,14 @@ namespace forge::cli
 
       if (build_first)
       {
-        return build_and_run_project(
-          working_directory,
-          target,
-          profile,
-          system_profile,
-          program_arguments,
-          output,
-          error
-        );
+        BuildOptions options;
+        options.target = target;
+        options.profile = profile;
+        options.system_profile = system_profile;
+        options.style = style;
+        options.platform = platform;
+        options.config = config;
+        return build_and_run_project(working_directory, options, program_arguments, output, error);
       }
 
       return run_project(
@@ -2147,6 +2201,42 @@ namespace forge::cli
           if (!read_system_profile_option(argument, options.system_profile, error))
             return 2;
         }
+        else if (argument.starts_with("--style="))
+        {
+          const auto value = *option_value(argument, "--style=");
+
+          if (options.style || value.empty())
+          {
+            error << "forge: dependency style may only be specified once and cannot be empty\n";
+            return 2;
+          }
+
+          options.style = std::string { value };
+        }
+        else if (argument.starts_with("--platform="))
+        {
+          const auto value = *option_value(argument, "--platform=");
+
+          if (options.platform || value.empty())
+          {
+            error << "forge: platform may only be specified once and cannot be empty\n";
+            return 2;
+          }
+
+          options.platform = std::string { value };
+        }
+        else if (argument.starts_with("--config="))
+        {
+          const auto value = *option_value(argument, "--config=");
+
+          if (options.config || value.empty())
+          {
+            error << "forge: configuration may only be specified once and cannot be empty\n";
+            return 2;
+          }
+
+          options.config = std::string { value };
+        }
         else if (argument.starts_with("--define="))
         {
           const auto definition = *option_value(argument, "--define=");
@@ -2179,15 +2269,7 @@ namespace forge::cli
       if (!std::filesystem::exists(working_directory / "forge.recipe.toml")
           && std::filesystem::exists(working_directory / "forge.workspace.toml"))
       {
-        return build_workspace(
-          working_directory,
-          options.target,
-          options.profile,
-          options.system_profile,
-          options.compile_definitions,
-          output,
-          error
-        );
+        return build_workspace(working_directory, options, output, error);
       }
 
       return build_project(working_directory, options, output, error);
@@ -2342,7 +2424,9 @@ namespace forge::cli
 
       for (const auto argument : arguments.subspan(1))
       {
-        if (const auto style = option_value(argument, "--dependency-style="))
+        if (const auto style = argument.starts_with("--style=")
+              ? option_value(argument, "--style=")
+              : option_value(argument, "--dependency-style="))
         {
           if (dependency_style_set)
           {
@@ -2350,13 +2434,13 @@ namespace forge::cli
             return 2;
           }
 
-          if (*style == "local")
+          if (*style == "local" || *style == "local-source")
             options.dependency_style = DependencyStyle::local;
-          else if (*style == "git")
+          else if (*style == "git" || *style == "git-source")
             options.dependency_style = DependencyStyle::git;
           else
           {
-            error << "forge: dependency style must be local or git\n";
+            error << "forge: adopt style must be local-source or git-source\n";
             return 2;
           }
 

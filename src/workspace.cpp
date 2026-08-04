@@ -2,9 +2,11 @@
 
 #include "recipe.h"
 #include "run.h"
+#include "target_support.h"
 #include "test.h"
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <map>
 #include <set>
@@ -552,6 +554,139 @@ namespace forge
     return 0;
   }
 
+  int build_workspace(const std::filesystem::path& workspace_directory,
+                      const BuildOptions& requested_options,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    return build_workspace(
+      workspace_directory,
+      requested_options,
+      run_process,
+      output,
+      error
+    );
+  }
+
+  int build_workspace(const std::filesystem::path& workspace_directory,
+                      const BuildOptions& requested_options,
+                      const ProcessRunner& process_runner,
+                      std::ostream& output,
+                      std::ostream& error)
+  {
+    Workspace workspace;
+    std::map<std::filesystem::path, Recipe> recipes;
+
+    if (!load_workspace(workspace_directory, workspace, recipes, error))
+      return 2;
+
+    const auto project = requested_options.target;
+    const auto platform = requested_options.platform.value_or(current_target());
+
+    for (auto& [path, recipe] : recipes)
+    {
+      static_cast<void>(path);
+      const auto legacy_profile = requested_options.profile
+          && (recipe.dependency_profiles.contains(*requested_options.profile)
+              || recipe.build_profiles.contains(*requested_options.profile))
+        ? requested_options.profile
+        : std::optional<std::string> {};
+
+      if (legacy_profile
+          && !select_dependency_profile(recipe, legacy_profile, false, error))
+      {
+        return 2;
+      }
+      if (requested_options.system_profile
+          && !select_system_dependency_profile(
+            recipe,
+            requested_options.system_profile,
+            false,
+            error
+          ))
+      {
+        return 2;
+      }
+
+      RecipeSelection selection;
+      selection.style = requested_options.style.value_or("local-source");
+      selection.platform = platform;
+      selection.configuration = requested_options.config.value_or("debug");
+      std::ranges::transform(
+        selection.configuration,
+        selection.configuration.begin(),
+        [](unsigned char character)
+        {
+          return static_cast<char>(std::tolower(character));
+        }
+      );
+      selection.profile = requested_options.profile.value_or("");
+      auto configuration = requested_options.configuration;
+
+      if (!legacy_profile && !apply_selector_rules(recipe, selection, configuration, error))
+        return 2;
+    }
+
+    std::vector<const WorkspaceProject*> ordered;
+
+    if (!order_projects(workspace, recipes, project, std::nullopt, std::nullopt, ordered, error))
+      return 2;
+
+    std::set<std::filesystem::path> dependency_projects;
+
+    for (const auto* current : ordered)
+    {
+      const auto& recipe = recipes.at(current->path);
+
+      for (const auto& dependency : recipe.dependencies)
+      {
+        if (dependency.path.empty())
+          continue;
+
+        std::error_code filesystem_error;
+        const auto dependency_path =
+          std::filesystem::weakly_canonical(current->path / dependency.path, filesystem_error);
+
+        if (!filesystem_error && recipes.contains(dependency_path))
+          dependency_projects.insert(dependency_path);
+      }
+    }
+
+    output << "Building workspace " << workspace.name << '\n';
+
+    for (const auto* current : ordered)
+    {
+      if ((project && current->name != *project)
+          || (!project && dependency_projects.contains(current->path)))
+      {
+        continue;
+      }
+
+      const auto& recipe = recipes.at(current->path);
+      auto options = requested_options;
+      options.target.reset();
+
+      if (recipe.targets.empty())
+      {
+        if (build_project(current->path, options, process_runner, output, error) != 0)
+          return 2;
+      }
+      else
+      {
+        for (const auto& target : recipe.targets)
+        {
+          options.target = target.name;
+
+          if (build_project(current->path, options, process_runner, output, error) != 0)
+            return 2;
+        }
+      }
+    }
+
+    output << "Built workspace " << workspace.name << '\n';
+    return 0;
+  }
+
   int run_workspace(const std::filesystem::path& workspace_directory,
                     std::string_view selection,
                     const std::optional<std::string>& profile,
@@ -701,6 +836,35 @@ namespace forge
       output,
       error
     );
+  }
+
+  int build_and_run_workspace(const std::filesystem::path& workspace_directory,
+                              std::string_view selection,
+                              const BuildOptions& requested_options,
+                              std::span<const std::string_view> arguments,
+                              std::ostream& output,
+                              std::ostream& error)
+  {
+    Workspace workspace;
+    std::map<std::filesystem::path, Recipe> recipes;
+
+    if (!load_workspace(workspace_directory, workspace, recipes, error))
+      return 2;
+
+    std::string project_name;
+    std::optional<std::string> target;
+
+    if (!parse_selection(selection, project_name, target, error))
+      return 2;
+
+    const auto* project = find_project(workspace, project_name, error);
+
+    if (!project)
+      return 2;
+
+    auto options = requested_options;
+    options.target = target;
+    return build_and_run_project(project->path, options, arguments, output, error);
   }
 
   int test_workspace(const std::filesystem::path& workspace_directory,

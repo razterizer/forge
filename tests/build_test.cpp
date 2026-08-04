@@ -481,6 +481,118 @@ namespace
     expect(error.str().empty(), "successful build profile does not write an error");
   }
 
+  void test_build_applies_selector_rules()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[build.config.debug]\n"
+      << "configuration = \"Debug\"\n"
+      << "defines = [\"DEBUG_BUILD\"]\n"
+      << "\n[build.config.release]\n"
+      << "configuration = \"Release\"\n"
+      << "defines = [\"RELEASE_BUILD\"]\n"
+      << "\n[build.config.-.profile.applaudio]\n"
+      << "defines = [\"USE_APPLAUDIO\"]\n";
+    recipe.close();
+    forge::BuildOptions options;
+    options.config = "release";
+    options.profile = "applaudio";
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [&commands](const std::vector<std::string>& arguments,
+                  const std::filesystem::path&,
+                  std::ostream&)
+      {
+        commands.push_back(arguments);
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), options, runner, output, error) == 0,
+      "build succeeds with selector rules"
+    );
+    const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
+    expect(contains(generated, "\"RELEASE_BUILD\""), "config selector applies release settings");
+    expect(!contains(generated, "\"DEBUG_BUILD\""), "config selector excludes debug settings");
+    expect(contains(generated, "\"USE_APPLAUDIO\""), "wildcard config combines with profile selector");
+    expect(
+      commands.size() == 2 && commands[1][4] == "Release",
+      "config selector selects the CMake configuration"
+    );
+    expect(error.str().empty(), "successful selector build does not write an error");
+  }
+
+  void test_dependency_style_validates_rule_shape()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[dependencies.style.local-source]\n"
+      << "Core = { github = \"razterizer/Core\", version = \"1.5.0+build.8\" }\n";
+    recipe.close();
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 2,
+      "dependency style rejects a mismatched declaration"
+    );
+    expect(invocations == 0, "invalid dependency style does not invoke external tools");
+    expect(contains(error.str(), "invalid recipe value"), "style mismatch identifies the recipe line");
+  }
+
+  void test_selector_recipe_keeps_legacy_workflow_profile()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[build.config.debug]\n"
+      << "configuration = \"Debug\"\n"
+      << "defines = [\"DEBUG_BUILD\"]\n"
+      << "\n[profile.workflow-release.build]\n"
+      << "configuration = \"Release\"\n"
+      << "defines = [\"WORKFLOW_RELEASE\"]\n";
+    recipe.close();
+    forge::BuildOptions options;
+    options.profile = "workflow-release";
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [&commands](const std::vector<std::string>& arguments,
+                  const std::filesystem::path&,
+                  std::ostream&)
+      {
+        commands.push_back(arguments);
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), options, runner, output, error) == 0,
+      "selector recipe accepts the legacy workflow-release profile"
+    );
+    const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
+    expect(contains(generated, "\"WORKFLOW_RELEASE\""), "legacy workflow settings are applied");
+    expect(!contains(generated, "\"DEBUG_BUILD\""), "selector rules do not leak into legacy workflow builds");
+    expect(commands.size() == 2 && commands[1][4] == "Release", "legacy workflow stays Release");
+    expect(error.str().empty(), "legacy workflow migration build does not write an error");
+  }
+
   void test_build_generates_system_package_hint_diagnostics()
   {
     TemporaryDirectory directory;
@@ -2067,6 +2179,9 @@ int main()
   test_build_generates_named_target_definitions();
   test_build_rejects_invalid_recipe_definition();
   test_build_applies_build_profile();
+  test_build_applies_selector_rules();
+  test_dependency_style_validates_rule_shape();
+  test_selector_recipe_keeps_legacy_workflow_profile();
   test_build_generates_system_package_hint_diagnostics();
   test_build_generates_named_target_system_package_hint_diagnostics();
   test_build_skips_dependencies_filtered_to_other_targets();

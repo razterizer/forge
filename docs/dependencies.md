@@ -152,11 +152,38 @@ resolve to a single `target = "any"` entry.
 Use `forge list platforms` to inspect the supported platform strings accepted by
 `--target=<os-arch>` and used by release-target updates.
 
-## Dependency profiles
+## Dependency selector rules
+
+New recipes should select dependency representation independently from build
+configuration and software profile:
+
+```toml
+[dependencies.style.local-source]
+Core = { path = "../Core" }
+
+[dependencies.style.github-package]
+Core = { github = "razterizer/Core", version = "1.5.0+build.8" }
+```
+
+Select either set without coupling it to Debug/Release or a backend profile:
+
+```sh
+forge build --style=local-source --config=debug --profile=applaudio
+forge build --style=github-package --config=release --profile=openal
+```
+
+Rule paths follow `dependencies.<argument>.<value>...`; supported arguments are
+`style`, `platform`, `config`, and `profile`. `-` is a wildcard value. Exact
+style rules validate the dependency shape: `local-source` uses `path`,
+`git-source` uses `git` plus `commit`, `local-package` uses `box`, `url-package`
+uses `url` plus `sha256`, and `github-package` uses `github` plus `version`.
+
+## Legacy dependency profiles
 
 Profile names such as `dev` and `pinned` are conventions chosen by the project.
 They have no built-in dependency semantics. Each profile may contain any of the
-dependency forms above.
+dependency forms above. This combined-profile format remains supported while
+existing recipes and generated CI workflows migrate to selector rules.
 
 A common workflow uses editable sibling sources for development and released
 packages for reproducible builds:

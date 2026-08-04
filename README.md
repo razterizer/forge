@@ -521,51 +521,58 @@ like a local source dependency. Cached checkouts are verified against the
 declared commit before reuse. The exact commit in the recipe is the source of
 truth, so pinned Git source dependencies do not require a lockfile entry.
 
-Named dependency profiles let development builds use editable local projects
-while reproducible builds use exact Git commits:
+Selector rules keep dependency representation, build configuration, platform,
+and software variants independently composable. Rule paths contain alternating
+argument/value descriptors after `build` or `dependencies`:
 
 ```toml
-[profile.dev.dependencies]
+[dependencies.style.local-source]
 answer = { path = "../answer" }
 
-[profile.pinned.dependencies]
+[dependencies.style.git-source]
 answer = {
   git = "https://github.com/example/answer.git",
   commit = "0123456789abcdef0123456789abcdef01234567"
 }
-```
 
-The same profile may also select build settings:
-
-```toml
-[profile.Debug.build]
+[build.config.debug]
 configuration = "Debug"
 defines = ["DEBUG_UI"]
 
-[profile.Release.build]
+[build.config.release]
 configuration = "Release"
 defines = ["NDEBUG"]
+
+[build.config.-.profile.applaudio]
+defines = ["USE_APPLAUDIO"]
 ```
 
-Select a profile for the complete command:
+`-` is the wildcard value. Omitted selector arguments do not constrain a rule;
+matching rules are layered from general to specific. Select dimensions
+independently:
 
 ```sh
-forge build --profile=pinned
-forge build-and-run --profile=dev
-forge test --profile=pinned
+forge build --style=local-source --config=debug --profile=applaudio
+forge build-and-run --style=git-source --config=release --profile=applaudio
 ```
 
-List declared dependency/build profiles and profile-backed release or cbox
-variants:
+Supported dependency styles mirror the existing dependency forms:
+`local-source`, `git-source`, `local-package`, `url-package`, and
+`github-package`. Forge validates dependencies declared below an exact style
+selector against that form.
+
+Legacy `[profile.<name>.dependencies]`, `[profile.<name>.build]`, and
+`--sysprofile` remain readable during CI migration. On recipes without selector
+rules, `--profile=<name>` retains its legacy combined-profile behavior.
+
+List declared legacy profiles and profile-backed release or cbox variants:
 
 ```sh
 forge list profiles
 ```
 
-The root recipe must declare the requested profile. Forge propagates the
-selection through transitive source dependencies; dependencies declaring the
-same profile use its dependency and build settings, while dependencies without
-it retain their normal dependencies and build settings.
+Selector choices propagate through transitive source dependencies. Each recipe
+applies the matching rules it declares and otherwise retains its base settings.
 
 Projects may also consume an existing local box directly:
 

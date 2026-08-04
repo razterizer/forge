@@ -1,5 +1,4 @@
 #include "recipe.h"
-
 #include <algorithm>
 #include <cctype>
 #include <charconv>
@@ -84,6 +83,106 @@ namespace forge
         && value != ".."
         && value.find('/') == std::string_view::npos
         && value.find('\\') == std::string_view::npos;
+    }
+
+    bool parse_sources(std::string_view value, std::vector<std::filesystem::path>& sources);
+    bool parse_definitions(std::string_view value, std::vector<std::string>& definitions);
+
+    bool is_selector_argument(std::string_view value)
+    {
+      return value == "style"
+        || value == "platform"
+        || value == "config"
+        || value == "profile";
+    }
+
+    bool is_dependency_style(std::string_view value)
+    {
+      return value == "local-source"
+        || value == "git-source"
+        || value == "local-package"
+        || value == "url-package"
+        || value == "github-package";
+    }
+
+    bool parse_selector_path(std::string_view value, RecipeSelectors& selectors)
+    {
+      selectors.clear();
+
+      while (!value.empty())
+      {
+        const auto argument_end = value.find('.');
+
+        if (argument_end == std::string_view::npos)
+          return false;
+
+        const auto argument = value.substr(0, argument_end);
+        value.remove_prefix(argument_end + 1);
+        const auto value_end = value.find('.');
+        const auto selected = value.substr(0, value_end);
+
+        if (!is_selector_argument(argument)
+            || !is_safe_name(selected)
+            || selectors.contains(std::string { argument })
+            || (argument == "style" && selected != "-" && !is_dependency_style(selected)))
+        {
+          return false;
+        }
+
+        selectors.emplace(argument, selected);
+
+        if (value_end == std::string_view::npos)
+          value = {};
+        else
+          value.remove_prefix(value_end + 1);
+      }
+
+      return !selectors.empty();
+    }
+
+    bool parse_build_setting(std::string_view key,
+                             std::string_view value,
+                             BuildProfile& build)
+    {
+      if (key == "configuration")
+        return parse_string(value, build.configuration);
+      if (key == "cpp_std")
+        return parse_integer(value, build.cpp_standard);
+      if (key == "include_dirs")
+        return parse_sources(value, build.include_directories);
+      if (key == "macos_system_include_dirs")
+        return parse_sources(value, build.macos_system_include_directories);
+      if (key == "linux_system_include_dirs")
+        return parse_sources(value, build.linux_system_include_directories);
+      if (key == "windows_system_include_dirs")
+        return parse_sources(value, build.windows_system_include_directories);
+      if (key == "macos_system_library_dirs")
+        return parse_sources(value, build.macos_system_library_directories);
+      if (key == "linux_system_library_dirs")
+        return parse_sources(value, build.linux_system_library_directories);
+      if (key == "windows_system_library_dirs")
+        return parse_sources(value, build.windows_system_library_directories);
+      if (key == "defines")
+        return parse_definitions(value, build.compile_definitions);
+
+      return false;
+    }
+
+    bool dependency_matches_style(const Dependency& dependency, std::string_view style)
+    {
+      if (style == "local-source")
+        return !dependency.path.empty() && dependency.git.empty() && dependency.box.empty()
+          && dependency.url.empty();
+      if (style == "git-source")
+        return !dependency.git.empty() && !dependency.commit.empty();
+      if (style == "local-package")
+        return !dependency.box.empty();
+      if (style == "url-package")
+        return !dependency.url.empty() && !dependency.sha256.empty();
+      if (style == "github-package")
+        return !dependency.github.empty() && !dependency.version.empty();
+
+      return true;
     }
 
     bool parse_sources(std::string_view value, std::vector<std::filesystem::path>& sources)
@@ -944,6 +1043,71 @@ namespace forge
         else
           valid = false;
       }
+      else if (section.starts_with("build."))
+      {
+        RecipeSelectors selectors;
+        valid = parse_selector_path(
+          section.substr(std::string_view { "build." }.size()),
+          selectors
+        );
+
+        if (valid)
+        {
+          auto rule = std::ranges::find_if(
+            recipe.build_rules,
+            [&selectors](const BuildRule& candidate)
+            {
+              return candidate.selectors == selectors;
+            }
+          );
+
+          if (rule == recipe.build_rules.end())
+          {
+            recipe.build_rules.push_back({ std::move(selectors), {} });
+            rule = std::prev(recipe.build_rules.end());
+          }
+
+          valid = parse_build_setting(key, value, rule->build);
+        }
+      }
+      else if (section.starts_with("dependencies."))
+      {
+        RecipeSelectors selectors;
+        valid = parse_selector_path(
+          section.substr(std::string_view { "dependencies." }.size()),
+          selectors
+        );
+        Dependency dependency;
+        dependency.name = std::string { key };
+        valid = valid && !dependency.name.empty() && parse_dependency(value, dependency);
+
+        if (valid)
+        {
+          const auto style = selectors.find("style");
+          valid = style == selectors.end()
+            || style->second == "-"
+            || dependency_matches_style(dependency, style->second);
+        }
+
+        if (valid)
+        {
+          auto rule = std::ranges::find_if(
+            recipe.dependency_rules,
+            [&selectors](const DependencyRule& candidate)
+            {
+              return candidate.selectors == selectors;
+            }
+          );
+
+          if (rule == recipe.dependency_rules.end())
+          {
+            recipe.dependency_rules.push_back({ std::move(selectors), {} });
+            rule = std::prev(recipe.dependency_rules.end());
+          }
+
+          rule->dependencies.push_back(std::move(dependency));
+        }
+      }
       else if (section == "dependencies"
                || section.starts_with("profile.")
                || section.starts_with("sysprofile."))
@@ -1001,28 +1165,7 @@ namespace forge
                   ? recipe.system_build_profiles[std::string { profile }]
                   : recipe.build_profiles[std::string { profile }];
 
-              if (key == "configuration")
-                valid = parse_string(value, build.configuration);
-              else if (key == "cpp_std")
-                valid = parse_integer(value, build.cpp_standard);
-              else if (key == "include_dirs")
-                valid = parse_sources(value, build.include_directories);
-              else if (key == "macos_system_include_dirs")
-                valid = parse_sources(value, build.macos_system_include_directories);
-              else if (key == "linux_system_include_dirs")
-                valid = parse_sources(value, build.linux_system_include_directories);
-              else if (key == "windows_system_include_dirs")
-                valid = parse_sources(value, build.windows_system_include_directories);
-              else if (key == "macos_system_library_dirs")
-                valid = parse_sources(value, build.macos_system_library_directories);
-              else if (key == "linux_system_library_dirs")
-                valid = parse_sources(value, build.linux_system_library_directories);
-              else if (key == "windows_system_library_dirs")
-                valid = parse_sources(value, build.windows_system_library_directories);
-              else if (key == "defines")
-                valid = parse_definitions(value, build.compile_definitions);
-              else
-                valid = false;
+              valid = parse_build_setting(key, value, build);
             }
           }
           else if (is_profile || is_system_profile)
@@ -1490,6 +1633,107 @@ namespace forge
     }
 
     apply_build_profile(recipe, profile->second, configuration);
+    return true;
+  }
+
+  bool apply_selector_rules(Recipe& recipe,
+                            const RecipeSelection& selection,
+                            std::string& configuration,
+                            std::ostream& error)
+  {
+    const auto selected_value = [&selection](std::string_view argument) -> std::string_view
+    {
+      if (argument == "style")
+        return selection.style;
+      if (argument == "platform")
+        return selection.platform;
+      if (argument == "config")
+        return selection.configuration;
+      if (argument == "profile")
+        return selection.profile;
+      return {};
+    };
+    const auto matches = [&selected_value](const RecipeSelectors& selectors)
+    {
+      return std::ranges::all_of(
+        selectors,
+        [&selected_value](const auto& selector)
+        {
+          return selector.second == "-" || selected_value(selector.first) == selector.second;
+        }
+      );
+    };
+    const auto specificity = [](const RecipeSelectors& selectors)
+    {
+      return std::ranges::count_if(
+        selectors,
+        [](const auto& selector)
+        {
+          return selector.second != "-";
+        }
+      );
+    };
+
+    std::vector<const DependencyRule*> dependency_rules;
+
+    for (const auto& rule : recipe.dependency_rules)
+    {
+      if (matches(rule.selectors))
+        dependency_rules.push_back(&rule);
+    }
+
+    std::ranges::stable_sort(
+      dependency_rules,
+      [&specificity](const DependencyRule* left, const DependencyRule* right)
+      {
+        return specificity(left->selectors) < specificity(right->selectors);
+      }
+    );
+
+    for (const auto* rule : dependency_rules)
+    {
+      for (const auto& dependency : rule->dependencies)
+      {
+        const auto existing = std::ranges::find_if(
+          recipe.dependencies,
+          [&dependency](const Dependency& candidate)
+          {
+            return candidate.name == dependency.name;
+          }
+        );
+
+        if (existing == recipe.dependencies.end())
+          recipe.dependencies.push_back(dependency);
+        else
+          *existing = dependency;
+      }
+    }
+
+    std::vector<const BuildRule*> build_rules;
+
+    for (const auto& rule : recipe.build_rules)
+    {
+      if (matches(rule.selectors))
+        build_rules.push_back(&rule);
+    }
+
+    std::ranges::stable_sort(
+      build_rules,
+      [&specificity](const BuildRule* left, const BuildRule* right)
+      {
+        return specificity(left->selectors) < specificity(right->selectors);
+      }
+    );
+
+    for (const auto* rule : build_rules)
+      apply_build_profile(recipe, rule->build, configuration);
+
+    if (!selection.style.empty() && !is_dependency_style(selection.style))
+    {
+      error << "forge: unknown dependency style '" << selection.style << "'\n";
+      return false;
+    }
+
     return true;
   }
 

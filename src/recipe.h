@@ -94,6 +94,28 @@ namespace forge
     std::vector<std::string> compile_definitions;
   };
 
+  using RecipeSelectors = std::map<std::string, std::string>;
+
+  struct BuildRule
+  {
+    RecipeSelectors selectors;
+    BuildProfile build;
+  };
+
+  struct DependencyRule
+  {
+    RecipeSelectors selectors;
+    std::vector<Dependency> dependencies;
+  };
+
+  struct RecipeSelection
+  {
+    std::string style;
+    std::string platform;
+    std::string configuration;
+    std::string profile;
+  };
+
   struct ReleaseVariant
   {
     std::string profile;
@@ -136,6 +158,8 @@ namespace forge
     std::map<std::string, BuildProfile> build_profiles;
     std::map<std::string, std::vector<Dependency>> system_dependency_profiles;
     std::map<std::string, BuildProfile> system_build_profiles;
+    std::vector<BuildRule> build_rules;
+    std::vector<DependencyRule> dependency_rules;
     std::vector<RuntimeFile> runtime_files;
     std::vector<std::filesystem::path> release_files;
     std::optional<std::string> release_bundle_name;
@@ -180,6 +204,11 @@ namespace forge
                                    bool required,
                                    std::string& configuration,
                                    std::ostream& error);
+
+  bool apply_selector_rules(Recipe& recipe,
+                            const RecipeSelection& selection,
+                            std::string& configuration,
+                            std::ostream& error);
 
   bool is_valid_compile_definition(std::string_view definition);
 

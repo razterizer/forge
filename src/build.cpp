@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <charconv>
 #include <fstream>
 #include <functional>
@@ -2971,6 +2972,19 @@ namespace forge
         return 2;
       }
 
+      if (options.platform && !is_supported_dependency_target(*options.platform))
+      {
+        error << "forge: unsupported build platform '" << *options.platform << "'\n";
+        return 2;
+      }
+
+      if (options.platform && *options.platform != current_target())
+      {
+        error << "forge: build platform '" << *options.platform
+              << "' does not match the current host '" << current_target() << "'\n";
+        return 2;
+      }
+
       if (!load_lockfile(canonical_project, error))
         return 2;
     }
@@ -2988,9 +3002,20 @@ namespace forge
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
       return 2;
 
+    const auto uses_selector_rules =
+      !recipe.build_rules.empty() || !recipe.dependency_rules.empty();
+    const auto requested_profile = dependency_session->options.profile;
+    const auto legacy_profile = requested_profile
+        && (recipe.dependency_profiles.contains(*requested_profile)
+            || recipe.build_profiles.contains(*requested_profile))
+      ? requested_profile
+      : uses_selector_rules
+        ? std::optional<std::string> {}
+        : requested_profile;
+
     if (!select_dependency_profile(
       recipe,
-      dependency_session->options.profile,
+      legacy_profile,
       is_root_project,
       error
     ))
@@ -3026,9 +3051,53 @@ namespace forge
 
     auto configuration = dependency_session->options.configuration;
 
+    if (dependency_session->options.config)
+    {
+      configuration = *dependency_session->options.config;
+
+      if (!configuration.empty())
+        configuration.front() = static_cast<char>(std::toupper(configuration.front()));
+    }
+
+    RecipeSelection selection;
+    selection.style = dependency_session->options.style.value_or("");
+
+    if (selection.style.empty())
+    {
+      std::set<std::string> declared_styles;
+
+      for (const auto& rule : recipe.dependency_rules)
+      {
+        const auto style = rule.selectors.find("style");
+
+        if (style != rule.selectors.end() && style->second != "-")
+          declared_styles.insert(style->second);
+      }
+
+      selection.style = declared_styles.size() == 1 ? *declared_styles.begin() : "local-source";
+    }
+    selection.platform = dependency_session->options.platform.value_or(current_target());
+    selection.configuration = dependency_session->options.config.value_or("debug");
+    std::ranges::transform(
+      selection.configuration,
+      selection.configuration.begin(),
+      [](unsigned char character)
+      {
+        return static_cast<char>(std::tolower(character));
+      }
+    );
+    selection.profile = legacy_profile
+      ? std::string {}
+      : dependency_session->options.profile.value_or("");
+
+    if (!legacy_profile
+        && (uses_selector_rules || dependency_session->options.style)
+        && !apply_selector_rules(recipe, selection, configuration, error))
+      return 2;
+
     if (!select_build_profile(
       recipe,
-      dependency_session->options.profile,
+      legacy_profile,
       is_root_project,
       configuration,
       error

@@ -110,6 +110,18 @@
         },
         "windows_libraries": {
           "$ref": "#/$defs/linkNames"
+        },
+        "style": {
+          "$ref": "#/$defs/buildSelectorMap"
+        },
+        "platform": {
+          "$ref": "#/$defs/buildSelectorMap"
+        },
+        "config": {
+          "$ref": "#/$defs/buildSelectorMap"
+        },
+        "profile": {
+          "$ref": "#/$defs/buildSelectorMap"
         }
       }
     },
@@ -247,6 +259,12 @@
     "dependencies": {
       "type": "object",
       "description": "Local project, pinned Git project, local cbox, downloadable cbox, or GitHub Release cbox dependencies.",
+      "properties": {
+        "style": { "$ref": "#/$defs/dependencySelectorMap" },
+        "platform": { "$ref": "#/$defs/dependencySelectorMap" },
+        "config": { "$ref": "#/$defs/dependencySelectorMap" },
+        "profile": { "$ref": "#/$defs/dependencySelectorMap" }
+      },
       "propertyNames": {
         "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
       },
@@ -957,6 +975,52 @@
     }
   ],
   "$defs": {
+    "buildSelectorMap": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/buildSelectorNode"
+      }
+    },
+    "buildSelectorNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "configuration": { "type": "string", "minLength": 1 },
+        "cpp_std": { "type": "integer", "enum": [11, 14, 17, 20, 23, 26] },
+        "include_dirs": { "$ref": "#/$defs/projectPaths" },
+        "macos_system_include_dirs": { "$ref": "#/$defs/paths" },
+        "linux_system_include_dirs": { "$ref": "#/$defs/paths" },
+        "windows_system_include_dirs": { "$ref": "#/$defs/paths" },
+        "macos_system_library_dirs": { "$ref": "#/$defs/paths" },
+        "linux_system_library_dirs": { "$ref": "#/$defs/paths" },
+        "windows_system_library_dirs": { "$ref": "#/$defs/paths" },
+        "defines": { "$ref": "#/$defs/compileDefinitions" },
+        "style": { "$ref": "#/$defs/buildSelectorMap" },
+        "platform": { "$ref": "#/$defs/buildSelectorMap" },
+        "config": { "$ref": "#/$defs/buildSelectorMap" },
+        "profile": { "$ref": "#/$defs/buildSelectorMap" }
+      }
+    },
+    "dependencySelectorMap": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/dependencySelectorNode"
+      }
+    },
+    "dependencySelectorNode": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "style": { "$ref": "#/$defs/dependencySelectorMap" },
+        "platform": { "$ref": "#/$defs/dependencySelectorMap" },
+        "config": { "$ref": "#/$defs/dependencySelectorMap" },
+        "profile": { "$ref": "#/$defs/dependencySelectorMap" }
+      },
+      "additionalProperties": true
+    },
     "projectPath": {
       "type": "string",
       "minLength": 1,

@@ -1521,7 +1521,7 @@ namespace
     constexpr std::array build_arguments { std::string_view { "build" } };
     constexpr std::array release_build_arguments {
       std::string_view { "build" },
-      std::string_view { "--profile=Release" }
+      std::string_view { "--config=release" }
     };
     write_file(
       directory.path() / "hello.vcxproj",
@@ -1601,14 +1601,14 @@ namespace
       "adopt imports preprocessor definitions"
     );
     expect(
-      contains(recipe, "[profile.Debug.build]")
+      contains(recipe, "[build.config.debug]")
         && contains(recipe, "configuration = \"Debug\"")
         && contains(recipe, "include_dirs = [\"debug\"]")
         && contains(recipe, "defines = [\"DEBUG_ONLY\", \"DEBUG_PROPS\"]")
-        && contains(recipe, "[profile.Release.build]")
+        && contains(recipe, "[build.config.release]")
         && contains(recipe, "include_dirs = [\"release\"]")
         && contains(recipe, "defines = [\"RELEASE_ONLY\"]"),
-      "adopt maps Visual Studio configurations to build profiles"
+      "adopt maps Visual Studio configurations to build config selectors"
     );
     expect(
       contains(output.str(), "Imported Visual Studio project hello.vcxproj"),
@@ -1977,7 +1977,7 @@ namespace
     constexpr std::array adopt_arguments { std::string_view { "adopt" } };
     constexpr std::array release_build_arguments {
       std::string_view { "build" },
-      std::string_view { "--profile=Release" }
+      std::string_view { "--config=release" }
     };
     write_file(
       directory.path() / "Hello.xcodeproj/project.pbxproj",
@@ -2013,9 +2013,9 @@ namespace
     expect(contains(recipe, "include_dirs = [\"include\"]"), "adopt imports Xcode header search paths");
     expect(contains(recipe, "defines = [\"XCODE_COMMON\"]"), "adopt imports common Xcode definitions");
     expect(
-      contains(recipe, "[profile.Debug.build]")
+      contains(recipe, "[build.config.debug]")
         && contains(recipe, "defines = [\"DEBUG_XCODE\"]")
-        && contains(recipe, "[profile.Release.build]")
+        && contains(recipe, "[build.config.release]")
         && contains(recipe, "defines = [\"RELEASE_CONFIG\", \"RELEASE_XCODE\"]"),
       "adopt maps Xcode configurations to build profiles"
     );
@@ -2383,7 +2383,7 @@ namespace
     );
     const auto recipe = read_file(application / "forge.recipe.toml");
     expect(
-      contains(recipe, "[dependencies]\nanswer = { path = \"../answer\" }"),
+      contains(recipe, "[dependencies.style.local-source]\nanswer = { path = \"../answer\" }"),
       "adopt writes the inferred sibling dependency"
     );
     expect(
@@ -2446,7 +2446,7 @@ namespace
     );
     const auto recipe = read_file(application / "forge.recipe.toml");
     expect(
-      contains(recipe, "[dependencies]\ntargetlib = { path = \"../dependency\" }"),
+      contains(recipe, "[dependencies.style.local-source]\ntargetlib = { path = \"../dependency\" }"),
       "adopt writes the sibling dependency using the matched library target"
     );
     expect(
@@ -2699,7 +2699,7 @@ namespace
     expect(
       contains(
         recipe,
-        "answer = { git = \"https://github.com/example/answer.git\", commit = \""
+        "[dependencies.style.git-source]\nanswer = { git = \"https://github.com/example/answer.git\", commit = \""
           + std::string { commit } + "\" }"
       )
         && contains(recipe, "[profile.workflow-release.dependencies]"),

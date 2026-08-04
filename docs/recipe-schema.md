@@ -84,10 +84,22 @@ rules:
 - Pinned Git source dependencies require `git` and an exact full 40- or
   64-hex-character `commit`. Forge caches the detached checkout and treats it
   like a local source project.
+- Selector rules use alternating argument/value path segments after either
+  `build` or `dependencies`:
+  `<category>.<argument>.<value>...`. Supported arguments are `style`,
+  `platform`, `config`, and `profile`; `-` is the wildcard value. Omitted
+  arguments do not constrain a rule. Matching rules are layered from general
+  to specific. For example, `[build.config.-.profile.applaudio]` applies to
+  every build configuration selected with `--profile=applaudio`.
+- Dependency styles are `local-source`, `git-source`, `local-package`,
+  `url-package`, and `github-package`. Forge validates entries below an exact
+  style selector against the corresponding `path`, `git`/`commit`, `box`,
+  `url`/`sha256`, or `github`/`version` recipe form.
 - Named `[profile.<name>.dependencies]` sections provide complete dependency-set
   overrides. `[profile.<name>.build]` sections add build configuration,
   `cpp_std`, `include_dirs`, platform system include dirs, and `defines`
-  overrides. Both are selected by `forge build`, `forge build-and-run`, or
+  overrides. These are the legacy combined-profile format retained for CI
+  migration. Both are selected by `forge build`, `forge build-and-run`, or
   `forge test` with `--profile=<name>`.
 - Forge-owned `[sysprofile.<name>.dependencies]` and
   `[sysprofile.<name>.build]` sections use reserved names such as

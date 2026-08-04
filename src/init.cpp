@@ -1440,15 +1440,20 @@ namespace forge
         + initial_build_number_format.value_or("dotted") + "\"\n";
     }
 
-    if (!sibling_dependencies.empty() || !github_dependencies.empty())
+    if (!sibling_dependencies.empty())
     {
-      recipe += "\n[dependencies]\n";
+      recipe += "\n[dependencies.style.local-source]\n";
 
       for (const auto& dependency : sibling_dependencies)
       {
         recipe += dependency.name + " = { path = \""
           + escape_toml_string(dependency.path) + "\" }\n";
       }
+    }
+
+    if (!github_dependencies.empty())
+    {
+      recipe += "\n[dependencies.style.git-source]\n";
 
       for (const auto& dependency : github_dependencies)
       {
@@ -1494,7 +1499,16 @@ namespace forge
     {
       for (const auto& [name, profile] : visual_studio_project->profiles)
       {
-        recipe += "\n[profile." + escape_toml_string(name) + ".build]\n"
+        auto selector = name;
+        std::ranges::transform(
+          selector,
+          selector.begin(),
+          [](unsigned char character)
+          {
+            return static_cast<char>(std::tolower(character));
+          }
+        );
+        recipe += "\n[build.config." + escape_toml_string(selector) + "]\n"
           "configuration = \"" + escape_toml_string(profile.configuration) + "\"\n";
 
         if (profile.cpp_standard != 0 && profile.cpp_standard != visual_studio_project->cpp_standard)

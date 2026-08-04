@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fprocess.h"
+#include "build.h"
 
 #include <filesystem>
 #include <iosfwd>
@@ -69,6 +70,12 @@ namespace forge
                   std::ostream& error);
 
   int build_and_run_project(const std::filesystem::path& project_directory,
+                            std::span<const std::string_view> arguments,
+                            std::ostream& output,
+                            std::ostream& error);
+
+  int build_and_run_project(const std::filesystem::path& project_directory,
+                            const BuildOptions& options,
                             std::span<const std::string_view> arguments,
                             std::ostream& output,
                             std::ostream& error);

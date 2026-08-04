@@ -360,4 +360,25 @@ namespace forge
     );
   }
 
+  int build_and_run_project(const std::filesystem::path& project_directory,
+                            const BuildOptions& options,
+                            std::span<const std::string_view> arguments,
+                            std::ostream& output,
+                            std::ostream& error)
+  {
+    if (build_project(project_directory, options, run_process, output, error) != 0)
+      return 2;
+
+    return launch_project(
+      project_directory,
+      options.target,
+      std::nullopt,
+      std::nullopt,
+      arguments,
+      run_process,
+      output,
+      error
+    );
+  }
+
 } // namespace forge

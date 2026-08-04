@@ -1,5 +1,20 @@
 # Release notes
 
+## Next
+
+- Added independently composable `build.<argument>.<value>...` and
+  `dependencies.<argument>.<value>...` selector rules for dependency style,
+  platform, build configuration, and software profile. The reserved `-` value
+  matches any value for its selector argument.
+- Added `--style`, `--platform`, and `--config` to `forge build` and
+  `forge build-and-run`; `--profile` selects software variants on selector
+  recipes and retains its combined-profile behavior on legacy recipes.
+- Added validated dependency styles for local/Git source projects and
+  local/URL/GitHub packages.
+- Made `forge adopt` generate `build.config.*` and `dependencies.style.*`
+  selector tables while retaining the legacy `workflow-release` profile during
+  the CI migration period.
+
 ## 0.12.0
 
 - Added Forge-owned `[sysprofile.<name>.dependencies]` and

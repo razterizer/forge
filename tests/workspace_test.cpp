@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -27,6 +28,12 @@ namespace
   bool contains(const std::string& text, std::string_view fragment)
   {
     return text.find(fragment) != std::string::npos;
+  }
+
+  std::string read_file(const std::filesystem::path& path)
+  {
+    std::ifstream input { path };
+    return { std::istreambuf_iterator<char> { input }, std::istreambuf_iterator<char> {} };
   }
 
   void write_project(const std::filesystem::path& directory,
@@ -140,6 +147,44 @@ namespace
     expect(contains(output.str(), "Building workspace suite"), "workspace build reports its start");
     expect(contains(output.str(), "Built workspace suite"), "workspace build reports completion");
     expect(error.str().empty(), "workspace build does not write an error");
+  }
+
+  void test_workspace_propagates_selector_options()
+  {
+    TemporaryDirectory directory;
+    write_workspace(directory.path(), "\"first\"");
+    write_project(directory.path() / "first", "first");
+    std::ofstream recipe {
+      directory.path() / "first/forge.recipe.toml",
+      std::ios::app
+    };
+    recipe
+      << "\n[build.config.release]\n"
+      << "configuration = \"Release\"\n"
+      << "defines = [\"WORKSPACE_RELEASE\"]\n";
+    recipe.close();
+    forge::BuildOptions options;
+    options.config = "release";
+    std::vector<std::filesystem::path> directories;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::build_workspace(
+        directory.path(),
+        options,
+        successful_runner(directories),
+        output,
+        error
+      ) == 0,
+      "workspace build accepts selector options"
+    );
+    const auto generated = read_file(directory.path() / "first/.forge/generated/CMakeLists.txt");
+    expect(
+      contains(generated, "\"WORKSPACE_RELEASE\""),
+      "workspace propagates config selectors to project builds"
+    );
+    expect(error.str().empty(), "selector workspace build does not write an error");
   }
 
   void test_workspace_builds_selected_project()
@@ -398,6 +443,7 @@ namespace
 int main()
 {
   test_workspace_builds_all_projects();
+  test_workspace_propagates_selector_options();
   test_workspace_builds_selected_project();
   test_workspace_rejects_missing_project();
   test_workspace_rejects_duplicate_project();
