@@ -9,11 +9,13 @@
 - Added `--style`, `--platform`, and `--config` to `forge build` and
   `forge build-and-run`; `--profile` selects software variants on selector
   recipes and retains its combined-profile behavior on legacy recipes.
-- Added validated dependency styles for local/Git source projects and
-  local/URL/GitHub packages.
+- Added five validated selector dependency styles: `local-source`,
+  `git-source`, `local-package`, `url-package`, and `github-package`.
+  `forge adopt --style` generates the two source forms and retains
+  `--dependency-style` as a compatibility alias.
 - Made `forge adopt` generate `build.config.*` and `dependencies.style.*`
-  selector tables while retaining the legacy `workflow-release` profile during
-  the CI migration period.
+  selector tables. The legacy `workflow-release` profile remains temporarily
+  for compatibility with existing CI workflows.
 
 ## 0.12.0
 
