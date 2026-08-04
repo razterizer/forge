@@ -1846,7 +1846,7 @@ namespace
       "adopt rejects unknown dependency styles"
     );
     expect(
-      contains(invalid_error.str(), "dependency style must be local or git"),
+      contains(invalid_error.str(), "adopt style must be local-source or git-source"),
       "invalid dependency style explains valid choices"
     );
 
