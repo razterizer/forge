@@ -153,12 +153,18 @@ namespace forge::cli
         << "  forge build [target] [--style=<name>] [--platform=<os-arch>] "
         << "[--config=<name>] [--profile=<name>] [--define=<symbol> ...]\n\n"
         << "Options:\n"
-        << "  --style=<name>       Select a dependency style\n"
-        << "  --platform=<os-arch> Select platform-specific selector rules\n"
-        << "  --config=<name>      Select a build configuration\n"
+        << "  --style=<name>       Select local-source, git-source, local-package,\n"
+        << "                       url-package, or github-package\n"
+        << "  --platform=<os-arch> Select platform-specific rules (default: current platform)\n"
+        << "  --config=<name>      Select a recipe-defined configuration (default: debug;\n"
+        << "                       commonly debug or release)\n"
         << "  --profile=<name>     Select a software profile (legacy recipes select a combined profile)\n"
         << "  --sysprofile=<name>  Select a legacy reserved Forge system profile\n"
-        << "  --define=<symbol>    Add a temporary NAME or NAME=value definition\n";
+        << "  --define=<symbol>    Add a temporary NAME or NAME=value definition\n\n"
+        << "Selector rules:\n"
+        << "  Recipe table paths compose argument/value pairs, such as\n"
+        << "  [build.config.release.profile.applaudio]. Use '-' only in a recipe\n"
+        << "  table path to match any value, for example [build.config.-].\n";
       return true;
     }
 
@@ -182,8 +188,19 @@ namespace forge::cli
         << "  forge build-and-run [target|project[/target]] "
         << "[--style=<name>] [--platform=<os-arch>] [--config=<name>] "
         << "[--profile=<name>] [-- arguments...]\n\n"
+        << "Options:\n"
+        << "  --style=<name>       Select local-source, git-source, local-package,\n"
+        << "                       url-package, or github-package\n"
+        << "  --platform=<os-arch> Select platform-specific rules (default: current platform)\n"
+        << "  --config=<name>      Select a recipe-defined configuration (default: debug;\n"
+        << "                       commonly debug or release)\n"
+        << "  --profile=<name>     Select a software profile (legacy recipes select a combined profile)\n\n"
         << "Arguments after '--' are forwarded to the executable. Workspace runs\n"
-        << "require a project or project/target selection.\n";
+        << "require a project or project/target selection.\n\n"
+        << "Selector rules:\n"
+        << "  Recipe table paths compose argument/value pairs, such as\n"
+        << "  [build.config.release.profile.applaudio]. Use '-' only in a recipe\n"
+        << "  table path to match any value, for example [build.config.-].\n";
       return true;
     }
 

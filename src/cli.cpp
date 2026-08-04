@@ -45,6 +45,18 @@ namespace forge::cli
       return value.substr(first, last - first + 1);
     }
 
+    bool reject_cli_selector_wildcard(std::string_view option,
+                                      std::string_view value,
+                                      std::ostream& error)
+    {
+      if (value != "-" && value != "*")
+        return false;
+
+      error << "forge: " << option
+            << " requires a concrete value; use '-' only in recipe selector paths\n";
+      return true;
+    }
+
     bool parse_cli_string(std::string_view value, std::string& result)
     {
       value = trim_cli(value);
@@ -1643,6 +1655,9 @@ namespace forge::cli
             return 2;
           }
 
+          if (reject_cli_selector_wildcard("--style", value, error))
+            return 2;
+
           style = std::string { value };
         }
         else if (!forwarding && argument.starts_with("--platform="))
@@ -1655,6 +1670,9 @@ namespace forge::cli
             return 2;
           }
 
+          if (reject_cli_selector_wildcard("--platform", value, error))
+            return 2;
+
           platform = std::string { value };
         }
         else if (!forwarding && argument.starts_with("--config="))
@@ -1666,6 +1684,9 @@ namespace forge::cli
             error << "forge: --config requires one non-empty value on build-and-run\n";
             return 2;
           }
+
+          if (reject_cli_selector_wildcard("--config", value, error))
+            return 2;
 
           config = std::string { value };
         }
@@ -2211,6 +2232,9 @@ namespace forge::cli
             return 2;
           }
 
+          if (reject_cli_selector_wildcard("--style", value, error))
+            return 2;
+
           options.style = std::string { value };
         }
         else if (argument.starts_with("--platform="))
@@ -2223,6 +2247,9 @@ namespace forge::cli
             return 2;
           }
 
+          if (reject_cli_selector_wildcard("--platform", value, error))
+            return 2;
+
           options.platform = std::string { value };
         }
         else if (argument.starts_with("--config="))
@@ -2234,6 +2261,9 @@ namespace forge::cli
             error << "forge: configuration may only be specified once and cannot be empty\n";
             return 2;
           }
+
+          if (reject_cli_selector_wildcard("--config", value, error))
+            return 2;
 
           options.config = std::string { value };
         }

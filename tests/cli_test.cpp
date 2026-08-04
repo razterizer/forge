@@ -155,6 +155,49 @@ namespace
       expect(error.str().empty(), "command help does not write an error");
     }
 
+    constexpr std::array build_help_arguments {
+      std::string_view { "build" },
+      std::string_view { "--help" }
+    };
+    std::ostringstream build_help_output;
+    std::ostringstream build_help_error;
+    expect(
+      forge::cli::run(build_help_arguments, build_help_output, build_help_error) == 0,
+      "build help succeeds"
+    );
+    expect(
+      contains(build_help_output.str(), "local-source, git-source, local-package")
+        && contains(build_help_output.str(), "url-package, or github-package"),
+      "build help enumerates dependency styles"
+    );
+    expect(
+      contains(build_help_output.str(), "recipe-defined configuration")
+        && contains(build_help_output.str(), "commonly debug or release"),
+      "build help distinguishes common configurations from fixed values"
+    );
+    expect(
+      contains(build_help_output.str(), "Use '-' only in a recipe")
+        && contains(build_help_output.str(), "[build.config.-]"),
+      "build help explains recipe selector wildcards"
+    );
+    expect(build_help_error.str().empty(), "detailed build help does not write an error");
+
+    constexpr std::array wildcard_arguments {
+      std::string_view { "build" },
+      std::string_view { "--platform=*" }
+    };
+    std::ostringstream wildcard_output;
+    std::ostringstream wildcard_error;
+    expect(
+      forge::cli::run(wildcard_arguments, wildcard_output, wildcard_error) == 2,
+      "build rejects a CLI selector wildcard"
+    );
+    expect(
+      contains(wildcard_error.str(), "requires a concrete value")
+        && contains(wildcard_error.str(), "use '-' only in recipe selector paths"),
+      "build explains where selector wildcards belong"
+    );
+
     constexpr std::array nested_arguments {
       std::string_view { "workflow" },
       std::string_view { "prepare-release" },
