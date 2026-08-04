@@ -324,6 +324,17 @@ namespace forge
       return variant == recipe.box_variants.end() ? std::string {} : variant->suffix;
     }
 
+    bool uses_profile_selector(const Recipe& recipe)
+    {
+      const auto has_profile = [](const auto& rule)
+      {
+        return rule.selectors.contains("profile");
+      };
+
+      return std::ranges::any_of(recipe.build_rules, has_profile)
+        || std::ranges::any_of(recipe.dependency_rules, has_profile);
+    }
+
     std::string box_filename(const Recipe& recipe,
                              std::string_view variant = {},
                              bool force_target_qualified = false)
@@ -843,6 +854,27 @@ namespace forge
                  std::ostream& output,
                  std::ostream& error)
   {
+    BuildOptions options;
+    options.target = target;
+    options.profile = profile;
+    options.system_profile = system_profile;
+    return create_box(
+      project_directory,
+      target,
+      options,
+      process_runner,
+      output,
+      error
+    );
+  }
+
+  int create_box(const std::filesystem::path& project_directory,
+                 const std::optional<std::string>& target,
+                 const BuildOptions& requested_options,
+                 const ProcessRunner& process_runner,
+                 std::ostream& output,
+                 std::ostream& error)
+  {
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
@@ -852,8 +884,8 @@ namespace forge
       return create_container_box(
         project_directory,
         recipe,
-        profile,
-        system_profile,
+        requested_options.profile,
+        requested_options.system_profile,
         process_runner,
         output,
         error
@@ -862,17 +894,52 @@ namespace forge
     if (!select_recipe_target(recipe, target, error))
       return 2;
 
-    if (!select_dependency_profile(recipe, profile, true, error))
-      return 2;
-    if (!select_system_dependency_profile(recipe, system_profile, true, error))
-      return 2;
+    const auto uses_selector_rules =
+      !recipe.build_rules.empty() || !recipe.dependency_rules.empty();
+    const auto requested_profile = requested_options.profile;
+    const auto legacy_profile = requested_profile
+        && (recipe.dependency_profiles.contains(*requested_profile)
+            || recipe.build_profiles.contains(*requested_profile))
+      ? requested_profile
+      : uses_selector_rules || requested_options.style
+        ? std::optional<std::string> {}
+        : requested_profile;
 
-    BuildOptions options;
+    if (!select_dependency_profile(recipe, legacy_profile, true, error))
+      return 2;
+    if (!select_system_dependency_profile(
+      recipe,
+      requested_options.system_profile,
+      true,
+      error
+    ))
+    {
+      return 2;
+    }
+
+    auto configuration = requested_options.configuration;
+    auto selection = resolve_recipe_selection(
+      recipe,
+      requested_options.style,
+      requested_options.platform.value_or(current_target()),
+      requested_options.config,
+      legacy_profile ? std::optional<std::string> {} : requested_options.profile
+    );
+
+    if (legacy_profile)
+      selection.profile.clear();
+
+    if (!legacy_profile
+        && (uses_selector_rules || requested_options.style)
+        && !apply_selector_rules(recipe, selection, configuration, error))
+    {
+      return 2;
+    }
+
+    auto options = requested_options;
     options.target = target;
-    options.profile = profile;
-    options.system_profile = system_profile;
 
-    if (profile == workflow_release_profile)
+    if (legacy_profile == workflow_release_profile)
       options.configuration = "Release";
 
     if (build_project(project_directory, options, process_runner, output, error) != 0)
@@ -933,9 +1000,19 @@ namespace forge
             process_runner,
             error
           ));
+      auto variant_suffix = box_variant_suffix(recipe, legacy_profile);
+
+      if (variant_suffix.empty()
+          && !legacy_profile
+          && !selection.profile.empty()
+          && uses_profile_selector(recipe))
+      {
+        variant_suffix = selection.profile;
+      }
+
       const auto archive_filename = box_filename(
         recipe,
-        box_variant_suffix(recipe, profile),
+        variant_suffix,
         force_target_qualified
       );
     const auto box_name = std::filesystem::path { archive_filename }.stem().string();
@@ -1222,8 +1299,7 @@ namespace forge
           || create_box(
             project_directory,
             dependency_name,
-            profile,
-            system_profile,
+            options,
             process_runner,
             output,
             error

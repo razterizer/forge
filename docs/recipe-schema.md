@@ -91,6 +91,9 @@ rules:
   arguments do not constrain a rule. Matching rules are layered from general
   to specific. For example, `[build.config.-.profile.applaudio]` applies to
   every build configuration selected with `--profile=applaudio`.
+- `[defaults].style` and `[defaults].profile` select a dependency style and
+  software profile when their corresponding CLI flags are omitted. Explicit
+  CLI values take precedence. Wildcards are not valid defaults.
 - Dependency styles are `local-source`, `git-source`, `local-package`,
   `url-package`, and `github-package`. Forge validates entries below an exact
   style selector against the corresponding `path`, `git`/`commit`, `box`,

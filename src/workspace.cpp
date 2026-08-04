@@ -608,19 +608,16 @@ namespace forge
         return 2;
       }
 
-      RecipeSelection selection;
-      selection.style = requested_options.style.value_or("local-source");
-      selection.platform = platform;
-      selection.configuration = requested_options.config.value_or("debug");
-      std::ranges::transform(
-        selection.configuration,
-        selection.configuration.begin(),
-        [](unsigned char character)
-        {
-          return static_cast<char>(std::tolower(character));
-        }
+      auto selection = resolve_recipe_selection(
+        recipe,
+        requested_options.style,
+        platform,
+        requested_options.config,
+        legacy_profile ? std::optional<std::string> {} : requested_options.profile
       );
-      selection.profile = requested_options.profile.value_or("");
+
+      if (legacy_profile)
+        selection.profile.clear();
       auto configuration = requested_options.configuration;
 
       if (!legacy_profile && !apply_selector_rules(recipe, selection, configuration, error))

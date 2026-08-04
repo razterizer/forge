@@ -545,10 +545,16 @@ defines = ["NDEBUG"]
 
 [build.config.-.profile.applaudio]
 defines = ["USE_APPLAUDIO"]
+
+[defaults]
+style = "github-package"
+profile = "applaudio"
 ```
 
 `-` is the wildcard value. Omitted selector arguments do not constrain a rule;
-matching rules are layered from general to specific. Select dimensions
+matching rules are layered from general to specific. `[defaults].style` and
+`[defaults].profile` select a dependency style and software profile when their
+CLI flags are omitted; explicit flags take precedence. Select dimensions
 independently:
 
 ```sh

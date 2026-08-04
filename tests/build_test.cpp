@@ -526,6 +526,71 @@ namespace
     expect(error.str().empty(), "successful selector build does not write an error");
   }
 
+  void test_build_applies_default_selector_profile()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[defaults]\n"
+      << "style = \"github-package\"\n"
+      << "profile = \"applaudio\"\n"
+      << "\n[build.profile.applaudio]\n"
+      << "defines = [\"USE_APPLAUDIO\"]\n"
+      << "\n[build.profile.openal]\n"
+      << "defines = [\"USE_OPENAL\"]\n";
+    recipe.close();
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+    std::ostringstream default_output;
+    std::ostringstream default_error;
+
+    expect(
+      forge::build_project(
+        directory.path(),
+        forge::BuildOptions {},
+        runner,
+        default_output,
+        default_error
+      ) == 0,
+      "build succeeds with a default selector profile"
+    );
+    const auto default_generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
+    expect(
+      contains(default_generated, "\"USE_APPLAUDIO\"")
+        && !contains(default_generated, "\"USE_OPENAL\""),
+      "default selector profile applies when --profile is omitted"
+    );
+    expect(default_error.str().empty(), "default selector profile does not write an error");
+
+    forge::BuildOptions explicit_options;
+    explicit_options.profile = "openal";
+    std::ostringstream explicit_output;
+    std::ostringstream explicit_error;
+    expect(
+      forge::build_project(
+        directory.path(),
+        explicit_options,
+        runner,
+        explicit_output,
+        explicit_error
+      ) == 0,
+      "build succeeds with an explicit selector profile"
+    );
+    const auto explicit_generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
+    expect(
+      contains(explicit_generated, "\"USE_OPENAL\"")
+        && !contains(explicit_generated, "\"USE_APPLAUDIO\""),
+      "explicit selector profile overrides the recipe default"
+    );
+    expect(explicit_error.str().empty(), "explicit selector profile does not write an error");
+  }
+
   void test_dependency_style_validates_rule_shape()
   {
     TemporaryDirectory directory;
@@ -2180,6 +2245,7 @@ int main()
   test_build_rejects_invalid_recipe_definition();
   test_build_applies_build_profile();
   test_build_applies_selector_rules();
+  test_build_applies_default_selector_profile();
   test_dependency_style_validates_rule_shape();
   test_selector_recipe_keeps_legacy_workflow_profile();
   test_build_generates_system_package_hint_diagnostics();

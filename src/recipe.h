@@ -160,6 +160,8 @@ namespace forge
     std::map<std::string, BuildProfile> system_build_profiles;
     std::vector<BuildRule> build_rules;
     std::vector<DependencyRule> dependency_rules;
+    std::optional<std::string> default_style;
+    std::optional<std::string> default_profile;
     std::vector<RuntimeFile> runtime_files;
     std::vector<std::filesystem::path> release_files;
     std::optional<std::string> release_bundle_name;
@@ -209,6 +211,14 @@ namespace forge
                             const RecipeSelection& selection,
                             std::string& configuration,
                             std::ostream& error);
+
+  RecipeSelection resolve_recipe_selection(
+    const Recipe& recipe,
+    const std::optional<std::string>& style,
+    std::string platform,
+    const std::optional<std::string>& configuration,
+    const std::optional<std::string>& profile
+  );
 
   bool is_valid_compile_definition(std::string_view definition);
 

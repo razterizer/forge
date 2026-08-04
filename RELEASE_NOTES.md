@@ -6,6 +6,9 @@
   `dependencies.<argument>.<value>...` selector rules for dependency style,
   platform, build configuration, and software profile. The reserved `-` value
   matches any value for its selector argument.
+- Added `[defaults].style` and `[defaults].profile` for choosing a recipe's
+  dependency style and software profile when their CLI flags are omitted;
+  explicit CLI values take precedence.
 - Added `--style`, `--platform`, and `--config` to `forge build` and
   `forge build-and-run`; `--profile` selects software variants on selector
   recipes and retains its combined-profile behavior on legacy recipes.

@@ -4,6 +4,7 @@
 #include <charconv>
 #include <fstream>
 #include <iterator>
+#include <set>
 #include <string_view>
 
 namespace forge
@@ -892,6 +893,25 @@ namespace forge
       }
       else if (section == "project" && key == "cpp_std")
         valid = parse_integer(value, recipe.cpp_standard);
+      else if (section == "defaults" && key == "style")
+      {
+        std::string style;
+        valid = parse_string(value, style) && is_dependency_style(style);
+
+        if (valid)
+          recipe.default_style = std::move(style);
+      }
+      else if (section == "defaults" && key == "profile")
+      {
+        std::string profile;
+        valid = parse_string(value, profile)
+          && is_safe_name(profile)
+          && profile != "-"
+          && profile != "*";
+
+        if (valid)
+          recipe.default_profile = std::move(profile);
+      }
       else if (section == "build" && key == "number")
       {
         int build_number = 0;
@@ -1735,6 +1755,48 @@ namespace forge
     }
 
     return true;
+  }
+
+  RecipeSelection resolve_recipe_selection(
+    const Recipe& recipe,
+    const std::optional<std::string>& style,
+    std::string platform,
+    const std::optional<std::string>& configuration,
+    const std::optional<std::string>& profile
+  )
+  {
+    RecipeSelection selection;
+    selection.style = style.value_or(recipe.default_style.value_or(""));
+
+    if (selection.style.empty())
+    {
+      std::set<std::string> declared_styles;
+
+      for (const auto& rule : recipe.dependency_rules)
+      {
+        const auto declared = rule.selectors.find("style");
+
+        if (declared != rule.selectors.end() && declared->second != "-")
+          declared_styles.insert(declared->second);
+      }
+
+      selection.style = declared_styles.size() == 1
+        ? *declared_styles.begin()
+        : "local-source";
+    }
+
+    selection.platform = std::move(platform);
+    selection.configuration = configuration.value_or("debug");
+    std::ranges::transform(
+      selection.configuration,
+      selection.configuration.begin(),
+      [](unsigned char character)
+      {
+        return static_cast<char>(std::tolower(character));
+      }
+    );
+    selection.profile = profile.value_or(recipe.default_profile.value_or(""));
+    return selection;
   }
 
 } // namespace forge

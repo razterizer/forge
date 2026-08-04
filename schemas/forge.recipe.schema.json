@@ -54,6 +54,33 @@
         }
       }
     },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "style": {
+          "type": "string",
+          "enum": [
+            "local-source",
+            "git-source",
+            "local-package",
+            "url-package",
+            "github-package"
+          ],
+          "description": "Dependency style selected when --style is omitted. An explicit CLI value takes precedence."
+        },
+        "profile": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "enum": ["-", "*", ".", ".."]
+          },
+          "pattern": "^[^/\\\\]+$",
+          "description": "Software profile selected when --profile is omitted. An explicit CLI value takes precedence."
+        }
+      }
+    },
     "build": {
       "type": "object",
       "additionalProperties": false,

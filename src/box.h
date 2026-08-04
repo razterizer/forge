@@ -11,6 +11,8 @@
 namespace forge
 {
 
+  struct BuildOptions;
+
   struct BoxArtifactMetadata
   {
     std::filesystem::path path;
@@ -100,6 +102,13 @@ namespace forge
                  const std::optional<std::string>& target,
                  const std::optional<std::string>& profile,
                  const std::optional<std::string>& system_profile,
+                 const ProcessRunner& process_runner,
+                 std::ostream& output,
+                 std::ostream& error);
+
+  int create_box(const std::filesystem::path& project_directory,
+                 const std::optional<std::string>& target,
+                 const BuildOptions& options,
                  const ProcessRunner& process_runner,
                  std::ostream& output,
                  std::ostream& error);
