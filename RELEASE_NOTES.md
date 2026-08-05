@@ -19,6 +19,8 @@
 - Made `forge adopt` generate `build.config.*` and `dependencies.style.*`
   selector tables. The legacy `workflow-release` profile remains temporarily
   for compatibility with existing CI workflows.
+- Made `forge run` report the configuration recorded by the built artifact
+  instead of always labeling selector-based builds as Debug.
 
 ## 0.12.0
 

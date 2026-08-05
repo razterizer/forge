@@ -3,7 +3,9 @@
 #include "build.h"
 #include "recipe.h"
 
+#include <fstream>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <vector>
 
@@ -16,6 +18,30 @@ namespace forge
       std::string name = "default";
       std::string configuration = "Debug";
     };
+
+    std::optional<std::string> read_build_configuration(
+      const std::filesystem::path& build_directory)
+    {
+      std::ifstream file { build_directory / "forge-toolchain.toml" };
+      std::string line;
+      constexpr std::string_view prefix { "configuration = \"" };
+
+      while (std::getline(file, line))
+      {
+        const std::string_view content { line };
+
+        if (content.starts_with(prefix)
+            && content.size() > prefix.size()
+            && content.back() == '"')
+        {
+          return std::string {
+            content.substr(prefix.size(), content.size() - prefix.size() - 1)
+          };
+        }
+      }
+
+      return std::nullopt;
+    }
 
     bool resolve_launch_profile(Recipe recipe,
                                 const std::optional<std::string>& profile,
@@ -71,6 +97,9 @@ namespace forge
 
       if (recipe.selected_target)
         build_directory /= *recipe.selected_target;
+
+      if (const auto configuration = read_build_configuration(build_directory))
+        launch_profile.configuration = *configuration;
 
       auto executable = build_directory / recipe.name;
 

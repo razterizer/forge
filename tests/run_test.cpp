@@ -56,6 +56,20 @@ namespace
 #endif
   }
 
+  void write_toolchain(const std::filesystem::path& directory,
+                       std::string_view configuration,
+                       const std::filesystem::path& relative_directory = {})
+  {
+    const auto build_directory = directory / ".forge/build" / relative_directory;
+    std::filesystem::create_directories(build_directory);
+    std::ofstream { build_directory / "forge-toolchain.toml" }
+      << "compiler = \"Test\"\n"
+      << "compiler_version = \"1\"\n"
+      << "cpp_std = 20\n"
+      << "configuration = \"" << configuration << "\"\n"
+      << "runtime = \"test\"\n";
+  }
+
   void test_run_forwards_arguments()
   {
     TemporaryDirectory directory;
@@ -94,6 +108,33 @@ namespace
     );
     expect(contains(output.str(), "Running hello"), "run reports the launched project");
     expect(error.str().empty(), "successful run does not write an error");
+  }
+
+  void test_run_reports_built_configuration()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    write_executable(directory.path());
+    write_toolchain(directory.path(), "Release");
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::run_project(directory.path(), {}, runner, output, error) == 0,
+      "run succeeds for a configured Release build"
+    );
+    expect(
+      contains(output.str(), "profile default (Release)"),
+      "run reports the configuration recorded by the built artifact"
+    );
+    expect(error.str().empty(), "configured run does not write an error");
   }
 
   void test_build_and_run_builds_and_forwards_arguments()
@@ -281,6 +322,7 @@ namespace
 int main()
 {
   test_run_forwards_arguments();
+  test_run_reports_built_configuration();
   test_build_and_run_builds_and_forwards_arguments();
   test_build_and_run_reports_selected_profile();
   test_build_and_run_stops_when_build_fails();
