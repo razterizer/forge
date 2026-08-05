@@ -3131,12 +3131,13 @@ namespace
     const auto updated = read_file(workflow);
     expect(
       contains(updated, "  forge-release-boxes:\n")
-      && contains(updated, "# forge-managed: release-boxes@3")
+      && contains(updated, "# forge-managed: release-boxes@4")
       && contains(updated, "Resolve latest Forge release")
       && contains(updated, "ref: ${{ steps.forge-release.outputs.result }}")
       && contains(updated, "if: startsWith(github.ref, 'refs/tags/')")
       && contains(updated, "forge workflow prepare-release")
-      && contains(updated, "artifacts: boxes/*.cbox,boxes/*.sha256"),
+      && contains(updated, "artifacts: boxes/*.cbox,boxes/*.sha256")
+      && contains(updated, "if: steps.publish-release.outcome == 'failure'"),
       "workflow feature application injects the managed release-boxes job"
     );
     expect(
@@ -3358,8 +3359,8 @@ namespace
     expect(contains(current_output.str(), "release-boxes  current"), "workflow status reports current feature");
 
     auto outdated = current;
-    const auto marker = outdated.find("# forge-managed: release-boxes@3");
-    outdated.replace(marker, std::string_view { "# forge-managed: release-boxes@3" }.size(),
+    const auto marker = outdated.find("# forge-managed: release-boxes@4");
+    outdated.replace(marker, std::string_view { "# forge-managed: release-boxes@4" }.size(),
                      "# forge-managed: release-boxes@1");
     write_file(workflow, outdated);
     std::ostringstream outdated_output;
@@ -3506,6 +3507,21 @@ namespace
         "needs: [build-modern, build-legacy]"
       ),
       "new Linux workflow publishes modern and legacy release assets together"
+    );
+    expect(
+      contains(
+        read_file(directory.path() / "hello/.github/workflows/release-macos.yml"),
+        "if: steps.publish-release.outcome == 'failure'"
+      )
+        && contains(
+          read_file(directory.path() / "hello/.github/workflows/release-windows.yml"),
+          "Retry Publish GitHub release after concurrent creation"
+        )
+        && contains(
+          read_file(directory.path() / "hello/.github/workflows/release-linux.yml"),
+          "continue-on-error: true"
+        ),
+      "new workflows retry publication after a concurrent release creation race"
     );
     expect(
       std::filesystem::exists(directory.path() / "hello/RELEASE_NOTES.md"),
@@ -4412,6 +4428,100 @@ namespace
       "update rejects an unknown dependency"
     );
     expect(contains(update_error.str(), "was not found"), "unknown update dependency is explained");
+  }
+
+  void test_upgrade_updates_selector_and_legacy_profiles()
+  {
+    TemporaryDirectory directory;
+    const auto project = directory.path() / "selector-upgrade";
+    write_file(project / "main.cpp", "int main() { return 0; }\n");
+    write_file(
+      project / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"selector-upgrade\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[defaults]\n"
+      "style = \"github-package\"\n"
+      "profile = \"applaudio\"\n\n"
+      "[dependencies.style.github-package.profile.applaudio]\n"
+      "answer = { github = \"example/answer\", version = \"1.0.0\" }\n\n"
+      "[profile.workflow-release.dependencies]\n"
+      "answer = { github = \"example/answer\", version = \"1.0.0\" }\n"
+    );
+    constexpr std::array arguments {
+      std::string_view { "upgrade" },
+      std::string_view { "answer" },
+      std::string_view { "--to=1.1.0" },
+      std::string_view { "--all-profiles" },
+      std::string_view { "--target=unsupported-target" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, project, output, error) == 2,
+      "selector upgrade reaches target validation after rewriting the recipe"
+    );
+    const auto recipe = read_file(project / "forge.recipe.toml");
+    expect(
+      count_occurrences(recipe, "version = \"1.1.0\"") == 2,
+      "all-profile upgrade rewrites selector and legacy dependency profiles"
+    );
+    expect(
+      contains(output.str(), "Upgraded dependency answer to 1.1.0"),
+      "selector upgrade reports the rewritten dependency"
+    );
+    expect(
+      contains(error.str(), "unsupported update target 'unsupported-target'"),
+      "selector upgrade continues into lock target validation"
+    );
+
+    const auto selected_project = directory.path() / "selected-upgrade";
+    write_file(selected_project / "main.cpp", "int main() { return 0; }\n");
+    write_file(
+      selected_project / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"selected-upgrade\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = [\"main.cpp\"]\n\n"
+      "[defaults]\n"
+      "style = \"local-source\"\n\n"
+      "[dependencies.style.github-package.profile.applaudio]\n"
+      "answer = { github = \"example/answer\", version = \"1.0.0\" }\n"
+    );
+    constexpr std::array selected_arguments {
+      std::string_view { "upgrade" },
+      std::string_view { "answer" },
+      std::string_view { "--to=1.1.0" },
+      std::string_view { "--profile=applaudio" },
+      std::string_view { "--target=unsupported-target" }
+    };
+    std::ostringstream selected_output;
+    std::ostringstream selected_error;
+    expect(
+      forge::cli::run(
+        selected_arguments,
+        selected_project,
+        selected_output,
+        selected_error
+      ) == 2,
+      "upgrade accepts an explicit selector profile"
+    );
+    expect(
+      contains(read_file(selected_project / "forge.recipe.toml"), "version = \"1.1.0\""),
+      "explicit selector-profile upgrade rewrites its dependency rule"
+    );
+    expect(
+      !contains(selected_error.str(), "recipe has no profile named"),
+      "selector-profile upgrade is not treated as a missing legacy profile"
+    );
   }
 
   void test_run_new_project()
@@ -7202,6 +7312,7 @@ int main()
   test_build_rejects_empty_project();
   test_build_and_run_named_target();
   test_update_rejects_unknown_dependency();
+  test_upgrade_updates_selector_and_legacy_profiles();
   test_run_new_project();
   test_release_new_project();
   test_prepare_executable_release();

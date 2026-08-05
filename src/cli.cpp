@@ -109,6 +109,30 @@ namespace forge::cli
         : "default dependencies";
     }
 
+    bool select_cli_dependency_scope(Recipe& recipe,
+                                     const std::optional<std::string>& profile,
+                                     std::ostream& error)
+    {
+      const auto uses_selector_rules =
+        !recipe.build_rules.empty() || !recipe.dependency_rules.empty();
+      const auto legacy_profile = profile
+        && (recipe.dependency_profiles.contains(*profile)
+            || recipe.build_profiles.contains(*profile));
+
+      if (legacy_profile || !uses_selector_rules)
+        return select_dependency_profile(recipe, profile, true, error);
+
+      auto configuration = std::string { "Debug" };
+      const auto selection = resolve_recipe_selection(
+        recipe,
+        std::optional<std::string> { "github-package" },
+        current_target(),
+        std::nullopt,
+        profile
+      );
+      return apply_selector_rules(recipe, selection, configuration, error);
+    }
+
     bool selected_github_dependency_names(const std::filesystem::path& project_directory,
                                           const std::optional<std::string>& profile,
                                           const std::optional<std::string>& dependency,
@@ -118,7 +142,7 @@ namespace forge::cli
       Recipe recipe;
 
       if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error)
-          || !select_dependency_profile(recipe, profile, true, error))
+          || !select_cli_dependency_scope(recipe, profile, error))
       {
         return false;
       }
@@ -176,8 +200,43 @@ namespace forge::cli
       if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
         return false;
 
-      if (dependencies_contain_selected_github(recipe.dependencies, options.update_dependency))
+      auto default_recipe = recipe;
+
+      if (!select_cli_dependency_scope(default_recipe, std::nullopt, error))
+        return false;
+
+      if (dependencies_contain_selected_github(default_recipe.dependencies, options.update_dependency))
         profiles.push_back(std::nullopt);
+
+      std::set<std::string> selector_profiles;
+
+      for (const auto& rule : recipe.dependency_rules)
+      {
+        const auto profile = rule.selectors.find("profile");
+
+        if (profile != rule.selectors.end()
+            && profile->second != "-"
+            && (!recipe.default_profile || profile->second != *recipe.default_profile))
+        {
+          selector_profiles.insert(profile->second);
+        }
+      }
+
+      for (const auto& name : selector_profiles)
+      {
+        auto selected_recipe = recipe;
+
+        if (!select_cli_dependency_scope(selected_recipe, name, error))
+          return false;
+
+        if (dependencies_contain_selected_github(
+          selected_recipe.dependencies,
+          options.update_dependency
+        ))
+        {
+          profiles.push_back(name);
+        }
+      }
 
       for (const auto& [name, dependencies] : recipe.dependency_profiles)
       {
@@ -222,7 +281,7 @@ namespace forge::cli
       contains_dependency = false;
 
       if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error)
-          || !select_dependency_profile(recipe, profile, true, error))
+          || !select_cli_dependency_scope(recipe, profile, error))
       {
         return false;
       }
@@ -434,24 +493,45 @@ namespace forge::cli
         return 2;
       }
 
+      auto dependency_options = options;
+
+      if (!dependency_options.style)
+      {
+        Recipe recipe;
+
+        if (!read_recipe(working_directory / "forge.recipe.toml", recipe, error))
+          return 2;
+
+        if (!recipe.dependency_rules.empty())
+          dependency_options.style = "github-package";
+      }
+
       if (!all_profiles)
       {
         if (!all_targets && !release_targets)
         {
-          if (!validate_named_update_dependency(working_directory, options, error))
+          if (!validate_named_update_dependency(working_directory, dependency_options, error))
             return 2;
 
-          return build_project(working_directory, options, output, error);
+          return build_project(working_directory, dependency_options, output, error);
         }
 
         std::vector<std::string> targets;
 
-        if (!collect_update_targets(working_directory, options, release_targets, targets, error))
+        if (!collect_update_targets(
+              working_directory,
+              dependency_options,
+              release_targets,
+              targets,
+              error
+            ))
+        {
           return 2;
+        }
 
         for (const auto& target : targets)
         {
-          auto target_options = options;
+          auto target_options = dependency_options;
           target_options.update_target = target;
           const auto result = build_project(working_directory, target_options, output, error);
 
@@ -464,12 +544,12 @@ namespace forge::cli
 
       std::vector<std::optional<std::string>> profiles;
 
-      if (!collect_update_profiles(working_directory, options, profiles, error))
+      if (!collect_update_profiles(working_directory, dependency_options, profiles, error))
         return 2;
 
       for (const auto& profile : profiles)
       {
-        auto profile_options = options;
+        auto profile_options = dependency_options;
         profile_options.profile = profile;
         const auto result = run_dependency_update(
           working_directory,
@@ -561,11 +641,173 @@ namespace forge::cli
       return true;
     }
 
+    bool replace_dependency_version_line(std::string_view line,
+                                         std::string_view version,
+                                         std::string& updated);
+
     std::string dependency_section(const std::optional<std::string>& profile)
     {
       return profile
         ? "profile." + *profile + ".dependencies"
         : "dependencies";
+    }
+
+    std::optional<RecipeSelectors> dependency_section_selectors(std::string_view section)
+    {
+      if (section == "dependencies")
+        return RecipeSelectors {};
+
+      constexpr auto prefix = std::string_view { "dependencies." };
+
+      if (!section.starts_with(prefix))
+        return std::nullopt;
+
+      section.remove_prefix(prefix.size());
+      RecipeSelectors selectors;
+
+      while (!section.empty())
+      {
+        const auto argument_end = section.find('.');
+
+        if (argument_end == std::string_view::npos)
+          return std::nullopt;
+
+        const auto argument = section.substr(0, argument_end);
+        section.remove_prefix(argument_end + 1);
+        const auto value_end = section.find('.');
+        const auto value = section.substr(0, value_end);
+
+        if ((argument != "style" && argument != "platform"
+             && argument != "config" && argument != "profile")
+            || value.empty() || selectors.contains(std::string { argument }))
+        {
+          return std::nullopt;
+        }
+
+        selectors.emplace(argument, value);
+
+        if (value_end == std::string_view::npos)
+          break;
+
+        section.remove_prefix(value_end + 1);
+      }
+
+      return selectors.empty()
+        ? std::nullopt
+        : std::optional<RecipeSelectors> { std::move(selectors) };
+    }
+
+    bool selector_matches(const RecipeSelectors& selectors,
+                          const RecipeSelection& selection)
+    {
+      const auto selected_value = [&selection](std::string_view argument) -> std::string_view
+      {
+        if (argument == "style")
+          return selection.style;
+        if (argument == "platform")
+          return selection.platform;
+        if (argument == "config")
+          return selection.configuration;
+        if (argument == "profile")
+          return selection.profile;
+        return {};
+      };
+
+      return std::ranges::all_of(
+        selectors,
+        [&selected_value](const auto& selector)
+        {
+          return selector.second == "-" || selected_value(selector.first) == selector.second;
+        }
+      );
+    }
+
+    bool selected_dependency_section(const std::filesystem::path& project_directory,
+                                     std::string_view content,
+                                     const std::optional<std::string>& profile,
+                                     std::string_view dependency,
+                                     std::string& selected_section,
+                                     std::ostream& error)
+    {
+      Recipe recipe;
+
+      if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
+        return false;
+
+      const auto legacy_profile = profile
+        && (recipe.dependency_profiles.contains(*profile)
+            || recipe.build_profiles.contains(*profile));
+
+      if (legacy_profile || (recipe.build_rules.empty() && recipe.dependency_rules.empty()))
+      {
+        selected_section = dependency_section(profile);
+        return true;
+      }
+
+      const auto selection = resolve_recipe_selection(
+        recipe,
+        std::optional<std::string> { "github-package" },
+        current_target(),
+        std::nullopt,
+        profile
+      );
+      std::string section;
+      std::size_t selected_specificity = 0;
+      bool found = false;
+      std::string_view remaining = content;
+
+      while (!remaining.empty())
+      {
+        const auto newline = remaining.find('\n');
+        const auto line = remaining.substr(0, newline);
+        const auto trimmed = trim_cli(line);
+
+        if (trimmed.starts_with("[") && trimmed.ends_with("]"))
+          section = std::string { trim_cli(trimmed.substr(1, trimmed.size() - 2)) };
+
+        const auto selectors = dependency_section_selectors(section);
+        const auto equals = trimmed.find('=');
+        const auto key = equals == std::string_view::npos
+          ? std::string_view {}
+          : trim_cli(trimmed.substr(0, equals));
+
+        if (selectors
+            && selector_matches(*selectors, selection)
+            && key == dependency
+            && trimmed.find("github") != std::string_view::npos)
+        {
+          std::string ignored;
+
+          if (replace_dependency_version_line(line, "0.0.0", ignored))
+          {
+            const auto specificity = static_cast<std::size_t>(std::ranges::count_if(
+              *selectors,
+              [](const auto& selector) { return selector.second != "-"; }
+            ));
+
+            if (!found || specificity >= selected_specificity)
+            {
+              selected_section = section;
+              selected_specificity = specificity;
+              found = true;
+            }
+          }
+        }
+
+        if (newline == std::string_view::npos)
+          break;
+
+        remaining.remove_prefix(newline + 1);
+      }
+
+      if (!found)
+      {
+        error << "forge: GitHub dependency '" << dependency
+              << "' was not found in the selected dependency rules\n";
+        return false;
+      }
+
+      return true;
     }
 
     bool replace_dependency_version_line(std::string_view line,
@@ -599,7 +841,7 @@ namespace forge::cli
     }
 
     bool replace_dependency_version(std::string_view content,
-                                    const std::optional<std::string>& profile,
+                                    std::string_view wanted_section,
                                     std::string_view dependency,
                                     std::string_view version,
                                     std::string& updated,
@@ -607,7 +849,6 @@ namespace forge::cli
     {
       updated.clear();
       std::string section;
-      const auto wanted_section = dependency_section(profile);
       bool replaced = false;
       std::string_view remaining = content;
 
@@ -761,9 +1002,18 @@ namespace forge::cli
       const auto path = project_directory / "forge.recipe.toml";
       std::string content;
       std::string updated;
+      std::string section;
 
       return read_text_file(path, content, error)
-        && replace_dependency_version(content, profile, dependency, version, updated, error)
+        && selected_dependency_section(
+          project_directory,
+          content,
+          profile,
+          dependency,
+          section,
+          error
+        )
+        && replace_dependency_version(content, section, dependency, version, updated, error)
         && write_text_file(path, updated, error);
     }
 
@@ -796,9 +1046,27 @@ namespace forge::cli
       for (const auto& profile : profiles)
       {
         std::string updated;
+        std::string section;
 
-        if (!replace_dependency_version(content, profile, dependency, version, updated, error))
+        if (!selected_dependency_section(
+              project_directory,
+              content,
+              profile,
+              dependency,
+              section,
+              error
+            )
+            || !replace_dependency_version(
+              content,
+              section,
+              dependency,
+              version,
+              updated,
+              error
+            ))
+        {
           return false;
+        }
 
         content = std::move(updated);
       }
@@ -852,9 +1120,27 @@ namespace forge::cli
             continue;
 
           std::string updated;
+          std::string section;
 
-          if (!replace_dependency_version(content, profile, dependency, version, updated, error))
+          if (!selected_dependency_section(
+                project_directory,
+                content,
+                profile,
+                dependency,
+                section,
+                error
+              )
+              || !replace_dependency_version(
+                content,
+                section,
+                dependency,
+                version,
+                updated,
+                error
+              ))
+          {
             return false;
+          }
 
           content = std::move(updated);
         }
@@ -872,7 +1158,7 @@ namespace forge::cli
       Recipe recipe;
 
       if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error)
-          || !select_dependency_profile(recipe, profile, true, error))
+          || !select_cli_dependency_scope(recipe, profile, error))
       {
         return false;
       }

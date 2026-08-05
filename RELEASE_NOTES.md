@@ -1,5 +1,16 @@
 # Release notes
 
+## 0.13.1
+
+- Made `forge update` and `forge upgrade` recognize selector-based software
+  profiles and update their effective `github-package` dependency rules.
+  `--all-profiles` now updates both selector rules and legacy dependency
+  profiles in mixed migration recipes.
+- Made generated GitHub release workflows retry publication once when another
+  platform job creates the shared release concurrently. The managed
+  `release-boxes` workflow feature is updated to revision 4 with the same
+  recovery behavior.
+
 ## 0.13.0
 
 - Added independently composable `build.<argument>.<value>...` and

@@ -31,6 +31,17 @@ jobs:
           ./build/dev/forge workflow prepare-release
 
       - name: Publish GitHub release
+        id: publish-release
+        continue-on-error: true
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: .forge/release/*.zip,boxes/*.cbox,boxes/*.sha256
+          bodyFile: .forge/release/RELEASE_NOTES.md
+          tag: ${{ github.ref_name }}
+
+      - name: Retry Publish GitHub release after concurrent creation
+        if: steps.publish-release.outcome == 'failure'
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true

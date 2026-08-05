@@ -144,6 +144,31 @@ namespace forge
       return candidate_component != candidate.end();
     }
 
+    std::string publish_release_steps(std::string_view name,
+                                      std::string_view artifacts,
+                                      std::string_view body_file = {})
+    {
+      const auto action =
+        "        uses: ncipollo/release-action@v1\n"
+        "        with:\n"
+        "          allowUpdates: true\n"
+        "          artifacts: " + std::string { artifacts } + "\n"
+        + (body_file.empty()
+          ? std::string {}
+          : "          bodyFile: " + std::string { body_file } + "\n")
+        + "          tag: ${{ github.ref_name }}\n";
+
+      return
+        "      - name: " + std::string { name } + "\n"
+        "        id: publish-release\n"
+        "        continue-on-error: true\n"
+        + action
+        + "\n"
+        "      - name: Retry " + std::string { name } + " after concurrent creation\n"
+        "        if: steps.publish-release.outcome == 'failure'\n"
+        + action;
+    }
+
     std::string release_boxes_job(std::string_view workflow)
     {
       const auto windows =
@@ -175,7 +200,7 @@ namespace forge
 
       return
         "  forge-release-boxes:\n"
-        "    # forge-managed: release-boxes@3\n"
+        "    # forge-managed: release-boxes@4\n"
         "    name: Publish Forge cboxes\n"
         "    if: startsWith(github.ref, 'refs/tags/')\n"
         "    runs-on: " + std::string { runner } + "\n"
@@ -207,12 +232,10 @@ namespace forge
         "          && cmake --build .forge-bootstrap/build\n"
         + std::string { shell } +
         "        run: " + std::string { forge_executable } + " workflow prepare-release --skip-unsupported\n"
-        "      - name: Publish Forge release boxes\n"
-        "        uses: ncipollo/release-action@v1\n"
-        "        with:\n"
-        "          allowUpdates: true\n"
-        "          artifacts: boxes/*.cbox,boxes/*.sha256\n"
-          "          tag: ${{ github.ref_name }}\n";
+        + publish_release_steps(
+          "Publish Forge release boxes",
+          "boxes/*.cbox,boxes/*.sha256"
+        );
     }
 
     struct WorkflowFeature
@@ -229,7 +252,7 @@ namespace forge
         "release-boxes",
         "Publish Forge cboxes and checksums from Git tag workflows",
         "forge-release-boxes",
-        "# forge-managed: release-boxes@3",
+        "# forge-managed: release-boxes@4",
         release_boxes_job
       }
     };
@@ -548,13 +571,11 @@ namespace forge
         "        run: |\n"
         "          " + std::string { forge_executable } + " workflow prepare-release --skip-unsupported\n"
         "\n"
-        "      - name: Publish GitHub release\n"
-        "        uses: ncipollo/release-action@v1\n"
-        "        with:\n"
-        "          allowUpdates: true\n"
-        "          artifacts: .forge/release/*.zip,boxes/*.cbox,boxes/*.sha256\n"
-        "          bodyFile: .forge/release/RELEASE_NOTES.md\n"
-        "          tag: ${{ github.ref_name }}\n";
+        + publish_release_steps(
+          "Publish GitHub release",
+          ".forge/release/*.zip,boxes/*.cbox,boxes/*.sha256",
+          ".forge/release/RELEASE_NOTES.md"
+        );
 
       return workflow;
     }
@@ -687,13 +708,11 @@ namespace forge
           "            tar -czf \"release-assets/${base}.tar.gz\" -C linux-bundle \"${base}-modern\" \"${base}-legacy\"\n"
           "          done\n"
           "\n"
-          "      - name: Publish GitHub release\n"
-          "        uses: ncipollo/release-action@v1\n"
-          "        with:\n"
-          "          allowUpdates: true\n"
-          "          artifacts: release-assets/*.tar.gz,release-assets/*.cbox,release-assets/*.sha256\n"
-          "          bodyFile: release-assets/RELEASE_NOTES.md\n"
-          "          tag: ${{ github.ref_name }}\n";
+          + publish_release_steps(
+            "Publish GitHub release",
+            "release-assets/*.tar.gz,release-assets/*.cbox,release-assets/*.sha256",
+            "release-assets/RELEASE_NOTES.md"
+          );
     }
 
   } // namespace
