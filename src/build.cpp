@@ -3,6 +3,7 @@
 #include "box.h"
 #include "file_support.h"
 #include "fprocess.h"
+#include "project_scan.h"
 #include "recipe.h"
 #include "runtime_assets.h"
 #include "sha256.h"
@@ -81,6 +82,72 @@ namespace forge
       std::string url;
       std::string sha256;
     };
+
+    std::set<std::string> selector_dependency_names(const Recipe& recipe)
+    {
+      std::set<std::string> names;
+
+      for (const auto& rule : recipe.dependency_rules)
+      {
+        for (const auto& dependency : rule.dependencies)
+          names.insert(dependency.name);
+      }
+
+      return names;
+    }
+
+    bool validate_selected_dependency_includes(
+      const std::filesystem::path& project_directory,
+      const Recipe& recipe,
+      const RecipeSelection& selection,
+      const std::set<std::string>& selectable_dependencies,
+      std::ostream& error
+    )
+    {
+      if (selectable_dependencies.empty())
+        return true;
+
+      std::vector<std::string> sources;
+      std::vector<std::string> headers;
+
+      for (const auto& source : recipe.sources)
+        sources.push_back(source.generic_string());
+
+      for (const auto& header : recipe.public_headers)
+        headers.push_back(header.generic_string());
+
+      const auto unresolved = unresolved_includes(project_directory, sources, headers);
+
+      for (const auto& [include, source] : unresolved)
+      {
+        const auto separator = include.find_first_of("/\\");
+        const auto dependency_name = include.substr(0, separator);
+
+        if (!selectable_dependencies.contains(dependency_name))
+          continue;
+
+        const auto selected = std::ranges::find_if(
+          recipe.dependencies,
+          [&dependency_name](const Dependency& dependency)
+          {
+            return dependency.name == dependency_name;
+          }
+        );
+
+        if (selected != recipe.dependencies.end())
+          continue;
+
+        error << "forge: selected dependency rules omit '" << dependency_name
+              << "', required by include '" << include << "' in '" << source << "'\n"
+              << "forge: no matching dependency for style '" << selection.style
+              << "', platform '" << selection.platform
+              << "', config '" << selection.configuration
+              << "', profile '" << selection.profile << "'\n";
+        return false;
+      }
+
+      return true;
+    }
 
     bool is_binary_compatible_toolchain(const ToolchainIdentity& dependency,
                                         const ToolchainIdentity& project)
@@ -1272,6 +1339,9 @@ namespace forge
       file
         << "cmake_minimum_required(VERSION 3.25)\n"
         << "project(forge_project LANGUAGES CXX)\n\n"
+        << "if(WIN32)\n"
+        << "  add_compile_definitions(NOMINMAX)\n"
+        << "endif()\n\n"
         << "include(CheckCXXSourceCompiles)\n"
         << "check_cxx_source_compiles(\"#include <string>\\n#ifndef _LIBCPP_VERSION\\n"
         << "#error\\n#endif\\nint main() {}\" FORGE_USES_LIBCPP)\n"
@@ -3129,10 +3199,24 @@ namespace forge
       }
     }
 
+    const auto selectable_dependencies = selector_dependency_names(recipe);
+
     if (!legacy_profile
         && (uses_selector_rules || dependency_session->options.style)
         && !apply_selector_rules(recipe, selection, configuration, error))
       return 2;
+
+    if (!legacy_profile
+        && !validate_selected_dependency_includes(
+          project_directory,
+          recipe,
+          selection,
+          selectable_dependencies,
+          error
+        ))
+    {
+      return 2;
+    }
 
     if (!select_build_profile(
       recipe,

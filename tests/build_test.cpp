@@ -277,6 +277,10 @@ namespace
     );
 
     const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
+    expect(
+      contains(generated, "add_compile_definitions(NOMINMAX)"),
+      "generated CMake disables Windows min and max macros"
+    );
     expect(contains(generated, "add_executable(forge_project"), "build generates an executable target");
     expect(contains(generated, "forge-toolchain.toml"), "build records the selected toolchain identity");
     expect(contains(generated, "CMAKE_CXX_COMPILER_ID"), "toolchain identity records the compiler");
@@ -589,6 +593,45 @@ namespace
       "explicit selector profile overrides the recipe default"
     );
     expect(explicit_error.str().empty(), "explicit selector profile does not write an error");
+  }
+
+  void test_build_rejects_selector_that_omits_required_dependency()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream { directory.path() / "main.cpp" }
+      << "#include <8Beat/AudioSourceHandler.h>\nint main() {}\n";
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe
+      << "\n[dependencies.style.github-package.profile.applaudio]\n"
+      << "8Beat = { github = \"example/8Beat\", version = \"1.0.0\" }\n";
+    recipe.close();
+    forge::BuildOptions options;
+    options.style = "github-package";
+    options.profile = "openal";
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), options, runner, output, error) == 2,
+      "build rejects a selector combination that omits a required dependency"
+    );
+    expect(invocations == 0, "missing selected dependency fails before external tools run");
+    expect(
+      contains(error.str(), "selected dependency rules omit '8Beat'")
+        && contains(error.str(), "profile 'openal'"),
+      "missing selected dependency explains the selector mismatch"
+    );
   }
 
   void test_dependency_style_validates_rule_shape()
@@ -2246,6 +2289,7 @@ int main()
   test_build_applies_build_profile();
   test_build_applies_selector_rules();
   test_build_applies_default_selector_profile();
+  test_build_rejects_selector_that_omits_required_dependency();
   test_dependency_style_validates_rule_shape();
   test_selector_recipe_keeps_legacy_workflow_profile();
   test_build_generates_system_package_hint_diagnostics();
