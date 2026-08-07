@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 project(
     forge
-    VERSION 0.13.3
+    VERSION 0.13.4
     DESCRIPTION "A project workflow system for C++"
     LANGUAGES CXX
 )

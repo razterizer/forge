@@ -1,5 +1,15 @@
 # Release notes
 
+## 0.13.4
+
+- Made generated Windows projects define `NOMINMAX`, preventing the `min` and
+  `max` macros from `windows.h` from breaking standard-library calls in project
+  and dependency headers.
+- Made selector-based builds detect direct dependency includes whose dependency
+  was omitted by the selected style, platform, configuration, or profile. Forge
+  now reports the mismatched selector combination before invoking external
+  tools instead of failing later with a compiler include error.
+
 ## 0.13.3
 
 - Made Windows builds automatically discover Visual Studio Build Tools with
