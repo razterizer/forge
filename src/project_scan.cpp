@@ -584,10 +584,10 @@ namespace forge
         url = first == std::string::npos ? std::string {} : url.substr(first);
         std::string_view path;
 
-        if (const auto github = url.find("github.com/"); github != std::string::npos)
-          path = std::string_view { url }.substr(github + 11);
-        else if (const auto github = url.find("github.com:"); github != std::string::npos)
-          path = std::string_view { url }.substr(github + 11);
+        if (const auto github_path = url.find("github.com/"); github_path != std::string::npos)
+          path = std::string_view { url }.substr(github_path + 11);
+        else if (const auto github_ssh = url.find("github.com:"); github_ssh != std::string::npos)
+          path = std::string_view { url }.substr(github_ssh + 11);
 
         auto repository = std::string { path };
 
@@ -1057,19 +1057,19 @@ namespace forge
 
     std::map<std::string, std::vector<std::pair<std::string, SiblingDependency>>> by_name;
 
-    for (const auto& [include, candidates] : matches)
+    for (const auto& [include, include_candidates] : matches)
     {
-      if (candidates.size() == 1)
-        by_name[candidates.front().name].emplace_back(include, candidates.front());
+      if (include_candidates.size() == 1)
+        by_name[include_candidates.front().name].emplace_back(include, include_candidates.front());
     }
 
     std::vector<SiblingDependency> result;
 
-    for (const auto& [name, candidates] : by_name)
+    for (const auto& [name, dependency_candidates] : by_name)
     {
-      const auto path = candidates.front().second.path;
+      const auto path = dependency_candidates.front().second.path;
       const auto same_project = std::ranges::all_of(
-        candidates,
+        dependency_candidates,
         [&path](const auto& candidate)
         {
           return candidate.second.path == path;
@@ -1079,9 +1079,9 @@ namespace forge
       if (!same_project)
         continue;
 
-      result.push_back(candidates.front().second);
+      result.push_back(dependency_candidates.front().second);
 
-      for (const auto& [include, dependency] : candidates)
+      for (const auto& [include, dependency] : dependency_candidates)
         unresolved.erase(include);
     }
 

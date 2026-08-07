@@ -1240,11 +1240,11 @@ namespace forge
       }
       else if (section == "version_header" && key == "path")
       {
-        std::string path;
-        valid = parse_string(value, path);
+        std::string header_path;
+        valid = parse_string(value, header_path);
 
         if (valid)
-          recipe.version_header_path = std::move(path);
+          recipe.version_header_path = std::move(header_path);
       }
       else if (section == "version_header" && key == "prefix")
       {

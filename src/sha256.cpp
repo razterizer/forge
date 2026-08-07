@@ -133,12 +133,12 @@ namespace forge
 
       if (count >= 56)
       {
-        std::fill(block.begin() + count + 1, block.end(), 0);
+        std::fill(block.begin() + count + 1, block.end(), std::uint8_t { 0 });
         process_block(block, state);
         block.fill(0);
       }
       else
-        std::fill(block.begin() + count + 1, block.end(), 0);
+        std::fill(block.begin() + count + 1, block.end(), std::uint8_t { 0 });
 
       const auto bit_count = byte_count * 8;
 

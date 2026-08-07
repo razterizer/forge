@@ -8,6 +8,8 @@
   without requiring the user to launch a Visual Studio Developer Shell first.
 - Added actionable diagnostics when Visual Studio, the C++ workload,
   `VsDevCmd.bat`, or `cl.exe` cannot be found.
+- Enabled standard C++ exception unwinding for MSVC builds and cleaned up the
+  warnings reported by the Visual Studio 2026 compiler at warning level 4.
 
 ## 0.13.2
 

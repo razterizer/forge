@@ -78,16 +78,24 @@ namespace forge
       if (executable_is_available("cl.exe"))
         return true;
 
-      const auto* program_files = std::getenv("ProgramFiles(x86)");
+      char* program_files = nullptr;
+      std::size_t program_files_size = 0;
+      const auto environment_error = _dupenv_s(
+        &program_files,
+        &program_files_size,
+        "ProgramFiles(x86)"
+      );
 
-      if (!program_files)
+      if (environment_error != 0 || !program_files)
       {
+        std::free(program_files);
         error << "forge: could not locate Visual Studio Installer (ProgramFiles(x86) is unset)\n";
         return false;
       }
 
       const auto vswhere = std::filesystem::path(program_files)
         / "Microsoft Visual Studio/Installer/vswhere.exe";
+      std::free(program_files);
 
       if (!std::filesystem::is_regular_file(vswhere))
       {

@@ -47,7 +47,7 @@ target_include_directories(forge_core
 )
 
 if(MSVC)
-    target_compile_options(forge_core PRIVATE /W4 /permissive-)
+    target_compile_options(forge_core PUBLIC /EHsc PRIVATE /W4 /permissive-)
 else()
     target_compile_options(forge_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()

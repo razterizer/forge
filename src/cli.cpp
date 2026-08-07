@@ -642,7 +642,7 @@ namespace forge::cli
     }
 
     bool replace_dependency_version_line(std::string_view line,
-                                         std::string_view version,
+                                         std::string_view replacement_version,
                                          std::string& updated);
 
     std::string dependency_section(const std::optional<std::string>& profile)
@@ -811,7 +811,7 @@ namespace forge::cli
     }
 
     bool replace_dependency_version_line(std::string_view line,
-                                         std::string_view version,
+                                         std::string_view replacement_version,
                                          std::string& updated)
     {
       const auto version_key = line.find("version");
@@ -835,7 +835,7 @@ namespace forge::cli
         return false;
 
       updated.assign(line.substr(0, open_quote + 1));
-      updated += version;
+      updated += replacement_version;
       updated += line.substr(close_quote);
       return true;
     }
@@ -843,7 +843,7 @@ namespace forge::cli
     bool replace_dependency_version(std::string_view content,
                                     std::string_view wanted_section,
                                     std::string_view dependency,
-                                    std::string_view version,
+                                    std::string_view replacement_version,
                                     std::string& updated,
                                     std::ostream& error)
     {
@@ -870,7 +870,7 @@ namespace forge::cli
         {
           std::string replacement;
 
-          if (!replace_dependency_version_line(line, version, replacement))
+          if (!replace_dependency_version_line(line, replacement_version, replacement))
           {
             error << "forge: dependency '" << dependency
                   << "' has no inline version to upgrade\n";
@@ -981,16 +981,16 @@ namespace forge::cli
     bool upgrade_recipe_dependency(const std::filesystem::path& project_directory,
                                    const std::optional<std::string>& profile,
                                    std::string_view dependency,
-                                   std::string_view version,
+                                   std::string_view requested_version,
                                    std::ostream& error)
     {
-      if (version.empty() || version.find('"') != std::string_view::npos)
+      if (requested_version.empty() || requested_version.find('"') != std::string_view::npos)
       {
         error << "forge: upgrade version cannot be empty\n";
         return false;
       }
 
-      if (!is_github_dependency_version(version))
+      if (!is_github_dependency_version(requested_version))
       {
         error << "forge: upgrade version must use <major>.<minor>.<patch>[+build.<number>]\n";
         return false;
@@ -1013,7 +1013,7 @@ namespace forge::cli
           section,
           error
         )
-        && replace_dependency_version(content, section, dependency, version, updated, error)
+        && replace_dependency_version(content, section, dependency, requested_version, updated, error)
         && write_text_file(path, updated, error);
     }
 
@@ -1021,17 +1021,17 @@ namespace forge::cli
       const std::filesystem::path& project_directory,
       const std::vector<std::optional<std::string>>& profiles,
       std::string_view dependency,
-      std::string_view version,
+      std::string_view requested_version,
       std::ostream& error
     )
     {
-      if (version.empty() || version.find('"') != std::string_view::npos)
+      if (requested_version.empty() || requested_version.find('"') != std::string_view::npos)
       {
         error << "forge: upgrade version cannot be empty\n";
         return false;
       }
 
-      if (!is_github_dependency_version(version))
+      if (!is_github_dependency_version(requested_version))
       {
         error << "forge: upgrade version must use <major>.<minor>.<patch>[+build.<number>]\n";
         return false;
@@ -1060,7 +1060,7 @@ namespace forge::cli
               content,
               section,
               dependency,
-              version,
+              requested_version,
               updated,
               error
             ))
@@ -1087,15 +1087,15 @@ namespace forge::cli
       if (!read_text_file(path, content, error))
         return false;
 
-      for (const auto& [dependency, version] : versions)
+      for (const auto& [dependency, requested_version] : versions)
       {
-        if (version.empty() || version.find('"') != std::string::npos)
+        if (requested_version.empty() || requested_version.find('"') != std::string::npos)
         {
           error << "forge: upgrade version cannot be empty\n";
           return false;
         }
 
-        if (!is_github_dependency_version(version))
+        if (!is_github_dependency_version(requested_version))
         {
           error << "forge: upgrade version must use <major>.<minor>.<patch>[+build.<number>]\n";
           return false;
@@ -1134,7 +1134,7 @@ namespace forge::cli
                 content,
                 section,
                 dependency,
-                version,
+                requested_version,
                 updated,
                 error
               ))
@@ -1356,7 +1356,7 @@ namespace forge::cli
     bool latest_dependency_version(const std::filesystem::path& project_directory,
                                    const std::optional<std::string>& profile,
                                    std::string_view dependency_name,
-                                   std::string& version,
+                                   std::string& resolved_version,
                                    std::ostream& output,
                                    std::ostream& error)
     {
@@ -1398,7 +1398,7 @@ namespace forge::cli
         return false;
       }
 
-      version = *resolved;
+      resolved_version = *resolved;
       return true;
     }
 
@@ -1406,7 +1406,7 @@ namespace forge::cli
       const std::filesystem::path& project_directory,
       const std::vector<std::optional<std::string>>& profiles,
       std::string_view dependency_name,
-      std::string& version,
+      std::string& resolved_version,
       std::ostream& output,
       std::ostream& error
     )
@@ -1429,7 +1429,14 @@ namespace forge::cli
         if (!contains_dependency)
           continue;
 
-        return latest_dependency_version(project_directory, profile, dependency_name, version, output, error);
+        return latest_dependency_version(
+          project_directory,
+          profile,
+          dependency_name,
+          resolved_version,
+          output,
+          error
+        );
       }
 
       error << "forge: GitHub dependency '" << dependency_name << "' was not found\n";
@@ -1796,8 +1803,8 @@ namespace forge::cli
             value && set_once(options.initial_version, *value))
         {
         }
-        else if (const auto value = option_value(argument, "--version-header-path=");
-                 value && set_once(options.version_header_path, *value))
+        else if (const auto header_path = option_value(argument, "--version-header-path=");
+                 header_path && set_once(options.version_header_path, *header_path))
         {
         }
         else if (!argument.starts_with("-") && !name)
@@ -2218,7 +2225,7 @@ namespace forge::cli
       bool all_targets = false;
       bool release_targets = false;
       bool all_profiles = false;
-      std::optional<std::string> version;
+      std::optional<std::string> requested_version;
       bool latest = false;
 
       for (const auto argument : arguments.subspan(1))
@@ -2250,7 +2257,7 @@ namespace forge::cli
           if (!read_required_option(*value, "forge: --to requires a version", error))
             return 2;
 
-          if (!set_once(version, *value))
+          if (!set_once(requested_version, *value))
           {
             print_upgrade_usage(error);
             return 2;
@@ -2272,14 +2279,14 @@ namespace forge::cli
 
       if (all_dependencies)
       {
-        if (!latest || version)
+        if (!latest || requested_version)
         {
           error << "forge: upgrading all dependencies requires --latest\n";
           print_upgrade_usage(error);
           return 2;
         }
       }
-      else if (latest == version.has_value())
+      else if (latest == requested_version.has_value())
       {
         print_upgrade_usage(error);
         return 2;
@@ -2373,7 +2380,7 @@ namespace forge::cli
             working_directory,
             upgrade_profiles.front(),
             *options.update_dependency,
-            version.emplace(),
+            requested_version.emplace(),
             output,
             error
           ))
@@ -2387,7 +2394,7 @@ namespace forge::cli
           working_directory,
           upgrade_profiles,
           *options.update_dependency,
-          *version,
+          *requested_version,
           error
         ))
         {
@@ -2398,7 +2405,7 @@ namespace forge::cli
         working_directory,
         options.profile,
         *options.update_dependency,
-        *version,
+        *requested_version,
         error
       ))
       {
@@ -2406,7 +2413,7 @@ namespace forge::cli
       }
 
       output << "Upgraded dependency " << *options.update_dependency
-             << " to " << *version << '\n';
+             << " to " << *requested_version << '\n';
       return run_dependency_update(
         working_directory,
         options,
@@ -2464,7 +2471,7 @@ namespace forge::cli
             return 2;
           }
         }
-        else if (const auto value = option_value(argument, "--tag-force="))
+        else if (const auto forced_tag = option_value(argument, "--tag-force="))
         {
           if (tag_option_seen)
           {
@@ -2473,7 +2480,7 @@ namespace forge::cli
           }
 
           tag_option_seen = true;
-          options.tag_format = std::string { *value };
+          options.tag_format = std::string { *forced_tag };
           options.force_tag = true;
 
           if (options.tag_format->empty())
@@ -2790,8 +2797,8 @@ namespace forge::cli
                  value && set_once(options.initial_version, *value))
         {
         }
-        else if (const auto value = option_value(argument, "--version-header-path=");
-                 value && set_once(options.version_header_path, *value))
+        else if (const auto header_path = option_value(argument, "--version-header-path=");
+                 header_path && set_once(options.version_header_path, *header_path))
         {
         }
         else
