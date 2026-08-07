@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.13.2
+
+- Added build script `build-dev.bat` which is necessary when building forge on Windows.
+
 ## 0.13.1
 
 - Made `forge update` and `forge upgrade` recognize selector-based software
