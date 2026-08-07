@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.13.3
+
+- Made Windows builds automatically discover Visual Studio Build Tools with
+  `vswhere` and initialize the MSVC developer environment before CMake
+  configuration. `forge build` can now run from a regular PowerShell session
+  without requiring the user to launch a Visual Studio Developer Shell first.
+- Added actionable diagnostics when Visual Studio, the C++ workload,
+  `VsDevCmd.bat`, or `cl.exe` cannot be found.
+
 ## 0.13.2
 
 - Added build script `build-dev.bat` which is necessary when building forge on Windows.
