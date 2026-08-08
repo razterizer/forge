@@ -71,6 +71,35 @@ namespace
       << "projects = [" << projects << "]\n";
   }
 
+  void test_workspace_accepts_toml_comments_multiline_arrays_and_escapes()
+  {
+    TemporaryDirectory directory;
+    std::ofstream workspace_file { directory.path() / "forge.workspace.toml" };
+    workspace_file
+      << "[workspace] # workspace metadata\n"
+      << "name = \"suite\\u002dtools\" # Unicode escape\n"
+      << "projects = [\n"
+      << "  \"app\", # application\n"
+      << "  \"library\",\n"
+      << "]\n";
+    workspace_file.close();
+    forge::Workspace workspace;
+    std::ostringstream error;
+
+    expect(
+      forge::read_workspace(directory.path() / "forge.workspace.toml", workspace, error),
+      "workspace accepts TOML comments, multiline arrays, and escapes"
+    );
+    expect(workspace.name == "suite-tools", "workspace decodes TOML Unicode escapes");
+    expect(
+      workspace.projects.size() == 2
+        && workspace.projects[0].path == "app"
+        && workspace.projects[1].path == "library",
+      "workspace parses a multiline project array"
+    );
+    expect(error.str().empty(), "valid TOML workspace writes no error");
+  }
+
   void write_named_project(const std::filesystem::path& directory,
                            std::string_view name)
   {
@@ -442,6 +471,7 @@ namespace
 
 int main()
 {
+  test_workspace_accepts_toml_comments_multiline_arrays_and_escapes();
   test_workspace_builds_all_projects();
   test_workspace_propagates_selector_options();
   test_workspace_builds_selected_project();

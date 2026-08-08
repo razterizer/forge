@@ -35,6 +35,7 @@ add_library(forge_core STATIC
     src/sha256.cpp
     src/test.cpp
     src/target_support.cpp
+    src/toml_support.cpp
     src/workspace.cpp
     src/zip.cpp
 )

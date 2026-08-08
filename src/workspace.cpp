@@ -4,6 +4,7 @@
 #include "run.h"
 #include "target_support.h"
 #include "test.h"
+#include "toml_support.h"
 
 #include <algorithm>
 #include <cctype>
@@ -32,13 +33,7 @@ namespace forge
 
     bool parse_string(std::string_view value, std::string& result)
     {
-      value = trim(value);
-
-      if (value.size() < 2 || value.front() != '"' || value.back() != '"')
-        return false;
-
-      result = value.substr(1, value.size() - 2);
-      return result.find('"') == std::string::npos;
+      return parse_toml_string(value, result);
     }
 
     bool parse_paths(std::string_view value, std::vector<std::filesystem::path>& paths)
@@ -52,16 +47,14 @@ namespace forge
 
       while (!value.empty())
       {
-        if (value.front() != '"')
+        std::string path;
+        std::size_t consumed = 0;
+
+        if (!parse_toml_string_prefix(value, path, consumed))
           return false;
 
-        const auto end = value.find('"', 1);
-
-        if (end == std::string_view::npos)
-          return false;
-
-        paths.emplace_back(value.substr(1, end - 1));
-        value = trim(value.substr(end + 1));
+        paths.emplace_back(path);
+        value = trim(value.substr(consumed));
 
         if (value.empty())
           break;
@@ -317,17 +310,20 @@ namespace forge
     }
 
     std::string section;
-    std::string line;
     std::vector<std::filesystem::path> projects;
-    std::size_t line_number = 0;
+    std::vector<TomlStatement> statements;
+    std::size_t invalid_line = 0;
 
-    while (std::getline(file, line))
+    if (!read_toml_statements(file, statements, invalid_line))
     {
-      ++line_number;
-      auto content = trim(line);
+      error << "forge: invalid workspace value on line " << invalid_line << '\n';
+      return false;
+    }
 
-      if (content.empty() || content.front() == '#')
-        continue;
+    for (const auto& statement : statements)
+    {
+      const auto content = trim(statement.content);
+      const auto line_number = statement.line;
 
       if (content.front() == '[' && content.back() == ']')
       {

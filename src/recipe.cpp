@@ -1,4 +1,5 @@
 #include "recipe.h"
+#include "toml_support.h"
 #include <algorithm>
 #include <cctype>
 #include <charconv>
@@ -27,27 +28,7 @@ namespace forge
 
     bool parse_string(std::string_view value, std::string& result)
     {
-      value = trim(value);
-
-      if (value.size() < 2 || value.front() != '"' || value.back() != '"')
-        return false;
-
-      result.clear();
-
-      for (std::size_t index = 1; index + 1 < value.size(); ++index)
-      {
-        if (value[index] == '\\')
-        {
-          ++index;
-
-          if (index + 1 >= value.size())
-            return false;
-        }
-
-        result += value[index];
-      }
-
-      return true;
+      return parse_toml_string(value, result);
     }
 
     bool parse_integer(std::string_view value, int& result)
@@ -198,29 +179,14 @@ namespace forge
 
       while (!value.empty())
       {
-        if (value.front() != '"')
-          return false;
-
-        std::size_t end = 1;
-
-        while (end < value.size() && value[end] != '"')
-        {
-          if (value[end] == '\\')
-            ++end;
-
-          ++end;
-        }
-
-        if (end >= value.size())
-          return false;
-
         std::string source;
+        std::size_t consumed = 0;
 
-        if (!parse_string(value.substr(0, end + 1), source))
+        if (!parse_toml_string_prefix(value, source, consumed))
           return false;
 
         sources.emplace_back(source);
-        value = trim(value.substr(end + 1));
+        value = trim(value.substr(consumed));
 
         if (value.empty())
           break;
@@ -851,16 +817,19 @@ namespace forge
     }
 
     std::string section;
-    std::string line;
-    std::size_t line_number = 0;
+    std::vector<TomlStatement> statements;
+    std::size_t invalid_line = 0;
 
-    while (std::getline(file, line))
+    if (!read_toml_statements(file, statements, invalid_line))
     {
-      ++line_number;
-      auto content = trim(line);
+      error << "forge: invalid recipe line " << invalid_line << '\n';
+      return false;
+    }
 
-      if (content.empty() || content.front() == '#')
-        continue;
+    for (const auto& statement : statements)
+    {
+      const auto content = trim(statement.content);
+      const auto line_number = statement.line;
 
       if (content.front() == '[' && content.back() == ']')
       {

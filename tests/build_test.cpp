@@ -1,5 +1,6 @@
 #include "build.h"
 #include "fprocess.h"
+#include "recipe.h"
 #include "test_support.h"
 
 #include <algorithm>
@@ -92,6 +93,36 @@ namespace
       << "public_headers = [\"include/hello/hello.h\"]\n";
 
     std::ofstream { directory / "include/hello/hello.h" } << "inline int hello() { return 42; }\n";
+  }
+
+  void test_recipe_accepts_toml_comments_multiline_arrays_and_escapes()
+  {
+    TemporaryDirectory directory;
+    std::ofstream recipe_file { directory.path() / "forge.recipe.toml" };
+    recipe_file
+      << "[project] # project metadata\n"
+      << "name = \"hello\\u002dworld\" # Unicode escape\n"
+      << "version = \"0.1.0\"\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = [\n"
+      << "  \"main.cpp\", # trailing comments are valid TOML\n"
+      << "]\n";
+    recipe_file.close();
+    forge::Recipe recipe;
+    std::ostringstream error;
+
+    expect(
+      forge::read_recipe(directory.path() / "forge.recipe.toml", recipe, error),
+      "recipe accepts TOML comments, multiline arrays, and escapes"
+    );
+    expect(recipe.name == "hello-world", "recipe decodes TOML Unicode escapes");
+    expect(
+      recipe.sources.size() == 1 && recipe.sources.front() == "main.cpp",
+      "recipe parses a multiline source array"
+    );
+    expect(error.str().empty(), "valid TOML recipe writes no error");
   }
 
   void write_u16(std::ofstream& file, std::uint16_t value)
@@ -2361,6 +2392,7 @@ namespace
 
 int main()
 {
+  test_recipe_accepts_toml_comments_multiline_arrays_and_escapes();
   test_build_generates_cmake_and_commands();
   test_build_generates_static_library();
   test_build_generates_dynamic_library();
