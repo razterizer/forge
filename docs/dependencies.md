@@ -54,10 +54,7 @@ but its source revision must be reproducible:
 
 ```toml
 [dependencies]
-Core = {
-  git = "https://github.com/razterizer/Core.git",
-  commit = "<exact-full-commit>"
-}
+Core = { git = "https://github.com/razterizer/Core.git", commit = "<exact-full-commit>" }
 ```
 
 The exact commit in the recipe is the pin, so no lockfile entry is required.
@@ -78,10 +75,7 @@ Forge's GitHub Release conventions:
 
 ```toml
 [dependencies]
-Core = {
-  url = "https://example.invalid/Core-1.5.0+build.8-ho.cbox",
-  sha256 = "<lowercase-sha256>"
-}
+Core = { url = "https://example.invalid/Core-1.5.0+build.8-ho.cbox", sha256 = "<lowercase-sha256>" }
 ```
 
 The explicit checksum is the immutable pin.

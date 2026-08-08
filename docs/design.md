@@ -131,35 +131,24 @@ workspace, box, runtime-assembly, and hosted-release milestones. The remaining
 roadmap focuses on making those features compose cleanly and stabilizing them
 for 1.0.
 
-### v0.8: Workspace and adoption lifecycle
+### Workspace and adoption follow-up
 
 - Add workspace release preparation and publication.
 - Make repeated `forge adopt` runs safe, preserving intentional recipe and
   workflow edits while reporting newly discovered or changed metadata.
-- Infer adopted project versions from the latest valid `RELEASE_NOTES.md`
-  heading when stronger project metadata does not declare one.
-- Polish `forge adopt --init-version=...` and `forge new --init-version=...`
-  so `RELEASE_NOTES.md`, recipe version, build number, and generated version
-  headers agree from the first generated commit.
-- Clarify version-header ownership:
-  - Detect and configure existing `version.h` files during `forge adopt`.
-  - Support an explicit `--version-header-path=<path>` override.
-  - Update generated headers using the project prefix, such as
-    `CORE_VERSION_STR`.
-  - Document whether version headers update when bumping versions or when
-    preparing release-git state.
+- Add consistency checks across release notes, recipe versions, build numbers,
+  and generated version headers before release tagging.
 - Improve ambiguous source ownership and dependency resolution.
 - Finish CMake, Visual Studio solution, and Xcode workspace interoperability
   for mixed and mirrored project layouts.
 - Add better progress output and completion summaries for long build, update,
   adoption, and workspace operations.
-- Make dependency and build profiles independently composable.
 
 Release criterion: Core, Termin8or, and Asciiroid_Belt can be adopted, built,
 tested, run, cleaned, and prepared for release together without maintaining a
 parallel hand-written build graph.
 
-### v0.9: Reproducible dependencies
+### Reproducible dependency follow-up
 
 - Support dependencies of `imported_library` packages.
 - Lock every remotely resolved artifact, including target-qualified boxes,
@@ -190,13 +179,14 @@ parallel hand-written build graph.
 Release criterion: a committed recipe and lockfile reproduce the same complete
 dependency graph and selected artifacts on every supported host.
 
-### v0.10: Declarative workflows
+### Declarative workflow follow-up
 
-- Add declarative release variants and platform-specific contents.
+- Extend declarative release variants with platform-specific contents.
 - Generate release manifests containing artifacts, checksums, components,
   dependencies, and toolchain identities.
-- Add dry-run support for release preparation, tagging, and publication.
-- Generate version headers as a first-class workflow feature.
+- Extend the existing `release-git --dry-run` preflight to release preparation
+  and publication.
+- Validate Forge-managed version headers during release preflight.
 - Finish thin, updateable CI adapters around locally runnable Forge commands.
 - Deprecate repo-local `tag_release.sh` scripts by letting Forge own version
   bumping, version-header updates, release notes, tags, and release

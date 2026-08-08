@@ -93,6 +93,7 @@ build_number_format = "dotted"
 [target.Core]
 type = "header_only"
 cpp_std = 20
+sources = []
 public_headers = ["include/Core/version.h"]
 include_dirs = ["Examples", "Tests", "include/Core"]
 
@@ -139,6 +140,10 @@ version = "1.0.0"
 type = "header_only"
 cpp_std = 20
 
+[sources]
+paths = []
+public_headers = ["include/AudioLibSwitcher_OpenAL/AudioLibSwitcher_OpenAL.h"]
+
 [build]
 number = 12
 macos_system_include_dirs = ["/opt/homebrew/opt/openal-soft/include", "/usr/local/opt/openal-soft/include"]
@@ -170,6 +175,7 @@ version = "1.0.0"
 [target.applaudio]
 type = "header_only"
 cpp_std = 20
+sources = []
 public_headers = ["include/applaudio/applaudio.h"]
 include_dirs = ["include"]
 macos_frameworks = ["AudioToolbox", "CoreAudio", "CoreFoundation"]
@@ -195,6 +201,10 @@ version = "1.0.0"
 type = "header_only"
 cpp_std = 20
 
+[sources]
+paths = []
+public_headers = ["include/AudioLibSwitcher_applaudio/AudioLibSwitcher_applaudio.h"]
+
 [build]
 number = 3
 
@@ -219,6 +229,10 @@ version = "1.0.0"
 type = "header_only"
 cpp_std = 20
 
+[sources]
+paths = []
+public_headers = ["include/sndfile.h"]
+
 [build]
 number = 3
 macos_system_include_dirs = ["/opt/homebrew/opt/libsndfile/include", "/usr/local/opt/libsndfile/include"]
@@ -237,6 +251,8 @@ type = "imported_library"
 
 [import.windows-x86_64]
 compiler = "MSVC"
+compiler_version = "19.40.33811.0"
+cpp_std = 20
 configuration = "Release"
 runtime = "msvc-dynamic"
 public_headers = ["include"]
@@ -260,6 +276,7 @@ number = 8
 [target.Termin8or]
 type = "header_only"
 cpp_std = 20
+sources = []
 public_headers = ["include/Termin8or/version/version.h"]
 include_dirs = ["Examples", "Tests", "include/Termin8or"]
 
@@ -276,8 +293,9 @@ configuration = "Release"
 ## 8Beat
 
 `8Beat` is also header-only, but its cbox embeds platform dependency cboxes.
-Its demo release bundles build every demo twice: once for OpenAL and once for
-applaudio.
+Its demo release bundles build every declared demo twice: once for OpenAL and
+once for applaudio. The recipe below includes one representative demo target;
+additional demos use the same target shape.
 
 ```toml
 [project]
@@ -287,7 +305,15 @@ version = "1.0.0"
 [target.8Beat]
 type = "header_only"
 cpp_std = 20
+sources = []
+public_headers = ["include/8Beat/8Beat.h"]
 include_dirs = ["include", "include/8Beat"]
+
+[target.demo_1]
+type = "executable"
+cpp_std = 20
+sources = ["Examples/demo_1.cpp"]
+dependencies = ["8Beat"]
 
 [build]
 number = 1
@@ -320,9 +346,9 @@ defines = ["USE_APPLAUDIO"]
 ```
 
 With those variants, `forge workflow prepare-release` produces one demo archive
-per platform. Each demo folder contains both executables, for example
-`demo_1_openal` and `demo_1_applaudio`. The Linux archive contains both modern
-and legacy Linux forms.
+per platform. Each declared demo is staged in both forms, for example
+`demo_1_openal` and `demo_1_applaudio`. The generated Linux workflows publish
+separate modern and legacy archives.
 
 ## Pilot_Episode-style top-level project
 

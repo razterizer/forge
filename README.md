@@ -115,8 +115,9 @@ Forge can also build and release itself using the root `forge.recipe.toml`:
 ./build/dev/forge release
 ```
 
-The self-hosted executable is written to `.forge/build/forge`, and the release
-archive is written to `.forge/release/forge-0.1.0.zip`.
+The self-hosted executable is written to `.forge/build/forge`. The release
+archive uses the recipe's qualified package version and is written to
+`.forge/release/forge-<version>[+build.<number>].zip`.
 
 Runnable and packageable sample projects are available under
 [`examples/`](examples/).
@@ -142,11 +143,11 @@ cd path/to/project
 modifying project sources. It inspects source files for `main()` entry points
 and reports stable line-based progress suitable for terminals and CI logs:
 
-The remaining adoption roadmap includes using the latest valid
-`RELEASE_NOTES.md` heading as a fallback project version, clearer generated
-version-header setup, and consistency checks across release notes, recipe
-version, build number, and generated headers. Versions declared by existing
-Forge or native project metadata take precedence.
+When stronger project metadata does not declare a version, adoption uses the
+latest valid `RELEASE_NOTES.md` heading as a fallback. Versions declared by
+existing Forge or native project metadata take precedence. Remaining adoption
+work focuses on tighter consistency checks across release notes, recipe
+version, build number, and generated headers.
 
 ```text
 [1/6] Inspecting project
@@ -524,10 +525,7 @@ Source projects may also be fetched from Git at an exact full commit ID:
 
 ```toml
 [dependencies]
-answer = {
-  git = "https://github.com/example/answer.git",
-  commit = "0123456789abcdef0123456789abcdef01234567"
-}
+answer = { git = "https://github.com/example/answer.git", commit = "0123456789abcdef0123456789abcdef01234567" }
 ```
 
 Forge fetches only the pinned commit into
@@ -545,10 +543,7 @@ argument/value descriptors after `build` or `dependencies`:
 answer = { path = "../answer" }
 
 [dependencies.style.git-source]
-answer = {
-  git = "https://github.com/example/answer.git",
-  commit = "0123456789abcdef0123456789abcdef01234567"
-}
+answer = { git = "https://github.com/example/answer.git", commit = "0123456789abcdef0123456789abcdef01234567" }
 
 [build.config.debug]
 configuration = "Debug"
@@ -611,10 +606,7 @@ Boxes may also be downloaded from a URL with an explicit external checksum:
 
 ```toml
 [dependencies]
-answer = {
-  url = "https://github.com/example/answer/releases/download/release-1.0.0/answer-1.0.0-macos-arm64.cbox",
-  sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-}
+answer = { url = "https://github.com/example/answer/releases/download/release-1.0.0/answer-1.0.0-macos-arm64.cbox", sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" }
 ```
 
 Forge downloads the box through CMake into `.forge/cache/downloads/`, verifies
@@ -640,12 +632,7 @@ published package identity and desired component:
 
 ```toml
 [dependencies]
-answer = {
-  github = "example/suite",
-  package = "suite",
-  component = "answer",
-  version = "1.0.0"
-}
+answer = { github = "example/suite", package = "suite", component = "answer", version = "1.0.0" }
 ```
 
 `package` defaults to the dependency name for normal single-package releases.
@@ -790,11 +777,7 @@ If Core publishes a multi-component project box, select the library component:
 
 ```toml
 [dependencies]
-Core = {
-  github = "razterizer/Core",
-  version = "<published-version>",
-  component = "<library-target>"
-}
+Core = { github = "razterizer/Core", version = "<published-version>", component = "<library-target>" }
 ```
 
 Then resolve and commit the exact platform asset:
@@ -1148,10 +1131,13 @@ project-wide match.
 Windows release workflows under `.github/workflows`. Pushing a `release-*` or
 `v*` tag builds Forge, runs `forge workflow prepare-release`, and publishes the resulting
 artifacts to the matching GitHub Release. Executable projects produce a
-target-qualified ZIP archive. Static-library, dynamic-library, and header-only
-projects produce a target-qualified `.cbox` and its `.sha256` checksum under
-`boxes/`. Existing workflow files and release notes are never overwritten by
-`forge adopt`. Both commands ensure `.gitignore` excludes Forge build state
+target-qualified ZIP archive. Static-library, dynamic-library, and
+imported-library projects with a matching host import profile produce a
+target-qualified `.cbox` and its `.sha256` checksum under `boxes/`; unsupported
+hosts are skipped. Header-only projects use a portable `-ho.cbox` name unless
+their dependency graph or platform-specific requirements make the box
+target-specific. Existing workflow files and release notes are never overwritten
+by `forge adopt`. Both commands ensure `.gitignore` excludes Forge build state
 without replacing existing ignore rules. Tag creation remains an explicit
 opt-in action.
 

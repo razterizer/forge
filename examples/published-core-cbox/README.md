@@ -16,11 +16,7 @@ declared by Core's Forge recipe:
 
 ```toml
 [dependencies]
-Core = {
-  github = "razterizer/Core",
-  version = "<published-version>",
-  component = "<library-target>"
-}
+Core = { github = "razterizer/Core", version = "<published-version>", component = "<library-target>" }
 ```
 
 Resolve the platform-specific cbox and checksum, then build normally:

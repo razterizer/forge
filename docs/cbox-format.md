@@ -136,10 +136,9 @@ import library and stage every contained dynamic-library runtime.
 
 The manifest determines package identity. The archive filename is only a
 human-readable label. Compiled box filenames include their OS and architecture;
-portable header-only box filenames omit them. Header-only boxes with
-target-filtered dependencies or platform-specific system requirements use
-target-qualified filenames because their dependency graph or consumer link
-requirements differ by platform.
+portable header-only box filenames omit them. Header-only boxes use
+target-qualified filenames when their dependency graph contains target-specific
+packages or their consumer requirements differ by platform.
 
 The optional `[requirements]` section records platform-specific system include
 directories, system library search directories, frameworks, and library names
@@ -170,11 +169,13 @@ individual compiled artifacts.
 
 Compiled boxes include a `[toolchain]` identity recording the actual compiler,
 exact compiler version, C++ standard, configuration, and runtime ABI selected
-by CMake. Forge rejects compiled dependencies without a matching identity
-before linking. Header-only boxes omit this section. Imported-library recipes
-declare the identity explicitly because their binaries were built outside
-Forge. Legacy compiled boxes without an identity remain inspectable and
-verifiable, but cannot be consumed as compiled dependencies.
+by CMake. Before linking, Forge requires the compiler family, C++ standard,
+configuration, and runtime ABI to match the consuming build. The exact compiler
+version is recorded for inspection but is not a hard compatibility boundary.
+Header-only boxes omit this section. Imported-library recipes declare the
+identity explicitly because their binaries were built outside Forge. Legacy
+compiled boxes without an identity remain inspectable and verifiable, but
+cannot be consumed as compiled dependencies.
 
 The `[toolchain].cpp_std` value is recorded package metadata, not a build
 instruction. `[project].cpp_std` in the source recipe instructs Forge how to
@@ -230,9 +231,11 @@ project-root `boxes/` directory and writes `<box>.sha256` using the standard
 
 Compiled boxes represent one OS and architecture target. Forge validates both
 before installing a compiled direct local box dependency. Header-only boxes are
-accepted across targets because they contain no compiled artifacts. Compiler,
-standard-library, ABI, build-type, permissions, and deterministic archive rules
-remain future compatibility dimensions.
+accepted across targets only when their dependency graph and system
+requirements are also portable. Forge currently checks compiler family, C++
+standard, build configuration, and runtime ABI for compiled dependencies.
+Configurable compatibility policies, permission normalization, and
+deterministic archive rules remain future work.
 
 Forge continues to consume format-1 boxes as self-contained leaf dependencies
 and format-2 boxes as single components. Multi-target projects are written as

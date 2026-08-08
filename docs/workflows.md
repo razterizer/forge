@@ -53,10 +53,13 @@ tag, such as `release-1.4.0.7`.
 Each workflow reacts to `release-*` and `v*` tags, bootstraps Forge, runs
 `forge workflow prepare-release`, and publishes its output to the matching GitHub
 Release. Executable projects produce a target-qualified ZIP archive.
-Static-library, dynamic-library, and header-only projects produce a
-target-qualified `.cbox` and its `.sha256` checksum under `boxes/`. Existing
-workflow and release-note files are left unchanged. Tag creation remains an
-explicit opt-in action.
+Static-library and dynamic-library projects produce a target-qualified `.cbox`
+and its `.sha256` checksum under `boxes/`. Imported-library projects do the same
+on hosts for which they declare an import profile; unsupported hosts are
+skipped. Header-only projects use a portable `-ho.cbox` name unless their
+dependency graph or platform-specific requirements make the box target-specific.
+Existing workflow and release-note files are left unchanged. Tag creation remains
+an explicit opt-in action.
 
 The Windows adapter explicitly initializes the x64 MSVC developer environment
 and selects `cl` for its bootstrap build. The same environment is inherited by
