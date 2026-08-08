@@ -1,5 +1,7 @@
 #include "runtime_assets.h"
 
+#include "file_support.h"
+
 #include <algorithm>
 #include <fstream>
 #include <set>
@@ -11,7 +13,7 @@ namespace forge
   namespace
   {
 
-    bool is_safe_project_path(const std::filesystem::path& path)
+    bool is_safe_runtime_path(const std::filesystem::path& path)
     {
       if (path.empty() || path.is_absolute() || path.has_root_path())
         return false;
@@ -55,7 +57,7 @@ namespace forge
 
     for (const auto& file : declared)
     {
-      if (!is_safe_project_path(file.source) || !is_safe_project_path(file.destination))
+      if (!is_safe_runtime_path(file.source) || !is_safe_runtime_path(file.destination))
       {
         error << "forge: runtime asset paths must stay inside the project\n";
         return false;
@@ -140,7 +142,15 @@ namespace forge
     {
       if (!line.empty())
       {
-        std::filesystem::remove(destination / line, filesystem_error);
+        const std::filesystem::path path { line };
+
+        if (!is_resolved_project_path(destination, path))
+        {
+          error << "forge: stale runtime asset manifest contains an unsafe path\n";
+          return false;
+        }
+
+        std::filesystem::remove(destination / path, filesystem_error);
 
         if (filesystem_error)
         {

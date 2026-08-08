@@ -1036,6 +1036,38 @@ namespace
     );
   }
 
+  void test_build_rejects_unsafe_runtime_asset_manifest()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::filesystem::create_directories(directory.path() / ".forge/build/.forge");
+    std::ofstream { directory.path() / "victim.txt" } << "keep me\n";
+    std::ofstream { directory.path() / ".forge/build/.forge/runtime-assets.txt" }
+      << "../../victim.txt\n";
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 2,
+      "build rejects an unsafe stale runtime asset manifest"
+    );
+    expect(invocations == 0, "unsafe runtime asset cleanup invokes no external tools");
+    expect(
+      std::filesystem::exists(directory.path() / "victim.txt"),
+      "unsafe runtime asset cleanup preserves files outside the build directory"
+    );
+    expect(contains(error.str(), "unsafe path"), "unsafe runtime asset cleanup is explained");
+  }
+
   void test_build_rejects_runtime_asset_collision()
   {
     TemporaryDirectory directory;
@@ -2352,6 +2384,7 @@ int main()
   test_build_rejects_missing_internal_target();
   test_build_rejects_internal_target_cycle();
   test_build_stages_runtime_assets();
+  test_build_rejects_unsafe_runtime_asset_manifest();
   test_build_rejects_runtime_asset_collision();
   test_build_stages_dependency_runtime_assets();
   test_build_rejects_missing_source_without_running_process();
