@@ -899,7 +899,7 @@ namespace forge
       {
         const auto path = project_directory / headers;
 
-        if (!is_safe_project_path(headers)
+        if (!is_resolved_project_path(project_directory, headers)
             || std::filesystem::is_symlink(path)
             || (!std::filesystem::is_regular_file(path) && !std::filesystem::is_directory(path)))
         {
@@ -921,7 +921,7 @@ namespace forge
         {
           const auto path = project_directory / library;
 
-          if (!is_safe_project_path(library)
+          if (!is_resolved_project_path(project_directory, library)
               || std::filesystem::is_symlink(path)
               || !std::filesystem::is_regular_file(path))
           {
@@ -3446,8 +3446,7 @@ namespace forge
 
       for (const auto& source : target.sources)
       {
-        if (source.is_absolute()
-            || source.string().starts_with("..")
+        if (!is_resolved_project_path(project_directory, source)
             || !std::filesystem::is_regular_file(project_directory / source))
         {
           error << "forge: internal target source '" << source.generic_string()
@@ -3458,8 +3457,7 @@ namespace forge
 
       for (const auto& header : target.public_headers)
       {
-        if (header.is_absolute()
-            || header.string().starts_with("..")
+        if (!is_resolved_project_path(project_directory, header)
             || header.begin() == header.end()
             || header.begin()->string() != "include"
             || !std::filesystem::is_regular_file(project_directory / header))
@@ -3472,8 +3470,7 @@ namespace forge
 
       for (const auto& include_directory : target.include_directories)
       {
-        if (include_directory.is_absolute()
-            || include_directory.string().starts_with("..")
+        if (!is_resolved_project_path(project_directory, include_directory)
             || !std::filesystem::is_directory(project_directory / include_directory))
         {
           error << "forge: internal target include directory '"
@@ -3505,7 +3502,7 @@ namespace forge
 
     for (const auto& source : recipe.sources)
     {
-      if (source.is_absolute() || source.string().starts_with(".."))
+      if (!is_resolved_project_path(project_directory, source))
       {
         error << "forge: source paths must stay inside the project\n";
         return 2;
@@ -3535,8 +3532,7 @@ namespace forge
 
     for (const auto& header : recipe.public_headers)
     {
-      if (header.is_absolute()
-          || header.string().starts_with("..")
+      if (!is_resolved_project_path(project_directory, header)
           || header.begin() == header.end()
           || header.begin()->string() != "include")
       {
@@ -3553,8 +3549,7 @@ namespace forge
 
     for (const auto& include_directory : recipe.include_directories)
     {
-      if (include_directory.is_absolute()
-          || include_directory.string().starts_with("..")
+      if (!is_resolved_project_path(project_directory, include_directory)
           || !std::filesystem::is_directory(project_directory / include_directory))
       {
         error << "forge: include directory '" << include_directory.generic_string()

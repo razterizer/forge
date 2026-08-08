@@ -1324,6 +1324,42 @@ namespace
     expect(contains(error.str(), "does not exist"), "build explains the missing source");
   }
 
+  void test_build_rejects_source_with_embedded_parent_path()
+  {
+    TemporaryDirectory directory;
+    const auto project = directory.path() / "project";
+    std::filesystem::create_directories(project / "inside");
+    std::ofstream { directory.path() / "outside.cpp" } << "int main() {}\n";
+    std::ofstream recipe { project / "forge.recipe.toml" };
+    recipe
+      << "[project]\n"
+      << "name = \"hello\"\n"
+      << "version = \"0.1.0\"\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = [\"inside/../../outside.cpp\"]\n";
+    recipe.close();
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::build_project(project, runner, output, error) == 2,
+      "build rejects a source path with embedded parent traversal"
+    );
+    expect(invocations == 0, "embedded source traversal invokes no external tools");
+    expect(contains(error.str(), "stay inside the project"), "source traversal is explained");
+  }
+
   void test_build_rejects_dependency_name_mismatch()
   {
     TemporaryDirectory directory;
@@ -2319,6 +2355,7 @@ int main()
   test_build_rejects_runtime_asset_collision();
   test_build_stages_dependency_runtime_assets();
   test_build_rejects_missing_source_without_running_process();
+  test_build_rejects_source_with_embedded_parent_path();
   test_build_rejects_dependency_name_mismatch();
   test_build_accepts_named_target_dependency();
   test_build_rejects_dependency_cycle();

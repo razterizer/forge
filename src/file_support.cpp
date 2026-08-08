@@ -31,6 +31,28 @@ namespace forge
     return true;
   }
 
+  bool is_resolved_project_path(const std::filesystem::path& project_directory,
+                                const std::filesystem::path& path)
+  {
+    if (!is_safe_project_path(path))
+      return false;
+
+    std::error_code filesystem_error;
+    const auto project = std::filesystem::weakly_canonical(project_directory, filesystem_error);
+
+    if (filesystem_error)
+      return false;
+
+    const auto resolved =
+      std::filesystem::weakly_canonical(project_directory / path, filesystem_error);
+
+    if (filesystem_error)
+      return false;
+
+    const auto relative = resolved.lexically_relative(project);
+    return !relative.empty() && !relative.is_absolute() && *relative.begin() != "..";
+  }
+
   bool copy_file(const std::filesystem::path& source,
                  const std::filesystem::path& destination,
                  std::ostream& error)

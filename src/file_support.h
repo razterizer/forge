@@ -9,6 +9,8 @@ namespace forge
 
   bool is_safe_path_component(std::string_view value);
   bool is_safe_project_path(const std::filesystem::path& path);
+  bool is_resolved_project_path(const std::filesystem::path& project_directory,
+                                const std::filesystem::path& path);
   bool copy_file(const std::filesystem::path& source,
                  const std::filesystem::path& destination,
                  std::ostream& error);
