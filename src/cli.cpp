@@ -1918,12 +1918,6 @@ namespace forge::cli
           forwarding = true;
         else if (!forwarding && argument.starts_with("--profile="))
         {
-          if (!build_first)
-          {
-            error << "forge: --profile applies to build commands; use 'forge build-and-run'\n";
-            return 2;
-          }
-
           if (!read_profile_option(argument, profile, error))
             return 2;
         }
@@ -1942,9 +1936,9 @@ namespace forge::cli
         {
           const auto value = *option_value(argument, "--style=");
 
-          if (!build_first || style || value.empty())
+          if (style || value.empty())
           {
-            error << "forge: --style requires one non-empty value on build-and-run\n";
+            error << "forge: --style requires one non-empty value\n";
             return 2;
           }
 
@@ -1972,9 +1966,9 @@ namespace forge::cli
         {
           const auto value = *option_value(argument, "--config=");
 
-          if (!build_first || config || value.empty())
+          if (config || value.empty())
           {
-            error << "forge: --config requires one non-empty value on build-and-run\n";
+            error << "forge: --config requires one non-empty value\n";
             return 2;
           }
 
@@ -1999,6 +1993,11 @@ namespace forge::cli
 
       if (workspace)
       {
+        if (!build_first && (style || config || profile))
+        {
+          error << "forge: cached run selectors are only supported in a project directory\n";
+          return 2;
+        }
         if (!target)
         {
           error << "forge: workspace " << arguments.front()
@@ -2045,6 +2044,27 @@ namespace forge::cli
           output,
           error
         );
+      }
+
+      if (!build_first && (style || config || profile))
+      {
+        const auto selected_target = target
+          ? target
+          : recipe.targets.empty()
+            ? std::optional<std::string> { recipe.name }
+            : std::optional<std::string> {};
+
+        if (!select_cached_run_variant(
+          working_directory,
+          selected_target,
+          config,
+          style,
+          profile,
+          error
+        ))
+        {
+          return 2;
+        }
       }
 
       if (!recipe.targets.empty() && !target)
@@ -2811,21 +2831,56 @@ namespace forge::cli
       return adopt_project(working_directory, options, run_process, output, error);
     }
 
+    if (arguments.front() == "clean")
+    {
+      CleanOptions options;
+
+      for (const auto argument : arguments.subspan(1))
+      {
+        const auto set_option = [&](std::string_view prefix, std::optional<std::string>& destination)
+        {
+          const auto value = option_value(argument, prefix);
+
+          if (!value || value->empty() || destination)
+            return false;
+
+          destination = std::string { *value };
+          return true;
+        };
+
+        if (set_option("--target=", options.target)
+            || set_option("--config=", options.configuration)
+            || set_option("--style=", options.style)
+            || set_option("--profile=", options.profile))
+          continue;
+
+        error << "forge: usage: forge clean [--target=<name>] [--config=<name>]"
+              << " [--style=<name>] [--profile=<name>]\n";
+        return 2;
+      }
+
+      if (!std::filesystem::exists(working_directory / "forge.recipe.toml")
+          && std::filesystem::exists(working_directory / "forge.workspace.toml"))
+      {
+        if (arguments.size() != 1)
+        {
+          error << "forge: selective clean is only supported in a project directory\n";
+          return 2;
+        }
+
+        return clean_workspace(working_directory, output, error);
+      }
+
+      if (arguments.size() != 1)
+        return clean_project(working_directory, options, output, error);
+
+      return clean_project(working_directory, output, error);
+    }
+
     if (arguments.size() != 1)
     {
       error << "forge: commands do not accept arguments yet\n";
       return 2;
-    }
-
-    if (arguments.front() == "clean")
-    {
-      if (!std::filesystem::exists(working_directory / "forge.recipe.toml")
-          && std::filesystem::exists(working_directory / "forge.workspace.toml"))
-      {
-        return clean_workspace(working_directory, output, error);
-      }
-
-      return clean_project(working_directory, output, error);
     }
 
     error << "forge: '" << arguments.front() << "' is not implemented yet\n";

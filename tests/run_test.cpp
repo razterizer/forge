@@ -176,8 +176,9 @@ namespace
     expect(commands[2][1] == "--message", "build-and-run forwards the first argument");
     expect(commands[2][2] == "hello world", "build-and-run preserves arguments containing spaces");
     expect(
-      working_directories[2] == directory.path() / ".forge/build",
-      "build-and-run launches from the staged runtime directory"
+      working_directories[2]
+        == directory.path() / ".forge/run/hello/Debug/local-source/default",
+      "build-and-run launches from the cached run variant"
     );
     expect(contains(output.str(), "Running hello"), "build-and-run reports the launched project");
     expect(
@@ -254,6 +255,95 @@ namespace
     expect(invocations == 1, "build-and-run does not launch after a build failure");
   }
 
+  void test_build_and_run_caches_profiles_independently()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    {
+      std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+      recipe
+        << "\n[build.profile.openal]\n"
+        << "defines = [\"USE_OPENAL\"]\n"
+        << "\n[build.profile.applaudio]\n"
+        << "defines = [\"USE_APPLAUDIO\"]\n";
+    }
+    std::vector<std::filesystem::path> launches;
+    const forge::ProcessRunner runner =
+      [&directory, &launches](const std::vector<std::string>& command,
+                              const std::filesystem::path& working_directory,
+                              std::ostream&)
+      {
+        if (command.size() > 1 && command[1] == "--build")
+          write_executable(directory.path());
+        else if (!command.empty() && command.front().find("hello") != std::string::npos)
+          launches.push_back(working_directory);
+
+        return 0;
+      };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::build_and_run_project(
+        directory.path(),
+        std::nullopt,
+        std::string { "openal" },
+        {},
+        runner,
+        output,
+        error
+      ) == 0,
+      "OpenAL build-and-run succeeds"
+    );
+    expect(
+      forge::build_and_run_project(
+        directory.path(),
+        std::nullopt,
+        std::string { "applaudio" },
+        {},
+        runner,
+        output,
+        error
+      ) == 0,
+      "applaudio build-and-run succeeds"
+    );
+
+    const auto run_root = directory.path() / ".forge/run/hello/Debug/local-source";
+    expect(std::filesystem::exists(run_root / "openal/hello"), "OpenAL run variant remains cached");
+    expect(std::filesystem::exists(run_root / "applaudio/hello"), "applaudio run variant is cached separately");
+
+    launches.clear();
+    expect(
+      forge::run_project(directory.path(), {}, runner, output, error) == 0,
+      "plain run launches the most recently built variant"
+    );
+    expect(
+      launches.size() == 1 && launches.front() == run_root / "applaudio",
+      "plain run selects the current cached profile"
+    );
+
+    expect(
+      forge::select_cached_run_variant(
+        directory.path(),
+        std::string { "hello" },
+        std::string { "debug" },
+        std::string { "local-source" },
+        std::string { "openal" },
+        error
+      ),
+      "an earlier cached profile can be selected"
+    );
+    launches.clear();
+    expect(
+      forge::run_project(directory.path(), {}, runner, output, error) == 0,
+      "run launches an explicitly selected cached profile"
+    );
+    expect(
+      launches.size() == 1 && launches.front() == run_root / "openal",
+      "cached profile selection switches the run directory"
+    );
+  }
+
   void test_build_and_run_selects_named_target()
   {
     TemporaryDirectory directory;
@@ -326,6 +416,7 @@ int main()
   test_build_and_run_builds_and_forwards_arguments();
   test_build_and_run_reports_selected_profile();
   test_build_and_run_stops_when_build_fails();
+  test_build_and_run_caches_profiles_independently();
   test_build_and_run_selects_named_target();
 
   return failures == 0 ? 0 : 1;

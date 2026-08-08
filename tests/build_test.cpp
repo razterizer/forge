@@ -981,10 +981,20 @@ namespace
     std::ostringstream error;
 
     const forge::ProcessRunner runner =
-      [](const std::vector<std::string>&,
+      [&directory](const std::vector<std::string>& arguments,
          const std::filesystem::path&,
          std::ostream&)
       {
+        if (arguments.size() > 1 && arguments[1] == "--build")
+        {
+          std::filesystem::create_directories(directory.path() / ".forge/build");
+#ifdef _WIN32
+          std::ofstream { directory.path() / ".forge/build/hello.exe" };
+#else
+          std::ofstream { directory.path() / ".forge/build/hello" };
+#endif
+        }
+
         return 0;
       };
 
@@ -999,6 +1009,12 @@ namespace
     expect(
       read_file(directory.path() / ".forge/build/Blocks.txt") == "blocks\n",
       "build stages mapped runtime assets at their requested destination"
+    );
+    expect(
+      read_file(
+        directory.path() / ".forge/run/hello/Debug/local-source/default/assets/message.txt"
+      ) == "hello\n",
+      "build caches runtime assets with the runnable variant"
     );
 
     std::filesystem::remove(directory.path() / "assets/message.txt");

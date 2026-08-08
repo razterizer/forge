@@ -406,6 +406,21 @@ For safety, `forge clean` only runs from a directory containing
 `forge.recipe.toml` or `forge.workspace.toml`. In a workspace root, it removes
 generated state from every workspace project.
 
+Successful executable builds are also cached as runnable variants keyed by
+target, configuration, dependency style, and software profile. `forge run`
+launches the most recently built variant, including its staged runtime assets.
+Choose an earlier cached variant explicitly with, for example,
+`forge run --config=release --style=git-source --profile=openal`.
+Remove only matching runnable variants while preserving other builds with:
+
+```sh
+forge clean --config=release --profile=openal
+```
+
+Selective clean accepts `--target`, `--config`, `--style`, and `--profile` and
+is available from project directories. With no selectors, `forge clean`
+retains its existing behavior and removes all generated state.
+
 Dynamic libraries use the same source and public-header layout:
 
 ```toml

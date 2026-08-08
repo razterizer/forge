@@ -5011,6 +5011,40 @@ namespace
     expect(error.str().empty(), "already clean project does not write an error");
   }
 
+  void test_clean_removes_only_matching_run_variants()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments {
+      std::string_view { "clean" },
+      std::string_view { "--profile=openal" }
+    };
+    std::ostringstream output;
+    std::ostringstream error;
+    const auto openal = directory.path() / ".forge/run/app/Release/git-source/openal";
+    const auto applaudio = directory.path() / ".forge/run/app/Release/git-source/applaudio";
+    write_file(directory.path() / "forge.recipe.toml", "");
+    write_file(
+      openal / "forge-run.toml",
+      "target = \"app\"\nconfiguration = \"Release\"\n"
+      "style = \"git-source\"\nprofile = \"openal\"\n"
+    );
+    write_file(
+      applaudio / "forge-run.toml",
+      "target = \"app\"\nconfiguration = \"Release\"\n"
+      "style = \"git-source\"\nprofile = \"applaudio\"\n"
+    );
+    write_file(directory.path() / ".forge/run/current.txt", "app/Release/git-source/openal\n");
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "selective clean succeeds"
+    );
+    expect(!std::filesystem::exists(openal), "selective clean removes the matching run variant");
+    expect(std::filesystem::exists(applaudio), "selective clean preserves other run variants");
+    expect(contains(output.str(), "Cleaned 1 cached run variant"), "selective clean reports its scope");
+    expect(error.str().empty(), "selective clean does not write an error");
+  }
+
   void test_clean_refuses_non_project_directory()
   {
     TemporaryDirectory directory;
@@ -7329,6 +7363,7 @@ int main()
   test_release_git_rejects_conflicting_tag_options();
   test_clean_removes_generated_state();
   test_clean_accepts_already_clean_project();
+  test_clean_removes_only_matching_run_variants();
   test_clean_refuses_non_project_directory();
   test_clean_removes_workspace_generated_state();
   test_clean_accepts_already_clean_workspace();

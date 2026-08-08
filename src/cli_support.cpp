@@ -175,7 +175,10 @@ namespace forge::cli
       output
         << "Run an already-built executable project or target.\n\n"
         << "Usage:\n"
-        << "  forge run [target|project[/target]] [-- arguments...]\n\n"
+        << "  forge run [target|project[/target]] [--config=<name>]"
+        << " [--style=<name>] [--profile=<name>] [-- arguments...]\n\n"
+        << "Without selectors, runs the most recently built cached variant.\n"
+        << "Selectors choose the newest matching cached variant.\n"
         << "Arguments after '--' are forwarded to the executable. Workspace runs\n"
         << "require a project or project/target selection. Use 'forge build' first,\n"
         << "or use 'forge build-and-run' to build before launching.\n";
@@ -296,10 +299,13 @@ namespace forge::cli
       output
         << "Remove generated Forge state for the current project or workspace.\n\n"
         << "Usage:\n"
-        << "  forge clean\n\n"
+        << "  forge clean\n"
+        << "  forge clean [--target=<name>] [--config=<name>]"
+        << " [--style=<name>] [--profile=<name>]\n\n"
         << "Removes .forge/ build output, generated files, dependency installs,\n"
-        << "boxes, release artifacts, and caches. In a workspace root, removes\n"
-        << "that state from every workspace project. Source files are preserved.\n";
+        << "boxes, release artifacts, and caches. Selector options remove only\n"
+        << "matching cached run variants. In a workspace root, full clean removes\n"
+        << "state from every workspace project. Source files are preserved.\n";
       return true;
     }
 
