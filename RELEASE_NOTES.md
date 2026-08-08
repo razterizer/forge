@@ -1,5 +1,21 @@
 # Release notes
 
+## 0.14.0
+
+- Added runnable build variants cached by target, configuration, dependency
+  style, and software profile. `forge run` now launches the most recently built
+  variant by default and accepts `--config`, `--style`, and `--profile` to
+  select an earlier matching build.
+- Made runnable variants preserve staged runtime assets and dependencies,
+  including placing Windows runtime DLLs beside the cached executable.
+- Added selective `forge clean` options for target, configuration, dependency
+  style, and software profile, allowing matching runnable variants to be
+  removed without discarding other cached builds.
+- Made Windows dependency installation retry transient directory rename
+  failures for up to three seconds, working around temporary file locks from
+  tools such as Microsoft Defender, and report the source, destination, and
+  operating-system error if installation still fails.
+
 ## 0.13.4
 
 - Made generated Windows projects define `NOMINMAX`, preventing the `min` and
