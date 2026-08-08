@@ -13,6 +13,7 @@
 #include <array>
 #include <cctype>
 #include <charconv>
+#include <chrono>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -21,6 +22,7 @@
 #include <sstream>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <vector>
 
 namespace forge
@@ -2564,9 +2566,25 @@ namespace forge
 
       std::filesystem::rename(extracted, destination, filesystem_error);
 
+#ifdef _WIN32
+      constexpr auto retry_timeout = std::chrono::seconds { 3 };
+      auto retry_delay = std::chrono::milliseconds { 25 };
+      const auto retry_deadline = std::chrono::steady_clock::now() + retry_timeout;
+
+      while (filesystem_error && std::chrono::steady_clock::now() < retry_deadline)
+      {
+        std::this_thread::sleep_for(retry_delay);
+        filesystem_error.clear();
+        std::filesystem::rename(extracted, destination, filesystem_error);
+        retry_delay = std::min(retry_delay * 2, std::chrono::milliseconds { 400 });
+      }
+#endif
+
       if (filesystem_error)
       {
-        error << "forge: could not install dependency '" << node.recipe.name << "'\n";
+        error << "forge: could not install dependency '" << node.recipe.name << "'\n"
+              << "forge: could not rename '" << extracted.string() << "' to '"
+              << destination.string() << "': " << filesystem_error.message() << '\n';
         return false;
       }
 
