@@ -1,5 +1,22 @@
 # Release notes
 
+## 0.14.1
+
+- Made build path validation reject embedded parent traversal and symbolic-link
+  escapes, preventing recipes from compiling sources, headers, libraries, or
+  include directories outside the project.
+- Made release packaging keep declared files and platform-specific README
+  inputs inside the project, preventing outside files from being copied into a
+  release or release destinations from escaping the staging directory.
+- Made stale runtime-asset cleanup validate every manifest entry before
+  deletion, preventing corrupt or tampered manifests from removing files
+  outside the build directory.
+- Improved recipe and workspace TOML parsing with inline comments, multiline
+  collections, and standard basic-string escapes, including Unicode escapes.
+- Corrected documentation and example inconsistencies around dependency
+  styles, package metadata, release workflows, and the current command-line
+  interface.
+
 ## 0.14.0
 
 - Added runnable build variants cached by target, configuration, dependency
