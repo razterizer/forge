@@ -242,17 +242,6 @@ namespace forge
       return true;
     }
 
-    bool is_project_relative_path(const std::filesystem::path& path)
-    {
-      const auto generic = path.generic_string();
-
-      return
-        !path.empty()
-        && !path.is_absolute()
-        && generic != ".."
-        && generic.rfind("../", 0) != 0;
-    }
-
     std::filesystem::path selected_release_readme(const Recipe& recipe)
     {
       const auto platform = hosted_platform();
@@ -907,7 +896,7 @@ namespace forge
 
     for (const auto& release_file : recipe.release_files)
     {
-      if (!is_project_relative_path(release_file))
+      if (!is_resolved_project_path(project_directory, release_file))
       {
         error << "forge: release file paths must stay inside the project\n";
         return 2;
@@ -927,7 +916,7 @@ namespace forge
 
     if (!release_readme.empty())
     {
-      if (!is_project_relative_path(release_readme))
+      if (!is_resolved_project_path(project_directory, release_readme))
       {
         error << "forge: release README paths must stay inside the project\n";
         return 2;

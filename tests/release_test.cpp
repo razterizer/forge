@@ -228,7 +228,7 @@ namespace
     TemporaryDirectory directory;
     write_project(directory.path());
     std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
-    recipe << "files = [\"../secret.txt\"]\n";
+    recipe << "files = [\"assets/../../secret.txt\"]\n";
     recipe.close();
     int invocations = 0;
     std::ostringstream output;
@@ -256,7 +256,7 @@ namespace
 
     expect(
       forge::release_project(directory.path(), runner, output, error) == 2,
-      "release rejects a file outside the project"
+      "release rejects an embedded parent path outside the project"
     );
     expect(invocations == 2, "unsafe release files are rejected before archiving");
     expect(contains(error.str(), "must stay inside"), "release explains unsafe file paths");
