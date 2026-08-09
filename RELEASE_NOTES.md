@@ -1,10 +1,15 @@
 # Release notes
 
+## 0.14.3
+
+- Corrected Windows runnable-variant tests to expect cached executables with
+  their `.exe` suffix, allowing the hosted-release test stage to complete and
+  publish Windows artifacts.
+
 ## 0.14.2
 
 - Fixed Windows runnable-variant caching to resolve executables with their
-  `.exe` suffix, restoring cached runtime assets and profile selection while
-  allowing the Windows hosted-release workflow to complete.
+  `.exe` suffix, restoring cached runtime assets and profile selection.
 
 ## 0.14.1
 
