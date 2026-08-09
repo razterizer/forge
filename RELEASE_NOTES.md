@@ -1,5 +1,20 @@
 # Release notes
 
+## 0.14.4
+
+- Preserved build-qualified versions such as `1.5.0+build.8` when embedding
+  dependency boxes, so direct and transitive package identities are compared
+  consistently.
+- Kept existing boxes compatible by deriving an embedded dependency's exact
+  version from its child manifest when older parent manifests contain only the
+  base version.
+- Improved dependency-conflict diagnostics to distinguish incompatible
+  versions from different packages claiming the same exact version, including
+  both SHA-256 checksums when available.
+- Made generated GitHub release workflows append-only for published assets,
+  preventing reruns or moved tags from silently replacing an existing cbox or
+  archive. Updated the managed `release-boxes` workflow feature accordingly.
+
 ## 0.14.3
 
 - Corrected Windows runnable-variant tests to expect cached executables with
