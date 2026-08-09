@@ -1282,7 +1282,7 @@ namespace forge
         dependencies.push_back(BoxDependency
           {
             metadata.name,
-            metadata.version,
+            package_version(metadata),
             metadata.type,
             dependency_path,
             checksum
@@ -1944,8 +1944,11 @@ namespace forge
         return false;
       }
 
+      const auto child_package_version = package_version(child);
+
       if (child.name != dependency.name
-          || child.version != dependency.version
+          || (child.version != dependency.version
+              && child_package_version != dependency.version)
           || child.type != dependency.type
           || (child.type != "header_only"
               && (child.os != manifest.os || child.arch != manifest.arch)))
@@ -1958,7 +1961,7 @@ namespace forge
       metadata.dependencies.push_back(
         {
           dependency.name,
-          dependency.version,
+          child_package_version,
           dependency.type,
           validation_directory / dependency.path,
           dependency.sha256

@@ -156,6 +156,7 @@ namespace forge
         + (body_file.empty()
           ? std::string {}
           : "          bodyFile: " + std::string { body_file } + "\n")
+        + "          replacesArtifacts: false\n"
         + "          tag: ${{ github.ref_name }}\n";
 
       return
@@ -200,7 +201,7 @@ namespace forge
 
       return
         "  forge-release-boxes:\n"
-        "    # forge-managed: release-boxes@4\n"
+        "    # forge-managed: release-boxes@5\n"
         "    name: Publish Forge cboxes\n"
         "    if: startsWith(github.ref, 'refs/tags/')\n"
         "    runs-on: " + std::string { runner } + "\n"
@@ -252,7 +253,7 @@ namespace forge
         "release-boxes",
         "Publish Forge cboxes and checksums from Git tag workflows",
         "forge-release-boxes",
-        "# forge-managed: release-boxes@4",
+        "# forge-managed: release-boxes@5",
         release_boxes_job
       }
     };

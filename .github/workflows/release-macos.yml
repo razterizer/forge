@@ -38,6 +38,7 @@ jobs:
           allowUpdates: true
           artifacts: .forge/release/*.zip,boxes/*.cbox,boxes/*.sha256
           bodyFile: .forge/release/RELEASE_NOTES.md
+          replacesArtifacts: false
           tag: ${{ github.ref_name }}
 
       - name: Retry Publish GitHub release after concurrent creation
@@ -47,4 +48,5 @@ jobs:
           allowUpdates: true
           artifacts: .forge/release/*.zip,boxes/*.cbox,boxes/*.sha256
           bodyFile: .forge/release/RELEASE_NOTES.md
+          replacesArtifacts: false
           tag: ${{ github.ref_name }}

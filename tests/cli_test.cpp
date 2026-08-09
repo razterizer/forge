@@ -3069,6 +3069,13 @@ namespace
       "adopt creates missing GitHub workflows"
     );
     expect(
+      contains(
+        read_file(directory.path() / ".github/workflows/release-windows.yml"),
+        "replacesArtifacts: false"
+      ),
+      "generated release workflows prevent existing assets from being replaced"
+    );
+    expect(
       read_file(directory.path() / ".gitignore")
         == "/existing-build/\n**/.forge/\n",
       "adopt adds Forge state to an existing gitignore without replacing it"
@@ -3131,12 +3138,13 @@ namespace
     const auto updated = read_file(workflow);
     expect(
       contains(updated, "  forge-release-boxes:\n")
-      && contains(updated, "# forge-managed: release-boxes@4")
+      && contains(updated, "# forge-managed: release-boxes@5")
       && contains(updated, "Resolve latest Forge release")
       && contains(updated, "ref: ${{ steps.forge-release.outputs.result }}")
       && contains(updated, "if: startsWith(github.ref, 'refs/tags/')")
       && contains(updated, "forge workflow prepare-release")
       && contains(updated, "artifacts: boxes/*.cbox,boxes/*.sha256")
+      && contains(updated, "replacesArtifacts: false")
       && contains(updated, "if: steps.publish-release.outcome == 'failure'"),
       "workflow feature application injects the managed release-boxes job"
     );
@@ -3359,8 +3367,8 @@ namespace
     expect(contains(current_output.str(), "release-boxes  current"), "workflow status reports current feature");
 
     auto outdated = current;
-    const auto marker = outdated.find("# forge-managed: release-boxes@4");
-    outdated.replace(marker, std::string_view { "# forge-managed: release-boxes@4" }.size(),
+    const auto marker = outdated.find("# forge-managed: release-boxes@5");
+    outdated.replace(marker, std::string_view { "# forge-managed: release-boxes@5" }.size(),
                      "# forge-managed: release-boxes@1");
     write_file(workflow, outdated);
     std::ostringstream outdated_output;
@@ -6009,6 +6017,8 @@ namespace
       "version = \"1.0.0\"\n"
       "type = \"static_library\"\n"
       "cpp_std = 20\n\n"
+      "[build]\n"
+      "number = 8\n\n"
       "[sources]\n"
       "paths = [\"src/answer.cpp\"]\n"
       "public_headers = [\"include/answer/answer.h\"]\n"
@@ -6094,6 +6104,13 @@ namespace
       std::filesystem::exists(application / ".forge/deps/calculator/lib"),
       "build installs a direct static-library dependency box"
     );
+    expect(
+      contains(
+        read_file(application / ".forge/deps/calculator/cbox.toml"),
+        "name = \"answer\"\nversion = \"1.0.0+build.8\""
+      ),
+      "parent box preserves an embedded dependency's build-qualified version"
+    );
     const auto generated = read_file(application / ".forge/generated/CMakeLists.txt");
     expect(contains(generated, "forge_dependency_0"), "build imports a static-library dependency");
     expect(contains(generated, ".forge/deps/doubled/include"), "build adds dependency include paths");
@@ -6168,6 +6185,8 @@ namespace
       "version = \"1.0.0\"\n"
       "type = \"header_only\"\n"
       "cpp_std = 20\n\n"
+      "[build]\n"
+      "number = 8\n\n"
       "[sources]\n"
       "paths = []\n"
       "public_headers = [\"include/Core/Core.h\"]\n"
@@ -6180,6 +6199,8 @@ namespace
       "version = \"2.0.0\"\n"
       "type = \"header_only\"\n"
       "cpp_std = 20\n\n"
+      "[build]\n"
+      "number = 8\n\n"
       "[sources]\n"
       "paths = []\n"
       "public_headers = [\"include/Core/Core.h\"]\n"
@@ -6224,9 +6245,37 @@ namespace
     );
     expect(
       contains(error.str(), "dependency conflict for 'Core'")
-        && contains(error.str(), "1.0.0")
-        && contains(error.str(), "2.0.0"),
+        && contains(error.str(), "1.0.0+build.8")
+        && contains(error.str(), "2.0.0+build.8"),
       "dependency version conflict explains both exact versions"
+    );
+
+    write_file(
+      core_v2 / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"Core\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[build]\n"
+      "number = 8\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/Core/Core.h\"]\n"
+    );
+    std::ostringstream identity_output;
+    std::ostringstream identity_error;
+
+    expect(
+      forge::cli::run(run_arguments, application, identity_output, identity_error) == 2,
+      "run rejects different packages with the same exact dependency version"
+    );
+    expect(
+      contains(
+        identity_error.str(),
+        "exact version '1.0.0+build.8' resolves to different packages"
+      ),
+      "dependency identity conflict distinguishes changed package contents from a version mismatch"
     );
   }
 

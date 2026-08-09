@@ -1998,7 +1998,7 @@ namespace forge
         );
 
         if (declared == metadata.dependencies.end()
-            || declared->version != child->second.recipe.version
+            || declared->version != package_version(child->second.recipe)
             || declared->type != child->second.recipe.type
             || declared->sha256 != checksum)
         {
@@ -2304,13 +2304,27 @@ namespace forge
             return false;
         }
 
-        if (!existing_version.empty()
-            && !requested_version.empty()
-            && existing_version != requested_version)
+        if (!existing_version.empty() && !requested_version.empty())
         {
+          if (existing_version != requested_version)
+          {
+            error << "forge: dependency conflict for '" << dependency.name
+                  << "': exact versions '" << existing_version << "' and '"
+                  << requested_version << "' cannot both be installed\n";
+            return false;
+          }
+
           error << "forge: dependency conflict for '" << dependency.name
-                << "': exact versions '" << existing_version << "' and '"
-                << requested_version << "' cannot both be installed\n";
+                << "': exact version '" << existing_version
+                << "' resolves to different packages";
+
+          if (!existing_checksum.empty() && !dependency.sha256.empty())
+          {
+            error << " (sha256 '" << existing_checksum << "' and '"
+                  << dependency.sha256 << "')";
+          }
+
+          error << '\n';
           return false;
         }
 
@@ -2378,11 +2392,11 @@ namespace forge
             return false;
           }
 
-          const auto contained_version = !resolved_dependency.github.empty()
-            ? package_version(metadata)
-            : metadata.version;
+          const auto contained_version = package_version(metadata);
 
-          if (!dependency.version.empty() && contained_version != dependency.version)
+          if (!dependency.version.empty()
+              && contained_version != dependency.version
+              && metadata.version != dependency.version)
           {
             error << "forge: dependency '" << dependency.name << "' requires version '"
                   << dependency.version << "', but box contains version '" << contained_version << "'\n";
@@ -2575,10 +2589,12 @@ namespace forge
         return false;
       }
       else if (!dependency.version.empty()
+               && package_version(existing_node->second.recipe) != dependency.version
                && existing_node->second.recipe.version != dependency.version)
       {
         error << "forge: dependency '" << dependency.name << "' requires conflicting versions '"
-              << existing_node->second.recipe.version << "' and '" << dependency.version << "'\n";
+              << package_version(existing_node->second.recipe) << "' and '"
+              << dependency.version << "'\n";
         return false;
       }
 

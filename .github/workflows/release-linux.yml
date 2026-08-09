@@ -153,6 +153,7 @@ jobs:
           allowUpdates: true
           artifacts: linux-modern/*.zip,linux-legacy/*.zip
           bodyFile: linux-modern/RELEASE_NOTES.md
+          replacesArtifacts: false
           tag: ${{ github.ref_name }}
 
       - name: Retry Publish GitHub release after concurrent creation
@@ -162,4 +163,5 @@ jobs:
           allowUpdates: true
           artifacts: linux-modern/*.zip,linux-legacy/*.zip
           bodyFile: linux-modern/RELEASE_NOTES.md
+          replacesArtifacts: false
           tag: ${{ github.ref_name }}
