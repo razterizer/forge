@@ -309,8 +309,19 @@ namespace
     );
 
     const auto run_root = directory.path() / ".forge/run/hello/Debug/local-source";
-    expect(std::filesystem::exists(run_root / "openal/hello"), "OpenAL run variant remains cached");
-    expect(std::filesystem::exists(run_root / "applaudio/hello"), "applaudio run variant is cached separately");
+#ifdef _WIN32
+    const std::filesystem::path executable_name { "hello.exe" };
+#else
+    const std::filesystem::path executable_name { "hello" };
+#endif
+    expect(
+      std::filesystem::exists(run_root / "openal" / executable_name),
+      "OpenAL run variant remains cached"
+    );
+    expect(
+      std::filesystem::exists(run_root / "applaudio" / executable_name),
+      "applaudio run variant is cached separately"
+    );
 
     launches.clear();
     expect(
