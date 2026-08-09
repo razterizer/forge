@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.14.2
+
+- Fixed Windows runnable-variant caching to resolve executables with their
+  `.exe` suffix, restoring cached runtime assets and profile selection while
+  allowing the Windows hosted-release workflow to complete.
+
 ## 0.14.1
 
 - Made build path validation reject embedded parent traversal and symbolic-link
