@@ -3746,6 +3746,10 @@ namespace forge
     }
     else if (recipe.type == "dynamic_library")
       artifact = build_directory / dynamic_library_filename(recipe.name);
+#ifdef _WIN32
+    else if (recipe.type == "executable")
+      artifact += ".exe";
+#endif
 
     output << "Built " << artifact.string() << '\n';
 
