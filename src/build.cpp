@@ -2282,14 +2282,39 @@ namespace forge
           : package_version(existing->second.recipe);
         std::string existing_checksum;
 
-        if (!dependency.sha256.empty()
+        if (is_box
             && existing != dependency_session->nodes.end()
-            && !existing->second.box.empty()
-            && sha256_file(existing->second.box, existing_checksum, error)
-            && existing_checksum == dependency.sha256)
+            && !existing->second.box.empty())
         {
-          node = &existing->second;
-          return true;
+          std::filesystem::path component_box;
+          BoxMetadata metadata;
+
+          if (!resolve_box_component(
+            directory,
+            parent_directory,
+            dependency.component.empty()
+              ? std::optional<std::string> { dependency.name }
+              : std::optional<std::string> { dependency.component },
+            process_runner,
+            component_box,
+            metadata,
+            error
+          )
+              || !sha256_file(existing->second.box, existing_checksum, error))
+          {
+            return false;
+          }
+
+          std::string requested_checksum;
+
+          if (!sha256_file(component_box, requested_checksum, error))
+            return false;
+
+          if (existing_checksum == requested_checksum)
+          {
+            node = &existing->second;
+            return true;
+          }
         }
 
         auto requested_version = dependency.version;

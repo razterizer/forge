@@ -6279,6 +6279,138 @@ namespace
     );
   }
 
+  void test_run_deduplicates_shared_box_dependencies_independent_of_order()
+  {
+    TemporaryDirectory directory;
+    const auto core = directory.path() / "Core";
+    const auto termin8or = directory.path() / "Termin8or";
+    const auto eight_beat = directory.path() / "8Beat";
+
+    write_file(
+      core / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"Core\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/Core/Core.h\"]\n"
+    );
+    write_file(core / "include/Core/Core.h", "#pragma once\ninline int core() { return 42; }\n");
+
+    const auto write_wrapper = [&core](const std::filesystem::path& path, std::string_view name)
+    {
+      write_file(
+        path / "forge.recipe.toml",
+        std::string {
+          "[project]\n"
+          "name = \""
+        } + std::string { name }
+          + "\"\n"
+            "version = \"1.0.0\"\n"
+            "type = \"header_only\"\n"
+            "cpp_std = 20\n\n"
+            "[sources]\n"
+            "paths = []\n"
+            "public_headers = [\"include/"
+          + std::string { name }
+          + "/"
+          + std::string { name }
+          + ".h\"]\n\n"
+            "[dependencies]\n"
+            "Core = { path = \"../Core\" }\n"
+      );
+      write_file(
+        path / "include" / std::string { name } / (std::string { name } + ".h"),
+        "#pragma once\n#include <Core/Core.h>\n"
+      );
+    };
+
+    write_wrapper(termin8or, "Termin8or");
+    write_wrapper(eight_beat, "8Beat");
+
+    constexpr std::array create_box_arguments {
+      std::string_view { "box" },
+      std::string_view { "create" }
+    };
+
+    for (const auto& [name, path] : std::array {
+      std::pair { std::string_view { "Core" }, core },
+      std::pair { std::string_view { "Termin8or" }, termin8or },
+      std::pair { std::string_view { "8Beat" }, eight_beat }
+    })
+    {
+      std::ostringstream output;
+      std::ostringstream error;
+      expect(
+        forge::cli::run(create_box_arguments, path, output, error) == 0,
+        std::string { "creates the " } + std::string { name } + " fixture box"
+      );
+      expect(error.str().empty(), std::string { "creating " } + std::string { name } + " writes no error");
+    }
+
+    const auto core_box = core / ".forge/boxes/Core-1.0.0-ho.cbox";
+    const auto termin8or_box = termin8or / ".forge/boxes/Termin8or-1.0.0-ho.cbox";
+    const auto eight_beat_box = eight_beat / ".forge/boxes/8Beat-1.0.0-ho.cbox";
+    const auto build_consumer = [&directory, &core_box, &termin8or_box, &eight_beat_box](
+      std::string_view name,
+      std::string_view dependencies)
+    {
+      const auto consumer = directory.path() / std::string { name };
+      write_file(
+        consumer / "forge.recipe.toml",
+        std::string {
+          "[project]\n"
+          "name = \""
+        } + std::string { name }
+          + "\"\n"
+            "version = \"1.0.0\"\n"
+            "type = \"executable\"\n"
+            "cpp_std = 20\n\n"
+            "[sources]\n"
+            "paths = [\"main.cpp\"]\n\n"
+            "[dependencies]\n"
+          + std::string { dependencies }
+      );
+      write_file(consumer / "main.cpp", "int main() { return 0; }\n");
+
+      std::ostringstream output;
+      std::ostringstream error;
+      constexpr std::array build_arguments { std::string_view { "build" } };
+      expect(
+        forge::cli::run(build_arguments, consumer, output, error) == 0,
+        std::string { name } + " resolves the shared Core box"
+      );
+      expect(error.str().empty(), std::string { name } + " shared-box build writes no error");
+      expect(
+        std::filesystem::exists(consumer / ".forge/deps/Core/include/Core/Core.h"),
+        std::string { name } + " installs Core once from the shared box"
+      );
+    };
+
+    const auto core_path = core_box.generic_string();
+    const auto termin8or_path = termin8or_box.generic_string();
+    const auto eight_beat_path = eight_beat_box.generic_string();
+    const auto boxed_dependency = [](std::string_view name, const std::string& path)
+    {
+      return std::string { name } + " = { box = \"" + path + "\" }\n";
+    };
+
+    build_consumer(
+      "christmas-demo-transitive-first",
+      boxed_dependency("Termin8or", termin8or_path)
+        + boxed_dependency("8Beat", eight_beat_path)
+        + boxed_dependency("Core", core_path)
+    );
+    build_consumer(
+      "christmas-demo-direct-first",
+      boxed_dependency("Core", core_path)
+        + boxed_dependency("Termin8or", termin8or_path)
+        + boxed_dependency("8Beat", eight_beat_path)
+    );
+  }
+
   void test_run_with_pinned_git_dependency()
   {
     TemporaryDirectory directory;
@@ -7424,6 +7556,7 @@ int main()
   test_imported_library_box_round_trip();
   test_run_with_imported_library_dependency();
   test_run_with_local_dependencies();
+  test_run_deduplicates_shared_box_dependencies_independent_of_order();
   test_run_rejects_conflicting_transitive_dependency_versions();
   test_run_with_pinned_git_dependency();
   test_dependency_profiles();
