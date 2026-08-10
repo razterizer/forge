@@ -2166,6 +2166,71 @@ namespace forge
       return true;
     }
 
+    bool validate_box_dependency(const Dependency& dependency,
+                                 const Dependency& resolved_dependency,
+                                 const BoxMetadata& metadata,
+                                 const BoxMetadata& container_metadata,
+                                 std::ostream& error)
+    {
+      if (!resolved_dependency.github.empty())
+      {
+        const auto package = resolved_dependency.package.empty()
+          ? resolved_dependency.name
+          : resolved_dependency.package;
+
+        if (container_metadata.name != package
+            || package_version(container_metadata) != resolved_dependency.version)
+        {
+          error << "forge: dependency '" << dependency.name
+                << "' requires package '" << package << "' version '"
+                << resolved_dependency.version << "', but the GitHub box contains package '"
+                << container_metadata.name << "' version '"
+                << package_version(container_metadata) << "'\n";
+          return false;
+        }
+      }
+
+      if (metadata.name != dependency.name
+          && (dependency.component.empty() || metadata.name != dependency.component))
+      {
+        error << "forge: dependency name '" << dependency.name
+              << "' does not match box name '" << metadata.name
+              << "' or the selected component\n";
+        return false;
+      }
+
+      const auto contained_version = package_version(metadata);
+
+      if (!dependency.version.empty()
+          && contained_version != dependency.version
+          && metadata.version != dependency.version)
+      {
+        error << "forge: dependency '" << dependency.name << "' requires version '"
+              << dependency.version << "', but box contains version '" << contained_version << "'\n";
+        return false;
+      }
+
+      if (!dependency.type.empty() && metadata.type != dependency.type)
+      {
+        error << "forge: dependency '" << dependency.name << "' declares type '"
+              << dependency.type << "', but box contains type '" << metadata.type << "'\n";
+        return false;
+      }
+
+      if (metadata.type != "header_only"
+          && (metadata.os != dependency_target_os()
+              || metadata.arch != dependency_target_arch()))
+      {
+        error << "forge: dependency '" << dependency.name
+              << "' box targets " << metadata.os << '-' << metadata.arch
+              << ", but this build targets "
+              << dependency_target_os() << '-' << dependency_target_arch() << '\n';
+        return false;
+      }
+
+      return true;
+    }
+
     bool read_dependency_node(const std::filesystem::path& parent_directory,
                               const Dependency& dependency,
                               const ProcessRunner& process_runner,
@@ -2272,6 +2337,42 @@ namespace forge
         return false;
       }
 
+      std::optional<BoxMetadata> box_metadata;
+
+      if (is_box)
+      {
+        BoxMetadata metadata;
+        BoxMetadata container_metadata;
+        std::filesystem::path component_box;
+        const auto component = dependency.component.empty()
+          ? std::optional<std::string> { dependency.name }
+          : std::optional<std::string> { dependency.component };
+
+        if (!resolve_box_component(
+          directory,
+          parent_directory,
+          component,
+          process_runner,
+          component_box,
+          metadata,
+          error,
+          &container_metadata
+        )
+            || !validate_box_dependency(
+              dependency,
+              resolved_dependency,
+              metadata,
+              container_metadata,
+              error
+            ))
+        {
+          return false;
+        }
+
+        directory = component_box;
+        box_metadata = std::move(metadata);
+      }
+
       const auto existing_name = dependency_session->names.find(dependency.name);
 
       if (existing_name != dependency_session->names.end() && existing_name->second != directory)
@@ -2281,34 +2382,17 @@ namespace forge
           ? std::string {}
           : package_version(existing->second.recipe);
         std::string existing_checksum;
+        std::string requested_checksum;
 
         if (is_box
             && existing != dependency_session->nodes.end()
             && !existing->second.box.empty())
         {
-          std::filesystem::path component_box;
-          BoxMetadata metadata;
-
-          if (!resolve_box_component(
-            directory,
-            parent_directory,
-            dependency.component.empty()
-              ? std::optional<std::string> { dependency.name }
-              : std::optional<std::string> { dependency.component },
-            process_runner,
-            component_box,
-            metadata,
-            error
-          )
-              || !sha256_file(existing->second.box, existing_checksum, error))
+          if (!sha256_file(existing->second.box, existing_checksum, error)
+              || !sha256_file(directory, requested_checksum, error))
           {
             return false;
           }
-
-          std::string requested_checksum;
-
-          if (!sha256_file(component_box, requested_checksum, error))
-            return false;
 
           if (existing_checksum == requested_checksum)
           {
@@ -2319,7 +2403,9 @@ namespace forge
 
         auto requested_version = dependency.version;
 
-        if (requested_version.empty() && !is_box)
+        if (requested_version.empty() && box_metadata)
+          requested_version = package_version(*box_metadata);
+        else if (requested_version.empty())
         {
           Recipe requested_recipe;
 
@@ -2343,10 +2429,10 @@ namespace forge
                 << "': exact version '" << existing_version
                 << "' resolves to different packages";
 
-          if (!existing_checksum.empty() && !dependency.sha256.empty())
+          if (!existing_checksum.empty() && !requested_checksum.empty())
           {
             error << " (sha256 '" << existing_checksum << "' and '"
-                  << dependency.sha256 << "')";
+                  << requested_checksum << "')";
           }
 
           error << '\n';
@@ -2363,88 +2449,10 @@ namespace forge
       if (existing_node == dependency_session->nodes.end())
       {
         Recipe dependency_recipe;
-        std::optional<BoxMetadata> box_metadata;
 
         if (is_box)
         {
-          BoxMetadata metadata;
-          BoxMetadata container_metadata;
-          std::filesystem::path component_box;
-          const auto component = dependency.component.empty()
-            ? std::optional<std::string> { dependency.name }
-            : std::optional<std::string> { dependency.component };
-
-          if (!resolve_box_component(
-            directory,
-            parent_directory,
-            component,
-            process_runner,
-            component_box,
-            metadata,
-            error,
-            &container_metadata
-          ))
-          {
-            return false;
-          }
-
-          directory = component_box;
-
-          if (!resolved_dependency.github.empty())
-          {
-            const auto package = resolved_dependency.package.empty()
-              ? resolved_dependency.name
-              : resolved_dependency.package;
-
-            if (container_metadata.name != package
-                || package_version(container_metadata) != resolved_dependency.version)
-            {
-              error << "forge: dependency '" << dependency.name
-                    << "' requires package '" << package << "' version '"
-                    << resolved_dependency.version << "', but the GitHub box contains package '"
-                    << container_metadata.name << "' version '"
-                    << package_version(container_metadata) << "'\n";
-              return false;
-            }
-          }
-
-          if (metadata.name != dependency.name
-              && (dependency.component.empty() || metadata.name != dependency.component))
-          {
-            error << "forge: dependency name '" << dependency.name
-                  << "' does not match box name '" << metadata.name
-                  << "' or the selected component\n";
-            return false;
-          }
-
-          const auto contained_version = package_version(metadata);
-
-          if (!dependency.version.empty()
-              && contained_version != dependency.version
-              && metadata.version != dependency.version)
-          {
-            error << "forge: dependency '" << dependency.name << "' requires version '"
-                  << dependency.version << "', but box contains version '" << contained_version << "'\n";
-            return false;
-          }
-
-          if (!dependency.type.empty() && metadata.type != dependency.type)
-          {
-            error << "forge: dependency '" << dependency.name << "' declares type '"
-                  << dependency.type << "', but box contains type '" << metadata.type << "'\n";
-            return false;
-          }
-
-          if (metadata.type != "header_only"
-              && (metadata.os != dependency_target_os()
-                  || metadata.arch != dependency_target_arch()))
-          {
-            error << "forge: dependency '" << dependency.name
-                  << "' box targets " << metadata.os << '-' << metadata.arch
-                  << ", but this build targets "
-                  << dependency_target_os() << '-' << dependency_target_arch() << '\n';
-            return false;
-          }
+          const auto& metadata = *box_metadata;
 
           dependency_recipe.name = dependency.name;
           dependency_recipe.version = metadata.version;
@@ -2474,7 +2482,6 @@ namespace forge
             );
           }
 
-          box_metadata = std::move(metadata);
         }
         else if (!read_recipe(directory / "forge.recipe.toml", dependency_recipe, error))
           return false;

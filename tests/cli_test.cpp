@@ -6299,7 +6299,7 @@ namespace
     );
     write_file(core / "include/Core/Core.h", "#pragma once\ninline int core() { return 42; }\n");
 
-    const auto write_wrapper = [&core](const std::filesystem::path& path, std::string_view name)
+    const auto write_wrapper = [](const std::filesystem::path& path, std::string_view name)
     {
       write_file(
         path / "forge.recipe.toml",
@@ -6353,9 +6353,10 @@ namespace
     const auto core_box = core / ".forge/boxes/Core-1.0.0-ho.cbox";
     const auto termin8or_box = termin8or / ".forge/boxes/Termin8or-1.0.0-ho.cbox";
     const auto eight_beat_box = eight_beat / ".forge/boxes/8Beat-1.0.0-ho.cbox";
-    const auto build_consumer = [&directory, &core_box, &termin8or_box, &eight_beat_box](
+    const auto build_consumer = [&directory](
       std::string_view name,
-      std::string_view dependencies)
+      std::string_view dependencies,
+      bool should_succeed)
     {
       const auto consumer = directory.path() / std::string { name };
       write_file(
@@ -6378,15 +6379,25 @@ namespace
       std::ostringstream output;
       std::ostringstream error;
       constexpr std::array build_arguments { std::string_view { "build" } };
-      expect(
-        forge::cli::run(build_arguments, consumer, output, error) == 0,
-        std::string { name } + " resolves the shared Core box"
-      );
-      expect(error.str().empty(), std::string { name } + " shared-box build writes no error");
-      expect(
-        std::filesystem::exists(consumer / ".forge/deps/Core/include/Core/Core.h"),
-        std::string { name } + " installs Core once from the shared box"
-      );
+      const auto result = forge::cli::run(build_arguments, consumer, output, error);
+
+      if (should_succeed)
+      {
+        expect(result == 0, std::string { name } + " resolves the shared Core box");
+        expect(error.str().empty(), std::string { name } + " shared-box build writes no error");
+        expect(
+          std::filesystem::exists(consumer / ".forge/deps/Core/include/Core/Core.h"),
+          std::string { name } + " installs Core once from the shared box"
+        );
+      }
+      else
+      {
+        expect(result == 2, std::string { name } + " rejects an invalid duplicate declaration");
+        expect(
+          contains(error.str(), "declares type 'static_library', but box contains type 'header_only'"),
+          std::string { name } + " explains the invalid duplicate type"
+        );
+      }
     };
 
     const auto core_path = core_box.generic_string();
@@ -6401,13 +6412,29 @@ namespace
       "christmas-demo-transitive-first",
       boxed_dependency("Termin8or", termin8or_path)
         + boxed_dependency("8Beat", eight_beat_path)
-        + boxed_dependency("Core", core_path)
+        + boxed_dependency("Core", core_path),
+      true
     );
     build_consumer(
       "christmas-demo-direct-first",
       boxed_dependency("Core", core_path)
         + boxed_dependency("Termin8or", termin8or_path)
+        + boxed_dependency("8Beat", eight_beat_path),
+      true
+    );
+    build_consumer(
+      "christmas-demo-invalid-transitive-first",
+      boxed_dependency("Termin8or", termin8or_path)
         + boxed_dependency("8Beat", eight_beat_path)
+        + "Core = { box = \"" + core_path + "\", type = \"static_library\" }\n",
+      false
+    );
+    build_consumer(
+      "christmas-demo-invalid-direct-first",
+      "Core = { box = \"" + core_path + "\", type = \"static_library\" }\n"
+        + boxed_dependency("Termin8or", termin8or_path)
+        + boxed_dependency("8Beat", eight_beat_path),
+      false
     );
   }
 
