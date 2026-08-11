@@ -180,8 +180,9 @@ Status reports `missing`, `current`, `outdated`, or `unmanaged collision`.
 Update and remove also preview by default and touch only a job carrying the
 matching Forge-managed marker.
 
-`forge release-git --tag-force` deliberately replaces the existing local and
-remote release tag. Use it only when repairing a broken published release.
+`forge release-git` never replaces an existing local or remote release tag.
+Bump the recipe version before publishing another release. Exceptional manual
+tag repair remains outside Forge's release workflow.
 
 ## Remaining workflow roadmap
 

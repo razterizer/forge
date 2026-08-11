@@ -2463,17 +2463,6 @@ namespace forge::cli
 
           options.dry_run = true;
         }
-        else if (argument == "--tag-force")
-        {
-          if (tag_option_seen)
-          {
-            print_release_git_usage(error);
-            return 2;
-          }
-
-          tag_option_seen = true;
-          options.force_tag = true;
-        }
         else if (const auto value = option_value(argument, "--tag="))
         {
           if (tag_option_seen)
@@ -2484,24 +2473,6 @@ namespace forge::cli
 
           tag_option_seen = true;
           options.tag_format = std::string { *value };
-
-          if (options.tag_format->empty())
-          {
-            error << "forge: tag format cannot be empty\n";
-            return 2;
-          }
-        }
-        else if (const auto forced_tag = option_value(argument, "--tag-force="))
-        {
-          if (tag_option_seen)
-          {
-            print_release_git_usage(error);
-            return 2;
-          }
-
-          tag_option_seen = true;
-          options.tag_format = std::string { *forced_tag };
-          options.force_tag = true;
 
           if (options.tag_format->empty())
           {

@@ -573,7 +573,6 @@ namespace forge
 
     bool preflight_tag(const std::filesystem::path& project_directory,
                        std::string_view tag,
-                       bool force_tag,
                        const ProcessRunner& process_runner,
                        std::ostream& error)
     {
@@ -611,13 +610,10 @@ namespace forge
 
       if (existing == 0)
       {
-        if (!force_tag)
-        {
-          error
-            << "forge: tag '" << tag << "' already exists locally\n"
-            << "forge: bump the recipe version before publishing another release\n";
-          return false;
-        }
+        error
+          << "forge: tag '" << tag << "' already exists locally\n"
+          << "forge: bump the recipe version before publishing another release\n";
+        return false;
       }
       else if (existing != 1)
       {
@@ -640,13 +636,10 @@ namespace forge
 
       if (remote_existing == 0)
       {
-        if (!force_tag)
-        {
-          error
-            << "forge: tag '" << tag << "' already exists on origin\n"
-            << "forge: bump the recipe version before publishing another release\n";
-          return false;
-        }
+        error
+          << "forge: tag '" << tag << "' already exists on origin\n"
+          << "forge: bump the recipe version before publishing another release\n";
+        return false;
       }
       else if (remote_existing != 2)
       {
@@ -661,16 +654,11 @@ namespace forge
                              std::string_view version,
                              const std::optional<std::string>& release_notes,
                              std::string_view tag,
-                             bool force_tag,
                              const ProcessRunner& process_runner,
                              std::ostream& output,
                              std::ostream& error)
     {
       std::vector<std::string> tag_arguments { "git", "tag" };
-
-      if (force_tag)
-        tag_arguments.push_back("--force");
-
       tag_arguments.insert(tag_arguments.end(), { "-a", std::string { tag } });
 
       if (release_notes)
@@ -689,10 +677,6 @@ namespace forge
       }
 
       std::vector<std::string> push_arguments { "git", "push" };
-
-      if (force_tag)
-        push_arguments.push_back("--force");
-
       push_arguments.insert(
         push_arguments.end(),
         { "origin", "refs/tags/" + std::string { tag } }
@@ -704,10 +688,7 @@ namespace forge
         return false;
       }
 
-      output
-        << (force_tag ? "Force-tagged and pushed " : "Tagged and pushed ")
-        << tag
-        << '\n';
+      output << "Tagged and pushed " << tag << '\n';
       return true;
     }
 
@@ -1356,7 +1337,7 @@ namespace forge
     std::string tag;
 
     if (!expand_tag_format(options.tag_format.value_or("release-<version>"), recipe, tag, error)
-        || !preflight_tag(project_directory, tag, options.force_tag, process_runner, error))
+        || !preflight_tag(project_directory, tag, process_runner, error))
     {
       return 2;
     }
@@ -1386,7 +1367,6 @@ namespace forge
       recipe.version,
       release_notes,
       tag,
-      options.force_tag,
       process_runner,
       output,
       error

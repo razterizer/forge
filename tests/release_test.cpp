@@ -411,6 +411,11 @@ namespace
       command_contains(commands[6], "refs/tags/hello-0.1.0+build.7-release"),
       "GitHub release pushes the exact tag"
     );
+    expect(
+      !command_contains(commands[5], "--force")
+        && !command_contains(commands[6], "--force"),
+      "GitHub release never force-rewrites tags"
+    );
     expect(contains(output.str(), "Tagged and pushed"), "GitHub release reports the pushed tag");
     expect(error.str().empty(), "successful GitHub release does not write an error");
   }
@@ -606,36 +611,6 @@ namespace
     expect(contains(error.str(), "bump the recipe version"), "GitHub release suggests a new version");
   }
 
-  void test_release_tag_force_replaces_existing_release()
-  {
-    TemporaryDirectory directory;
-    write_project(directory.path());
-    std::vector<std::vector<std::string>> commands;
-    std::ostringstream output;
-    std::ostringstream error;
-    forge::GitReleaseOptions options;
-    options.tag_format = "release-<version>";
-    options.force_tag = true;
-
-    const forge::ProcessRunner runner =
-      [&commands](const std::vector<std::string>& command,
-                  const std::filesystem::path&,
-                  std::ostream&)
-      {
-        commands.push_back(command);
-        return 0;
-      };
-
-    expect(
-      forge::release_git(directory.path(), options, runner, output, error) == 0,
-      "forced Git release replaces an existing tag"
-    );
-    expect(command_contains(commands[5], "--force"), "forced Git release replaces the local tag");
-    expect(command_contains(commands[6], "--force"), "forced Git release replaces the remote tag");
-    expect(contains(output.str(), "Force-tagged and pushed"), "forced Git release reports replacement");
-    expect(error.str().empty(), "successful forced Git release does not write an error");
-  }
-
 } // namespace
 
 int main()
@@ -652,7 +627,6 @@ int main()
   test_release_tag_requires_declared_build_number();
   test_release_tag_explains_existing_release();
   test_release_tag_explains_existing_remote_release();
-  test_release_tag_force_replaces_existing_release();
 
   return failures == 0 ? 0 : 1;
 }

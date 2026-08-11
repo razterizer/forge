@@ -155,6 +155,22 @@ namespace
       expect(error.str().empty(), "command help does not write an error");
     }
 
+    constexpr std::array release_help_arguments {
+      std::string_view { "release-git" },
+      std::string_view { "--help" }
+    };
+    std::ostringstream release_help_output;
+    std::ostringstream release_help_error;
+    expect(
+      forge::cli::run(release_help_arguments, release_help_output, release_help_error) == 0,
+      "Git release help succeeds"
+    );
+    expect(
+      !contains(release_help_output.str(), "tag-force"),
+      "Git release help omits the removed tag-force option"
+    );
+    expect(release_help_error.str().empty(), "Git release help does not write an error");
+
     constexpr std::array build_help_arguments {
       std::string_view { "build" },
       std::string_view { "--help" }
@@ -4909,23 +4925,6 @@ namespace
     expect(contains(error.str(), "cannot be empty"), "GitHub release explains an empty tag format");
   }
 
-  void test_release_git_force_rejects_empty_tag_format()
-  {
-    TemporaryDirectory directory;
-    constexpr std::array arguments {
-      std::string_view { "release-git" },
-      std::string_view { "--tag-force=" }
-    };
-    std::ostringstream output;
-    std::ostringstream error;
-
-    expect(
-      forge::cli::run(arguments, directory.path(), output, error) == 2,
-      "forced Git release rejects an empty tag format"
-    );
-    expect(contains(error.str(), "cannot be empty"), "forced Git release explains an empty tag format");
-  }
-
   void test_release_git_rejects_redundant_tag_argument()
   {
     TemporaryDirectory directory;
@@ -4961,23 +4960,30 @@ namespace
     expect(contains(error.str(), "usage: forge release-git"), "duplicate dry-run reports valid tag forms");
   }
 
-  void test_release_git_rejects_conflicting_tag_options()
+  void test_release_git_rejects_removed_tag_force()
   {
     TemporaryDirectory directory;
-    constexpr std::array arguments {
-      std::string_view { "release-git" },
-      std::string_view { "--dry-run" },
-      std::string_view { "--tag=release-<version>" },
-      std::string_view { "--tag-force" }
+    constexpr std::array removed_options {
+      std::string_view { "--tag-force" },
+      std::string_view { "--tag-force=release-<version>" }
     };
-    std::ostringstream output;
-    std::ostringstream error;
 
-    expect(
-      forge::cli::run(arguments, directory.path(), output, error) == 2,
-      "Git release rejects conflicting tag options"
-    );
-    expect(contains(error.str(), "usage: forge release-git"), "conflicting tag options report valid forms");
+    for (const auto option : removed_options)
+    {
+      const std::array arguments { std::string_view { "release-git" }, option };
+      std::ostringstream output;
+      std::ostringstream error;
+
+      expect(
+        forge::cli::run(arguments, directory.path(), output, error) == 2,
+        "Git release rejects the removed tag-force option"
+      );
+      expect(
+        contains(error.str(), "usage: forge release-git")
+          && !contains(error.str(), "tag-force"),
+        "removed tag-force reports the current release usage"
+      );
+    }
   }
 
   void test_clean_removes_generated_state()
@@ -7565,10 +7571,9 @@ int main()
   test_prepare_release_alias_warns();
   test_release_rejects_empty_tag_format();
   test_release_github_rejects_empty_tag_format();
-  test_release_git_force_rejects_empty_tag_format();
   test_release_git_rejects_redundant_tag_argument();
   test_release_git_rejects_duplicate_dry_run();
-  test_release_git_rejects_conflicting_tag_options();
+  test_release_git_rejects_removed_tag_force();
   test_clean_removes_generated_state();
   test_clean_accepts_already_clean_project();
   test_clean_removes_only_matching_run_variants();

@@ -60,7 +60,7 @@ For each repository:
 forge update --profile=workflow-release
 forge build --profile=workflow-release
 forge workflow prepare-release
-forge release-git --tag-force
+forge release-git
 ```
 
 For projects with target-specific hosted dependencies, lock every release target

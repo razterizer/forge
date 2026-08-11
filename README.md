@@ -1227,9 +1227,9 @@ creates an annotated tag from the matching release notes and pushes it to
 `origin`. If pushing fails, the local tag remains for inspection or a manual
 retry.
 
-To deliberately replace an existing local and remote tag, use
-`forge release-git --tag-force`. This rewrites published Git history and should
-normally only be used to repair a broken release.
+Forge never replaces an existing local or remote release tag. Bump the recipe
+version before publishing another release; repair an exceptional broken tag
+manually only after reviewing its published assets and downstream consumers.
 
 Generated GitHub workflows react to `release-*` and `v*`. A custom tag format
 must match one of those patterns, or the generated workflow triggers must be
