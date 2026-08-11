@@ -1,0 +1,11 @@
+#:schema https://raw.githubusercontent.com/razterizer/forge/main/schemas/forge.recipe.schema.json
+
+[project]
+name = "answer"
+version = "0.1.0"
+type = "static_library"
+cpp_std = 20
+
+[sources]
+paths = ["src/answer.cpp"]
+public_headers = ["include/answer/answer.h"]

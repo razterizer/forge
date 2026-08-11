@@ -1,0 +1,13 @@
+#:schema https://raw.githubusercontent.com/razterizer/forge/main/schemas/forge.recipe.schema.json
+
+[project]
+name = "answer-cbox-app"
+version = "0.1.0"
+type = "executable"
+cpp_std = 20
+
+[sources]
+paths = ["main.cpp"]
+
+[dependencies]
+answer = { box = "../packages/answer.cbox" }

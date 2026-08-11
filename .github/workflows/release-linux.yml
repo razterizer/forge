@@ -1,0 +1,167 @@
+name: release linux
+
+on:
+  push:
+    tags:
+      - "release-*"
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-modern:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake --preset dev
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build --preset dev 2>&1 | tee forge-build-linux-modern.log
+
+      - name: Upload Linux build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-build-log-linux-modern
+          path: forge-build-linux-modern.log
+          retention-days: 7
+
+      - name: Prepare Linux build log asset
+        if: failure()
+        run: cp forge-build-linux-modern.log forge-build-linux-modern-${{ github.run_id }}.log
+
+      - name: Upload Linux build log to release
+        if: failure()
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: forge-build-linux-modern-${{ github.run_id }}.log
+          artifactContentType: text/plain
+          artifactErrorsFailBuild: false
+          replacesArtifacts: false
+          tag: ${{ github.ref_name }}
+
+      - name: Test
+        run: ctest --preset dev
+
+      - name: Prepare hosted release assets
+        run: |
+          ./build/dev/forge workflow prepare-release
+          mkdir hosted-assets
+          for archive in .forge/release/*.zip; do
+            [ -e "$archive" ] || continue
+            filename=$(basename "${archive%.zip}")
+            cp "$archive" "hosted-assets/${filename}-linux-modern.zip"
+          done
+          cp .forge/release/RELEASE_NOTES.md hosted-assets/
+
+      - name: Upload modern Linux release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-modern
+          path: hosted-assets/
+          retention-days: 1
+
+  build-legacy:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake --preset dev
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build --preset dev 2>&1 | tee forge-build-linux-legacy.log
+
+      - name: Upload Linux build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-build-log-linux-legacy
+          path: forge-build-linux-legacy.log
+          retention-days: 7
+
+      - name: Prepare Linux build log asset
+        if: failure()
+        run: cp forge-build-linux-legacy.log forge-build-linux-legacy-${{ github.run_id }}.log
+
+      - name: Upload Linux build log to release
+        if: failure()
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: forge-build-linux-legacy-${{ github.run_id }}.log
+          artifactContentType: text/plain
+          artifactErrorsFailBuild: false
+          replacesArtifacts: false
+          tag: ${{ github.ref_name }}
+
+      - name: Test
+        run: ctest --preset dev
+
+      - name: Prepare hosted release assets
+        run: |
+          ./build/dev/forge workflow prepare-release
+          mkdir hosted-assets
+          for archive in .forge/release/*.zip; do
+            [ -e "$archive" ] || continue
+            filename=$(basename "${archive%.zip}")
+            cp "$archive" "hosted-assets/${filename}-linux-legacy.zip"
+          done
+          cp .forge/release/RELEASE_NOTES.md hosted-assets/
+
+      - name: Upload legacy Linux release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-legacy
+          path: hosted-assets/
+          retention-days: 1
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-modern, build-legacy]
+
+    steps:
+      - name: Download modern Linux assets
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-modern
+          path: linux-modern
+
+      - name: Download legacy Linux assets
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-legacy
+          path: linux-legacy
+
+      - name: Publish GitHub release
+        id: publish-release
+        continue-on-error: true
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: linux-modern/*.zip,linux-legacy/*.zip
+          bodyFile: linux-modern/RELEASE_NOTES.md
+          replacesArtifacts: false
+          tag: ${{ github.ref_name }}
+
+      - name: Retry Publish GitHub release after concurrent creation
+        if: steps.publish-release.outcome == 'failure'
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: linux-modern/*.zip,linux-legacy/*.zip
+          bodyFile: linux-modern/RELEASE_NOTES.md
+          replacesArtifacts: false
+          tag: ${{ github.ref_name }}

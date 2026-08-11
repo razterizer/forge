@@ -1,0 +1,58 @@
+name: release windows
+
+on:
+  push:
+    tags:
+      - "release-*"
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure
+        run: cmake --preset dev -DCMAKE_CXX_COMPILER=cl
+
+      - name: Build
+        run: cmake --build --preset dev
+
+      - name: Test
+        run: ctest --preset dev -L unit --parallel
+
+      - name: Prepare hosted release assets
+        shell: pwsh
+        run: |
+          ./build/dev/forge.exe workflow prepare-release
+
+      - name: Publish GitHub release
+        id: publish-release
+        continue-on-error: true
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: .forge/release/*.zip,boxes/*.cbox,boxes/*.sha256
+          bodyFile: .forge/release/RELEASE_NOTES.md
+          replacesArtifacts: false
+          tag: ${{ github.ref_name }}
+
+      - name: Retry Publish GitHub release after concurrent creation
+        if: steps.publish-release.outcome == 'failure'
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: .forge/release/*.zip,boxes/*.cbox,boxes/*.sha256
+          bodyFile: .forge/release/RELEASE_NOTES.md
+          replacesArtifacts: false
+          tag: ${{ github.ref_name }}

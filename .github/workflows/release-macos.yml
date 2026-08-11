@@ -1,0 +1,52 @@
+name: release macos
+
+on:
+  push:
+    tags:
+      - "release-*"
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake --preset dev
+
+      - name: Build
+        run: cmake --build --preset dev
+
+      - name: Test
+        run: ctest --preset dev
+
+      - name: Prepare hosted release assets
+        run: |
+          ./build/dev/forge workflow prepare-release
+
+      - name: Publish GitHub release
+        id: publish-release
+        continue-on-error: true
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: .forge/release/*.zip,boxes/*.cbox,boxes/*.sha256
+          bodyFile: .forge/release/RELEASE_NOTES.md
+          replacesArtifacts: false
+          tag: ${{ github.ref_name }}
+
+      - name: Retry Publish GitHub release after concurrent creation
+        if: steps.publish-release.outcome == 'failure'
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: .forge/release/*.zip,boxes/*.cbox,boxes/*.sha256
+          bodyFile: .forge/release/RELEASE_NOTES.md
+          replacesArtifacts: false
+          tag: ${{ github.ref_name }}

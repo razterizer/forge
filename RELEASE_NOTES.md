@@ -1,0 +1,487 @@
+# Release notes
+
+## 0.14.4
+
+- Preserved build-qualified versions such as `1.5.0+build.8` when embedding
+  dependency boxes, so direct and transitive package identities are compared
+  consistently.
+- Kept existing boxes compatible by deriving an embedded dependency's exact
+  version from its child manifest when older parent manifests contain only the
+  base version.
+- Improved dependency-conflict diagnostics to distinguish incompatible
+  versions from different packages claiming the same exact version, including
+  both SHA-256 checksums when available.
+- Made generated GitHub release workflows append-only for published assets,
+  preventing reruns or moved tags from silently replacing an existing cbox or
+  archive. Updated the managed `release-boxes` workflow feature accordingly.
+
+## 0.14.3
+
+- Corrected Windows runnable-variant tests to expect cached executables with
+  their `.exe` suffix, allowing the hosted-release test stage to complete and
+  publish Windows artifacts.
+
+## 0.14.2
+
+- Fixed Windows runnable-variant caching to resolve executables with their
+  `.exe` suffix, restoring cached runtime assets and profile selection.
+
+## 0.14.1
+
+- Made build path validation reject embedded parent traversal and symbolic-link
+  escapes, preventing recipes from compiling sources, headers, libraries, or
+  include directories outside the project.
+- Made release packaging keep declared files and platform-specific README
+  inputs inside the project, preventing outside files from being copied into a
+  release or release destinations from escaping the staging directory.
+- Made stale runtime-asset cleanup validate every manifest entry before
+  deletion, preventing corrupt or tampered manifests from removing files
+  outside the build directory.
+- Improved recipe and workspace TOML parsing with inline comments, multiline
+  collections, and standard basic-string escapes, including Unicode escapes.
+- Corrected documentation and example inconsistencies around dependency
+  styles, package metadata, release workflows, and the current command-line
+  interface.
+
+## 0.14.0
+
+- Added runnable build variants cached by target, configuration, dependency
+  style, and software profile. `forge run` now launches the most recently built
+  variant by default and accepts `--config`, `--style`, and `--profile` to
+  select an earlier matching build.
+- Made runnable variants preserve staged runtime assets and dependencies,
+  including placing Windows runtime DLLs beside the cached executable.
+- Added selective `forge clean` options for target, configuration, dependency
+  style, and software profile, allowing matching runnable variants to be
+  removed without discarding other cached builds.
+- Made Windows dependency installation retry transient directory rename
+  failures for up to three seconds, working around temporary file locks from
+  tools such as Microsoft Defender, and report the source, destination, and
+  operating-system error if installation still fails.
+
+## 0.13.4
+
+- Made generated Windows projects define `NOMINMAX`, preventing the `min` and
+  `max` macros from `windows.h` from breaking standard-library calls in project
+  and dependency headers.
+- Made selector-based builds detect direct dependency includes whose dependency
+  was omitted by the selected style, platform, configuration, or profile. Forge
+  now reports the mismatched selector combination before invoking external
+  tools instead of failing later with a compiler include error.
+
+## 0.13.3
+
+- Made Windows builds automatically discover Visual Studio Build Tools with
+  `vswhere` and initialize the MSVC developer environment before CMake
+  configuration. `forge build` can now run from a regular PowerShell session
+  without requiring the user to launch a Visual Studio Developer Shell first.
+- Added actionable diagnostics when Visual Studio, the C++ workload,
+  `VsDevCmd.bat`, or `cl.exe` cannot be found.
+- Enabled standard C++ exception unwinding for MSVC builds and cleaned up the
+  warnings reported by the Visual Studio 2026 compiler at warning level 4.
+
+## 0.13.2
+
+- Added build script `build-dev.bat` which is necessary when building forge on Windows.
+
+## 0.13.1
+
+- Made `forge update` and `forge upgrade` recognize selector-based software
+  profiles and update their effective `github-package` dependency rules.
+  `--all-profiles` now updates both selector rules and legacy dependency
+  profiles in mixed migration recipes.
+- Made generated GitHub release workflows retry publication once when another
+  platform job creates the shared release concurrently. The managed
+  `release-boxes` workflow feature is updated to revision 4 with the same
+  recovery behavior.
+
+## 0.13.0
+
+- Added independently composable `build.<argument>.<value>...` and
+  `dependencies.<argument>.<value>...` selector rules for dependency style,
+  platform, build configuration, and software profile. The reserved `-` value
+  matches any value for its selector argument.
+- Added `[defaults].style` and `[defaults].profile` for choosing a recipe's
+  dependency style and software profile when their CLI flags are omitted;
+  explicit CLI values take precedence.
+- Added `--style`, `--platform`, and `--config` to `forge build` and
+  `forge build-and-run`; `--profile` selects software variants on selector
+  recipes and retains its combined-profile behavior on legacy recipes.
+- Added five validated selector dependency styles: `local-source`,
+  `git-source`, `local-package`, `url-package`, and `github-package`.
+  `forge adopt --style` generates the two source forms and retains
+  `--dependency-style` as a compatibility alias.
+- Made `forge adopt` generate `build.config.*` and `dependencies.style.*`
+  selector tables. The legacy `workflow-release` profile remains temporarily
+  for compatibility with existing CI workflows.
+- Made `forge run` report the configuration recorded by the built artifact
+  instead of always labeling selector-based builds as Debug.
+
+## 0.12.0
+
+- Added Forge-owned `[sysprofile.<name>.dependencies]` and
+  `[sysprofile.<name>.build]` sections for reserved build flavours such as
+  `local-debug`, `local-release`, `git-debug`, `git-release`,
+  `github-cbox-debug`, and `github-cbox-release`.
+- Added `--sysprofile=<name>` to `forge build`, `forge build-and-run`, and
+  `forge test`, with mutual exclusion against user-defined `--profile`.
+- Made system profiles flow through dependency resolution, workspace builds,
+  launch-after-build commands, tests, and on-demand dependency box creation.
+- Made root `[build]` settings inherited by named targets, so project-wide
+  defines and platform requirements are not dropped during target selection.
+- Made `forge list profiles` show system profile roles separately as
+  `system dependencies` and `system build`.
+- Kept existing `[profile.Debug]`, `[profile.Release]`, and legacy
+  `[profile.workflow-release]` recipes compatible while rejecting new reserved
+  system profile names under `[profile.*]`.
+
+## 0.11.1
+
+- Removed the deprecated `forge adopt --github` alias; use
+  `forge adopt --dependency-style=git` instead.
+- Made `forge adopt` infer sibling dependencies by the library target that
+  provides the matched include, so projects whose display name differs from
+  their target name are adopted as buildable local dependencies.
+- Made `forge doctor` show declared runtime asset entries, including whether
+  each target stages or exports them and how many files directory mappings
+  expand to.
+- Made `forge doctor --search-github` derive cbox hints from the actual latest
+  release asset name, so build-qualified header-only boxes such as
+  `Core-1.5.0+build.8-ho.cbox` are reported with their concrete URL.
+
+## 0.11.0
+
+- Added `forge doctor` for local project health checks, including unadopted
+  project scans, recipe path validation, release-note version checks, and
+  dependency-kind summaries.
+- Made `forge doctor` reuse adoption scanning to report inferred runtime assets
+  and warn when adopted projects appear to use undeclared runtime files.
+- Made `forge doctor` report unresolved dependency includes, local sibling
+  dependency suggestions, and non-network GitHub dependency guesses.
+- Made `forge doctor` search nearby `lib` folders for local dependency repos and
+  print GitHub cbox/source fallback hints for dependency suggestions.
+- Added `forge doctor --search-github` to perform opt-in GitHub repository
+  searches for unresolved dependency includes that local scanning cannot match.
+- Added `forge adopt --search-github` to report external GitHub repository
+  candidates for unresolved dependency includes without writing unverified deps.
+- Added `--local-search=nearby|off` to `forge doctor` and `forge adopt` so
+  sandboxed checks can disable nearby sibling and ancestor `lib` discovery.
+- Made `forge doctor` and `forge adopt` resolve dependency-shaped includes
+  through inferred/configured include directories and report nearby Git/Forge
+  metadata for the header location before falling back to GitHub guesses.
+- Made `forge doctor --search-github` check latest GitHub releases for matching
+  cbox assets so same-owner dependency guesses can show concrete cbox versions.
+
+## 0.10.0
+
+- Made `forge release-git` preflight existing tags on `origin` before creating
+  the local annotated tag, so remote tag conflicts fail early without leaving a
+  stray local release tag behind.
+
+## 0.9.1
+
+- Added `forge release-git --dry-run` to preflight release tags, clean-tree state, and release notes before pushing.
+- Added `forge list boxes --platforms` / `forge box list --platforms` for compact platform visibility.
+- Classified and fixed Wine-specific unit-test failures caused by tests shelling out to host `cmake -E tar`.
+- Improved release confidence around cbox inspection and Windows/Wine portability.
+
+## 0.9.0
+
+- Added system-package provider hints to recipes and cbox manifests, so
+  libraries can advertise Homebrew and apt packages needed by consumers instead
+  of leaving missing native dependencies as linker mysteries.
+- Made builds diagnose missing provider-hinted system packages with the
+  platform package-manager command to install them when Forge can recognize the
+  active host.
+- Added `forge upgrade` for changing GitHub dependency versions and refreshing
+  their locks in one command, including `--latest` resolution from GitHub
+  Releases and `--to=<version>` for explicit package versions.
+- Made `forge upgrade --latest` without a dependency name upgrade every direct
+  GitHub dependency selected by the active dependency scope.
+- Added dependency lock refresh scopes for real release workflows:
+  `--all-profiles`, `--all-targets`, and `--release-targets`, allowing default
+  dependencies, dependency profiles, existing lock targets, and Forge's
+  standard Linux/macOS/Windows release matrix to be refreshed intentionally.
+- Improved dependency update and upgrade diagnostics, including clearer
+  handling of skipped local/profile-only dependencies and invalid option
+  combinations.
+- Added canonical `forge list <category>` commands for `profiles`, `targets`,
+  `deps`/`dependencies`, `boxes`, and `platforms`, replacing the older
+  `forge profile list` shape.
+- Removed the `forge init` compatibility alias, leaving `forge adopt` as the
+  single adoption command.
+
+## 0.8.10
+
+- Made `forge adopt` infer an initial project version from existing
+  `RELEASE_NOTES.md` headings when stronger project metadata does not declare
+  one, including dotted and SemVer build-qualified headings.
+
+## 0.8.9
+
+- Added workspace-aware `forge clean`, so running clean from a
+  `forge.workspace.toml` root removes generated Forge state from every
+  workspace project.
+
+## 0.8.8
+
+- Added `forge profile list` to show declared dependency/build profiles and
+  profile-backed release or cbox variants.
+- Added `github` fallback metadata for local source dependencies, so local
+  development recipes can also record the hosted repository Forge should use
+  when adopting or locking reproducible dependency graphs.
+- Added `forge adopt --dependency-style=git` for verifying inferred GitHub
+  source dependencies.
+- Renamed the build-then-launch workflow to `forge build-and-run`, while
+  keeping `forge run` focused on launching an already-built executable.
+- Made launch commands print the selected profile before running the executable,
+  so default and explicit profile choices are visible in command output.
+
+## 0.8.7
+
+- Made source dependency box packaging reuse a dependency profile only when the
+  dependency recipe declares that profile, so local profile-selected dependency
+  builds package the same dependency set they compiled.
+
+## 0.8.6
+
+- Added explicit hosted cbox variants through `[box].variants` and
+  `variant = "..."` GitHub dependencies, so packages can publish and consume
+  profile-built forms such as OpenAL and applaudio without changing the package
+  identity.
+- Made GitHub cbox resolution understand Linux workflow compatibility suffixes
+  such as `linux-modern` and `linux-legacy`.
+
+## 0.8.5
+
+- Kept header-only boxes portable when their dependencies are header-only and
+  have no platform-specific requirements, so packages such as Termin8or can
+  publish one `-ho.cbox` while still exporting runtime assets.
+
+## 0.8.4
+
+- Added transitive runtime assets for library and header-only cboxes, so
+  dependency-owned files can be staged beside consuming executables and included
+  in releases without copying them into each consumer repository.
+- Made local named-target dependencies use the selected library target identity,
+  matching hosted component behavior for packages whose display name differs
+  from the consumed target name.
+
+## 0.8.3
+
+- Added `[release].readme` so executable release archives can include
+  platform-specific README files as `README.txt`.
+
+## 0.8.2
+
+- Added target-filtered dependencies so recipes can declare platform-specific
+  dependency edges, such as a Windows-only SDK cbox.
+- Added platform-specific system include and library directory requirements to
+  recipes and cbox manifests, and propagate those requirements through cbox
+  consumers.
+- Made header-only boxes with platform-specific dependencies or system
+  requirements publish target-qualified cbox assets instead of universal
+  `-ho.cbox` assets.
+- Made shared transitive dependency conflicts fail explicitly when exact package
+  versions disagree instead of silently selecting one branch of the graph.
+
+## 0.8.1
+
+- Relaxed imported-library compatibility checks so compatible hosted runners
+  are not rejected solely because their exact compiler version changed.
+- Exported nested imported-library include roots discovered from cbox public
+  header artifacts.
+
+## 0.8.0
+
+- Added recipe-configured C/C++ version headers generated by `forge bump`, so
+  tracked version metadata is updated and reviewed before release tagging.
+  `forge adopt` configures an existing header when its five version macros form
+  one unambiguous convention.
+  `forge adopt` and `forge new` also accept explicit initial versions and
+  version-header paths, including migration from four-part dotted versions.
+  `forge release-git` remains mutation-free; validating that configured headers
+  are current before tagging remains planned.
+- Added platform-specific native library and macOS framework requirements, with
+  CMake adoption and propagation through named library target dependencies.
+- Added the reserved `workflow-release` profile, selected automatically by
+  hosted release preparation, so adopted projects can keep local development
+  dependencies while declaring reproducible workflow dependencies.
+- Made generated Linux workflows publish portable header-only cboxes once
+  without misleading modern or legacy compatibility suffixes.
+
+## 0.7.0
+
+- Added profile-aware GitHub dependency updates and a dedicated dependency guide
+  covering local and remote source and cbox workflows.
+- Made GitHub Release header-only cboxes use one portable `any` lock entry
+  instead of duplicating the same resolution for every platform.
+- Made `forge new` and `forge adopt` ensure existing `.gitignore` files exclude
+  generated `.forge` state without replacing user rules.
+- Silenced expected failed GitHub Release asset probes when dependency
+  resolution succeeds with a later package or tag candidate.
+- Made multi-target hosted releases publish each library target as its natural
+  cbox and each non-test executable target as a platform archive instead of
+  publishing the aggregate format-3 box by default.
+- Made executable release archive names include declared build metadata.
+- Made aggregate-box metadata validation reuse one flat checksum cache, avoiding
+  recursive cache paths that exceeded Windows path limits.
+- Made header-only boxes display their target as `any`.
+- Made default Git release tags follow configured dotted or SemVer
+  build-qualified release versions, with GitHub dependency resolution retaining
+  fallback support for older unqualified release tags.
+- Added portable end-to-end verification that publishes one aggregate format-3
+  box and consumes its header-only, static-library, and dynamic-library
+  components both locally and through a locked GitHub Release dependency.
+- Added optional dotted or SemVer build-qualified release-note headings through
+  `[release].build_number_format`.
+- Added safe preview and injection of a Forge-managed cbox publication job into
+  existing GitHub workflows.
+- Added workflow feature listing, status inspection, safe managed-job updates,
+  and safe managed-job removal.
+- Made generated and managed release workflows bootstrap the latest published
+  Forge release instead of the repository default branch.
+- Added GitHub aggregate-cbox component selection and lockfile format 2, which
+  records package and component identities alongside target, URL, and checksum.
+- Made `forge box list` and `forge box inspect` summarize package identity,
+  target, type, and selectable components.
+
+## 0.6.0
+
+- Made adoption preserve library targets alongside inferred examples and tests,
+  added explicit `--library-type` hints, and made source dependencies
+  automatically select matching named library targets.
+- Added mapped runtime assets and made adoption infer high-confidence literal
+  file dependencies for executable targets.
+- Made adoption preserve the highest C++ standard required by mirrored native
+  and CMake project metadata.
+- Added `forge box list`, bare-filename lookup for box commands, and
+  platform-independent filenames and consumption for header-only boxes.
+- Added format-3 multi-component platform boxes, allowing one project box to
+  carry static libraries, dynamic libraries, executables, and header-only
+  targets while consumers select the library component they need.
+
+## 0.5.0
+
+- Added the first multi-project workspace milestone: `forge.workspace.toml`
+  groups independent Forge projects, validates their local dependency graph,
+  and supports workspace-wide or selected-project builds, selected project
+  runs, and aggregated workspace tests.
+- Added persistent project and named-target preprocessor definitions plus
+  repeatable temporary `forge build --define=<symbol>` additions.
+- Made `forge adopt` import common `.vcxproj` metadata and turn supported
+  Visual Studio `.sln` files into Forge workspaces with local project
+  dependencies.
+- Added build profiles for configuration-specific C++ standards, include
+  directories, and definitions; `forge adopt` generates them from Visual
+  Studio configurations and recursively imported concrete `.props` files.
+- Made `forge adopt` import concrete CMake and Xcode project metadata,
+  configuration-matched `.xcconfig` files, and safely merge mirrored native
+  and CMake definitions while ignoring CMake-generated IDE projects. Concrete
+  target-free CMake superprojects become Forge workspaces.
+- Added concise phase and per-project progress reporting to `forge adopt`.
+
+## 0.4.0
+
+- Made `forge adopt` the primary command for adopting existing projects while
+  retaining `forge init` as a compatibility alias.
+- Added pinned Git source dependencies using exact full commit IDs, with
+  shallow project-local checkout caching and normal transitive source
+  dependency builds.
+- Added named development and pinned dependency profiles selectable by
+  `forge build`, `forge run`, and `forge test`.
+- Made `forge adopt` infer executable, multi-executable, static-library, and
+  header-only recipes from existing sources, public headers, and `main()`
+  entry points.
+- Renamed Forge's process helper to avoid shadowing the Windows system
+  `<process.h>` header.
+- Made generated Linux release workflows publish modern and legacy
+  compatibility builds from `ubuntu-latest` and `ubuntu-22.04`.
+- Made `forge adopt` infer local include search roots from resolvable
+  `#include` directives.
+- Made `forge adopt` use local include relationships to group implementation
+  files into inferred executable targets.
+- Made `forge adopt` report unresolved library-looking includes as dependency
+  candidates while excluding known standard and platform headers.
+- Made `forge adopt` infer unambiguous local path dependencies from sibling
+  single-target Forge libraries.
+- Added non-destructive GitHub dependency suggestions and explicit
+  `forge adopt --github` verification with exact Git commit pins.
+- Made Windows release workflows explicitly initialize and select MSVC,
+  preventing released executables from accidentally using an incompatible
+  compiler runtime found on the hosted runner.
+
+## 0.3.0
+
+- Added target-specific `imported_library` recipes that package local vendor
+  headers and precompiled static, dynamic, and import libraries without
+  invoking a compiler, then link and stage every contained artifact when
+  consumed as dependencies.
+- Added strict compiled-box toolchain identities covering compiler, exact
+  compiler version, C++ standard, configuration, and runtime ABI, with
+  incompatible dependencies rejected before linking.
+- Added declarative executable runtime assets that Forge stages for builds and
+  runs and includes automatically in executable boxes and releases.
+- Added backward-compatible named targets with `forge build <target>` and
+  `forge run <target> -- [arguments...]`.
+- Added transitive internal dependencies between named library and executable
+  targets, with missing-target and cycle validation.
+- Added `forge test [target]` for building and running marked named test
+  executables with argument forwarding and aggregate results.
+- Added named-target boxing and release preparation, including recursively
+  embedded internal dependency boxes and staged internal dynamic libraries.
+
+## 0.2.0
+
+- Added verified direct local `.cbox` dependencies through `{ box = "..." }`.
+- Added checksum-verified downloadable `.cbox` dependencies with local caching.
+- Added GitHub Release `.cbox` dependency shorthand with target-aware asset
+  resolution.
+- Added authoritative target-specific `forge.lock.toml` files and explicit
+  `forge update [dependency]` refreshes for reproducible GitHub dependencies.
+- Added self-contained format-2 boxes that embed and recursively resolve their
+  transitive dependency boxes.
+- Added compatible local source-dependency box caching. Forge reuses verified
+  boxes when their package identity, target, declared inputs, and direct
+  dependency checksums still match, while changed dependencies invalidate
+  dependent boxes.
+- Renamed the public dynamic-linking project type to `dynamic_library`, while
+  preserving `shared_library` as a legacy recipe and box alias.
+- Added Windows dynamic-library builds and boxes with separate DLL runtime and
+  import-library artifacts, automatic dependent linking, and DLL staging.
+- Added `forge box publish <box>` for verified local publication and checksum
+  generation.
+- Added `forge prepare-release` for type-aware hosted release assets:
+  target-qualified ZIPs for executables and published `.cbox` files with
+  checksums for libraries.
+- Simplified `forge release-git` so its default invocation creates and pushes
+  the conventional `release-<version>` tag.
+- Added `forge bump major|minor|patch` for updating the recipe version,
+  incrementing an existing build number, and preparing matching release notes.
+
+## 0.1.0
+
+- Added `forge new` and `forge init` for creating and adopting C++ projects
+  without imposing a source-directory layout.
+- Added recipe-driven builds for executables, static libraries, shared
+  libraries on macOS and Linux, and validated header-only libraries.
+- Added `forge run` for incremental builds and argument-forwarding execution.
+- Added recursive local path dependencies with cycle detection, transitive
+  linking, and runtime shared-library assembly.
+- Added verified `.cbox` creation, inspection, verification, and extraction
+  with multi-artifact packaging and SHA-256 checksums.
+- Added application release archives with declarative extra contents and
+  version-specific notes extracted from `RELEASE_NOTES.md`.
+- Added optional monotonically increasing build numbers represented as SemVer
+  build metadata.
+- Added a hosted JSON Schema automatically associated with generated
+  `forge.recipe.toml` files.
+- Added Linux, macOS, and Windows GitHub release workflows generated by
+  `forge new` and `forge init`.
+- Added explicit Git releases through `forge release-git`, with custom tag
+  formats and release-note annotations, while keeping `forge release`
+  local-only.
+- Fixed Linux runtime loading for transitive shared-library dependencies.
+- Added `forge clean` for removing all generated project state under `.forge/`.
+- Added runnable examples, unit and integration tests, CMake presets, and an
+  Xcode project.

@@ -1,0 +1,5 @@
+#:schema https://raw.githubusercontent.com/razterizer/forge/main/schemas/forge.workspace.schema.json
+
+[workspace]
+name = "answer-suite"
+projects = ["answer", "app"]

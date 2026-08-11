@@ -1,0 +1,434 @@
+#include "run.h"
+#include "test_support.h"
+
+#include <array>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace
+{
+
+  int failures = 0;
+
+  void expect(bool condition, std::string_view message)
+  {
+    if (!condition)
+    {
+      std::cerr << "FAIL: " << message << '\n';
+      ++failures;
+    }
+  }
+
+  bool contains(const std::string& text, std::string_view fragment)
+  {
+    return text.find(fragment) != std::string::npos;
+  }
+
+  void write_project(const std::filesystem::path& directory)
+  {
+    std::ofstream recipe { directory / "forge.recipe.toml" };
+    recipe
+      << "[project]\n"
+      << "name = \"hello\"\n"
+      << "version = \"0.1.0\"\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = [\"main.cpp\"]\n";
+
+    std::ofstream source { directory / "main.cpp" };
+    source << "int main() {}\n";
+  }
+
+  void write_executable(const std::filesystem::path& directory,
+                        const std::filesystem::path& relative_directory = {})
+  {
+    std::filesystem::create_directories(directory / ".forge/build" / relative_directory);
+#ifdef _WIN32
+    std::ofstream executable { directory / ".forge/build" / relative_directory / "hello.exe" };
+#else
+    std::ofstream executable { directory / ".forge/build" / relative_directory / "hello" };
+#endif
+  }
+
+  void write_toolchain(const std::filesystem::path& directory,
+                       std::string_view configuration,
+                       const std::filesystem::path& relative_directory = {})
+  {
+    const auto build_directory = directory / ".forge/build" / relative_directory;
+    std::filesystem::create_directories(build_directory);
+    std::ofstream { build_directory / "forge-toolchain.toml" }
+      << "compiler = \"Test\"\n"
+      << "compiler_version = \"1\"\n"
+      << "cpp_std = 20\n"
+      << "configuration = \"" << configuration << "\"\n"
+      << "runtime = \"test\"\n";
+  }
+
+  void test_run_forwards_arguments()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    write_executable(directory.path());
+    std::vector<std::vector<std::string>> commands;
+    std::vector<std::filesystem::path> working_directories;
+    std::ostringstream output;
+    std::ostringstream error;
+    constexpr std::array arguments {
+      std::string_view { "--message" },
+      std::string_view { "hello world" }
+    };
+
+    const forge::ProcessRunner runner =
+      [&commands, &working_directories](const std::vector<std::string>& command,
+                                        const std::filesystem::path& working_directory,
+                                        std::ostream&)
+      {
+        commands.push_back(command);
+        working_directories.push_back(working_directory);
+        return 7;
+      };
+
+    expect(
+      forge::run_project(directory.path(), arguments, runner, output, error) == 7,
+      "run returns the program exit status"
+    );
+    expect(commands.size() == 1, "run launches the existing program without building");
+    expect(commands[0].size() == 3, "run forwards program arguments");
+    expect(commands[0][1] == "--message", "run forwards the first argument");
+    expect(commands[0][2] == "hello world", "run preserves arguments containing spaces");
+    expect(
+      working_directories[0] == directory.path() / ".forge/build",
+      "run launches from the staged runtime directory"
+    );
+    expect(contains(output.str(), "Running hello"), "run reports the launched project");
+    expect(error.str().empty(), "successful run does not write an error");
+  }
+
+  void test_run_reports_built_configuration()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    write_executable(directory.path());
+    write_toolchain(directory.path(), "Release");
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::run_project(directory.path(), {}, runner, output, error) == 0,
+      "run succeeds for a configured Release build"
+    );
+    expect(
+      contains(output.str(), "profile default (Release)"),
+      "run reports the configuration recorded by the built artifact"
+    );
+    expect(error.str().empty(), "configured run does not write an error");
+  }
+
+  void test_build_and_run_builds_and_forwards_arguments()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::vector<std::vector<std::string>> commands;
+    std::vector<std::filesystem::path> working_directories;
+    std::ostringstream output;
+    std::ostringstream error;
+    constexpr std::array arguments {
+      std::string_view { "--message" },
+      std::string_view { "hello world" }
+    };
+
+    const forge::ProcessRunner runner =
+      [&commands, &working_directories, &directory](const std::vector<std::string>& command,
+                                                    const std::filesystem::path& working_directory,
+                                                    std::ostream&)
+      {
+        commands.push_back(command);
+        working_directories.push_back(working_directory);
+
+        if (command.size() > 1 && command[1] == "--build")
+          write_executable(directory.path());
+
+        if (commands.size() == 3)
+          return 7;
+
+        return 0;
+      };
+
+    expect(
+      forge::build_and_run_project(directory.path(), arguments, runner, output, error) == 7,
+      "build-and-run returns the program exit status"
+    );
+    expect(commands.size() == 3, "build-and-run configures, builds, and launches the program");
+    expect(commands[2].size() == 3, "build-and-run forwards program arguments");
+    expect(commands[2][1] == "--message", "build-and-run forwards the first argument");
+    expect(commands[2][2] == "hello world", "build-and-run preserves arguments containing spaces");
+    expect(
+      working_directories[2]
+        == directory.path() / ".forge/run/hello/Debug/local-source/default",
+      "build-and-run launches from the cached run variant"
+    );
+    expect(contains(output.str(), "Running hello"), "build-and-run reports the launched project");
+    expect(
+      contains(output.str(), "profile default (Debug)"),
+      "build-and-run reports the default launch profile"
+    );
+    expect(error.str().empty(), "successful build-and-run does not write an error");
+  }
+
+  void test_build_and_run_reports_selected_profile()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    {
+      std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+      recipe
+        << "\n[profile.Release.build]\n"
+        << "configuration = \"Release\"\n";
+    }
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&directory](const std::vector<std::string>& command,
+                   const std::filesystem::path&,
+                   std::ostream&)
+      {
+        if (command.size() > 1 && command[1] == "--build")
+          write_executable(directory.path());
+
+        return 0;
+      };
+
+    expect(
+      forge::build_and_run_project(
+        directory.path(),
+        std::nullopt,
+        std::string { "Release" },
+        {},
+        runner,
+        output,
+        error
+      ) == 0,
+      "build-and-run succeeds with a selected build profile"
+    );
+    expect(
+      contains(output.str(), "Running hello with profile Release (Release)"),
+      "build-and-run reports the selected launch profile"
+    );
+    expect(error.str().empty(), "profiled build-and-run does not write an error");
+  }
+
+  void test_build_and_run_stops_when_build_fails()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 1;
+      };
+
+    expect(
+      forge::build_and_run_project(directory.path(), {}, runner, output, error) == 2,
+      "build-and-run reports a build failure"
+    );
+    expect(invocations == 1, "build-and-run does not launch after a build failure");
+  }
+
+  void test_build_and_run_caches_profiles_independently()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    {
+      std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+      recipe
+        << "\n[build.profile.openal]\n"
+        << "defines = [\"USE_OPENAL\"]\n"
+        << "\n[build.profile.applaudio]\n"
+        << "defines = [\"USE_APPLAUDIO\"]\n";
+    }
+    std::vector<std::filesystem::path> launches;
+    const forge::ProcessRunner runner =
+      [&directory, &launches](const std::vector<std::string>& command,
+                              const std::filesystem::path& working_directory,
+                              std::ostream&)
+      {
+        if (command.size() > 1 && command[1] == "--build")
+          write_executable(directory.path());
+        else if (!command.empty() && command.front().find("hello") != std::string::npos)
+          launches.push_back(working_directory);
+
+        return 0;
+      };
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::build_and_run_project(
+        directory.path(),
+        std::nullopt,
+        std::string { "openal" },
+        {},
+        runner,
+        output,
+        error
+      ) == 0,
+      "OpenAL build-and-run succeeds"
+    );
+    expect(
+      forge::build_and_run_project(
+        directory.path(),
+        std::nullopt,
+        std::string { "applaudio" },
+        {},
+        runner,
+        output,
+        error
+      ) == 0,
+      "applaudio build-and-run succeeds"
+    );
+
+    const auto run_root = directory.path() / ".forge/run/hello/Debug/local-source";
+#ifdef _WIN32
+    const std::filesystem::path executable_name { "hello.exe" };
+#else
+    const std::filesystem::path executable_name { "hello" };
+#endif
+    expect(
+      std::filesystem::exists(run_root / "openal" / executable_name),
+      "OpenAL run variant remains cached"
+    );
+    expect(
+      std::filesystem::exists(run_root / "applaudio" / executable_name),
+      "applaudio run variant is cached separately"
+    );
+
+    launches.clear();
+    expect(
+      forge::run_project(directory.path(), {}, runner, output, error) == 0,
+      "plain run launches the most recently built variant"
+    );
+    expect(
+      launches.size() == 1 && launches.front() == run_root / "applaudio",
+      "plain run selects the current cached profile"
+    );
+
+    expect(
+      forge::select_cached_run_variant(
+        directory.path(),
+        std::string { "hello" },
+        std::string { "debug" },
+        std::string { "local-source" },
+        std::string { "openal" },
+        error
+      ),
+      "an earlier cached profile can be selected"
+    );
+    launches.clear();
+    expect(
+      forge::run_project(directory.path(), {}, runner, output, error) == 0,
+      "run launches an explicitly selected cached profile"
+    );
+    expect(
+      launches.size() == 1 && launches.front() == run_root / "openal",
+      "cached profile selection switches the run directory"
+    );
+  }
+
+  void test_build_and_run_selects_named_target()
+  {
+    TemporaryDirectory directory;
+    std::filesystem::create_directories(directory.path() / "Examples");
+    std::filesystem::create_directories(directory.path() / "Tests");
+    std::ofstream recipe { directory.path() / "forge.recipe.toml" };
+    recipe
+      << "[project]\n"
+      << "name = \"hello-suite\"\n"
+      << "version = \"0.1.0\"\n\n"
+      << "[target.examples]\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n"
+      << "sources = [\"Examples/examples.cpp\"]\n\n"
+      << "[target.unit_tests]\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = 20\n"
+      << "sources = [\"Tests/unit_tests.cpp\"]\n";
+    recipe.close();
+    std::ofstream { directory.path() / "Examples/examples.cpp" } << "int main() {}\n";
+    std::ofstream { directory.path() / "Tests/unit_tests.cpp" } << "int main() {}\n";
+    std::vector<std::vector<std::string>> commands;
+    std::ostringstream output;
+    std::ostringstream error;
+    constexpr std::array arguments { std::string_view { "--message" } };
+
+    const forge::ProcessRunner runner =
+      [&commands, &directory](const std::vector<std::string>& command,
+                             const std::filesystem::path&,
+                             std::ostream&)
+      {
+        commands.push_back(command);
+
+        if (command.size() > 1 && command[1] == "--build")
+        {
+          std::filesystem::create_directories(directory.path() / ".forge/build/examples");
+#ifdef _WIN32
+          std::ofstream { directory.path() / ".forge/build/examples/examples.exe" };
+#else
+          std::ofstream { directory.path() / ".forge/build/examples/examples" };
+#endif
+        }
+
+        return 0;
+      };
+
+    expect(
+      forge::build_and_run_project(
+        directory.path(),
+        std::string { "examples" },
+        arguments,
+        runner,
+        output,
+        error
+      ) == 0,
+      "build-and-run succeeds for a selected named target"
+    );
+    expect(commands.size() == 3, "named target build-and-run configures, builds, and launches");
+    expect(commands[2][1] == "--message", "named target build-and-run forwards arguments");
+    expect(contains(output.str(), "Running examples"), "build-and-run reports the selected named target");
+    expect(error.str().empty(), "selected named target build-and-run does not write an error");
+  }
+
+} // namespace
+
+int main()
+{
+  test_run_forwards_arguments();
+  test_run_reports_built_configuration();
+  test_build_and_run_builds_and_forwards_arguments();
+  test_build_and_run_reports_selected_profile();
+  test_build_and_run_stops_when_build_fails();
+  test_build_and_run_caches_profiles_independently();
+  test_build_and_run_selects_named_target();
+
+  return failures == 0 ? 0 : 1;
+}
