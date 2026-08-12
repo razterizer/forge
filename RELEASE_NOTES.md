@@ -1,5 +1,20 @@
 # Release notes
 
+## 0.15.0
+
+- Fixed order-dependent dependency-box deduplication in diamond dependency
+  graphs. Identical resolved components are now reused by checksum regardless
+  of whether they are encountered directly or transitively first.
+- Kept every dependency request fully validated before reusing an identical
+  box, so version, component, and target mismatches cannot be hidden by
+  deduplication.
+- Removed `release-git --tag-force`. Forge now always rejects existing local or
+  remote release tags, preserving the append-only release model and directing
+  subsequent releases through a version bump.
+- Added Ubuntu, macOS, and Windows build-and-test workflows for pushes and pull
+  requests to `main`. LOC badge generation remains in the Ubuntu workflow and
+  runs only after a successful pushed build.
+
 ## 0.14.4
 
 - Preserved build-qualified versions such as `1.5.0+build.8` when embedding
