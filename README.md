@@ -3,9 +3,9 @@
 ![GitHub License](https://img.shields.io/github/license/razterizer/forge?color=blue)
 ![Static Badge](https://img.shields.io/badge/C%2B%2B-20-yellow)
 
-[![release linux](https://github.com/razterizer/forge/actions/workflows/release-linux.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/release-linux.yml)
-[![release macos](https://github.com/razterizer/forge/actions/workflows/release-macos.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/release-macos.yml)
-[![release windows](https://github.com/razterizer/forge/actions/workflows/release-windows.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/release-windows.yml)
+[![build ubuntu](https://github.com/razterizer/forge/actions/workflows/build-ubuntu.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/build-ubuntu.yml)
+[![build macos](https://github.com/razterizer/forge/actions/workflows/build-macos.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/build-macos.yml)
+[![build windows](https://github.com/razterizer/forge/actions/workflows/build-windows.yml/badge.svg)](https://github.com/razterizer/forge/actions/workflows/build-windows.yml)
 
 ![Top Languages](https://img.shields.io/github/languages/top/razterizer/forge)
 ![GitHub repo size](https://img.shields.io/github/repo-size/razterizer/forge)
