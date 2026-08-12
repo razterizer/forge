@@ -6359,7 +6359,7 @@ namespace
     const auto core_box = core / ".forge/boxes/Core-1.0.0-ho.cbox";
     const auto termin8or_box = termin8or / ".forge/boxes/Termin8or-1.0.0-ho.cbox";
     const auto eight_beat_box = eight_beat / ".forge/boxes/8Beat-1.0.0-ho.cbox";
-    const auto build_consumer = [&directory](
+    const auto build_consumer = [&directory, &core_box](
       std::string_view name,
       std::string_view dependencies,
       bool should_succeed)
@@ -6382,6 +6382,31 @@ namespace
       );
       write_file(consumer / "main.cpp", "int main() { return 0; }\n");
 
+      if (!should_succeed)
+      {
+        std::string checksum;
+        std::ostringstream checksum_error;
+        expect(
+          forge::sha256_file(core_box, checksum, checksum_error),
+          std::string { name } + " hashes the shared Core box"
+        );
+        const auto cache = consumer / ".forge/cache/downloads";
+        std::filesystem::create_directories(cache);
+        std::filesystem::copy_file(core_box, cache / (checksum + ".cbox"));
+        write_file(
+          consumer / "forge.lock.toml",
+          "format = 2\n\n"
+          "[[dependency]]\n"
+          "name = \"Core\"\n"
+          "github = \"example/Core\"\n"
+          "package = \"Core\"\n"
+          "version = \"2.0.0\"\n"
+          "target = \"any\"\n"
+          "url = \"https://example.invalid/Core.cbox\"\n"
+          "sha256 = \"" + checksum + "\"\n"
+        );
+      }
+
       std::ostringstream output;
       std::ostringstream error;
       constexpr std::array build_arguments { std::string_view { "build" } };
@@ -6400,8 +6425,9 @@ namespace
       {
         expect(result == 2, std::string { name } + " rejects an invalid duplicate declaration");
         expect(
-          contains(error.str(), "declares type 'static_library', but box contains type 'header_only'"),
-          std::string { name } + " explains the invalid duplicate type"
+          contains(error.str(), "requires package 'Core' version '2.0.0'")
+            && contains(error.str(), "box contains package 'Core' version '1.0.0'"),
+          std::string { name } + " explains the invalid duplicate version"
         );
       }
     };
@@ -6432,12 +6458,12 @@ namespace
       "christmas-demo-invalid-transitive-first",
       boxed_dependency("Termin8or", termin8or_path)
         + boxed_dependency("8Beat", eight_beat_path)
-        + "Core = { box = \"" + core_path + "\", type = \"static_library\" }\n",
+        + "Core = { github = \"example/Core\", version = \"2.0.0\" }\n",
       false
     );
     build_consumer(
       "christmas-demo-invalid-direct-first",
-      "Core = { box = \"" + core_path + "\", type = \"static_library\" }\n"
+      "Core = { github = \"example/Core\", version = \"2.0.0\" }\n"
         + boxed_dependency("Termin8or", termin8or_path)
         + boxed_dependency("8Beat", eight_beat_path),
       false
