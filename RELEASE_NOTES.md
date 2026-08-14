@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.15.1
+
+- Added `[release].unblock` for platform-specific executable unblocking
+  instructions. Forge selects the current platform's file and packages it as
+  `UNBLOCK.txt` alongside the automatically included project `README.md`, while
+  preserving the existing `[release].readme` behavior.
+- Added macOS Gatekeeper quarantine and Windows downloaded-file unblocking
+  instructions to Forge's own release archives.
+
 ## 0.15.0
 
 - Fixed order-dependent dependency-box deduplication in diamond dependency
