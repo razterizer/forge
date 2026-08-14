@@ -710,6 +710,26 @@
             }
           }
         },
+        "unblock": {
+          "type": "object",
+          "description": "Platform-specific executable unblocking instructions copied into release archives as UNBLOCK.txt.",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "linux": {
+              "$ref": "#/$defs/projectPath",
+              "description": "Project-relative unblocking instructions copied into Linux executable release archives."
+            },
+            "macos": {
+              "$ref": "#/$defs/projectPath",
+              "description": "Project-relative unblocking instructions copied into macOS executable release archives."
+            },
+            "windows": {
+              "$ref": "#/$defs/projectPath",
+              "description": "Project-relative unblocking instructions copied into Windows executable release archives."
+            }
+          }
+        },
         "build_number_format": {
           "type": "string",
           "enum": ["semver", "dotted"],

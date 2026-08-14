@@ -1,0 +1,23 @@
+Running Forge on Windows
+========================
+
+Windows may mark ZIP files downloaded from the internet as blocked and carry
+that mark into extracted executables.
+
+Only continue if you downloaded Forge from the official razterizer/forge
+GitHub release and trust the file.
+
+Preferred method, before extracting the ZIP:
+
+1. Right-click the downloaded ZIP and select Properties.
+2. On the General tab, select Unblock, then Apply.
+3. Extract the ZIP and run forge.exe.
+
+If you already extracted it, open PowerShell in the extracted directory and
+run:
+
+    Unblock-File .\forge.exe
+    .\forge.exe --version
+
+If Microsoft Defender SmartScreen still appears, review that the file came
+from the official release before choosing More info, then Run anyway.

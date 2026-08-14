@@ -122,7 +122,7 @@ namespace forge
     std::string suffix;
   };
 
-  struct ReleaseReadme
+  struct PlatformReleaseFiles
   {
     std::filesystem::path linux_path;
     std::filesystem::path macos_path;
@@ -167,7 +167,8 @@ namespace forge
     std::optional<std::string> release_bundle_name;
     std::vector<ReleaseVariant> release_variants;
     std::vector<ReleaseVariant> box_variants;
-    ReleaseReadme release_readme;
+    PlatformReleaseFiles release_readme;
+    PlatformReleaseFiles release_unblock;
     std::optional<std::string> release_notes_build_number_format;
     std::filesystem::path version_header_path;
     std::string version_header_prefix;

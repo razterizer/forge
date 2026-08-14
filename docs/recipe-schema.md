@@ -67,6 +67,11 @@ rules:
   release archives as `README.txt`, for example
   `{ linux = "demos/README_LINUX.md", macos = "demos/README_MACOS.md",
   windows = "demos/README_WINDOWS.md" }`.
+- `[release].unblock` may map platform-specific executable unblocking
+  instructions into release archives as `UNBLOCK.txt`, for example
+  `{ macos = "release/UNBLOCK_MACOS.txt",
+  windows = "release/UNBLOCK_WINDOWS.txt" }`. This can coexist with the
+  root-level `README.md` that executable releases include automatically.
 - `[profile.workflow-release.build]` and
   `[profile.workflow-release.dependencies]` are the reserved hosted-workflow
   profile. `forge workflow prepare-release` selects it automatically when

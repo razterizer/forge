@@ -14,3 +14,4 @@ paths = ["src/box.cpp", "src/box_manifest.cpp", "src/bump.cpp", "src/build.cpp",
 
 [release]
 files = ["examples"]
+unblock = { macos = "release/UNBLOCK_MACOS.txt", windows = "release/UNBLOCK_WINDOWS.txt" }

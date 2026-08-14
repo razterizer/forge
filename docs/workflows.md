@@ -28,6 +28,18 @@ files = ["RELEASE_NOTES.md", "assets", "examples"]
 Forge preserves project-relative paths and rejects paths outside the project
 and symbolic links.
 
+Root-level `README.md` and `LICENSE` files are included automatically. Projects
+may also provide platform-specific executable unblocking instructions:
+
+```toml
+[release]
+unblock = { macos = "release/UNBLOCK_MACOS.txt", windows = "release/UNBLOCK_WINDOWS.txt" }
+```
+
+Forge selects the current platform's file and stages it as `UNBLOCK.txt`, so it
+can coexist with the project README. The existing `readme` mapping similarly
+stages a platform-specific file as `README.txt`.
+
 `forge bump major|minor|patch` prepares the next release by updating the
 recipe's semantic version and adding a matching topmost section to
 `RELEASE_NOTES.md`. Existing build numbers are incremented. Bumping does not

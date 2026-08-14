@@ -1087,6 +1087,15 @@ Forge copies declared entries recursively while preserving their
 project-relative paths. Paths must remain inside the project, and symbolic
 links are rejected.
 
+Root-level `README.md` and `LICENSE` files are included automatically. Add
+platform-specific executable unblocking instructions as `UNBLOCK.txt` without
+replacing the project README:
+
+```toml
+[release]
+unblock = { macos = "release/UNBLOCK_MACOS.txt", windows = "release/UNBLOCK_WINDOWS.txt" }
+```
+
 `forge adopt` creates a reserved workflow build profile:
 
 ```toml

@@ -1008,6 +1008,9 @@ namespace forge
     check_project_path(project_directory, recipe.release_readme.linux_path, "Linux release README", false, state, output);
     check_project_path(project_directory, recipe.release_readme.macos_path, "macOS release README", false, state, output);
     check_project_path(project_directory, recipe.release_readme.windows_path, "Windows release README", false, state, output);
+    check_project_path(project_directory, recipe.release_unblock.linux_path, "Linux release unblock file", false, state, output);
+    check_project_path(project_directory, recipe.release_unblock.macos_path, "macOS release unblock file", false, state, output);
+    check_project_path(project_directory, recipe.release_unblock.windows_path, "Windows release unblock file", false, state, output);
 
     for (const auto& target : recipe.targets)
       check_target_paths(project_directory, target, state, output);

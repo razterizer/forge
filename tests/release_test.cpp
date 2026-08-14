@@ -69,7 +69,10 @@ namespace
       << "files = [\"assets\", \"RELEASE_NOTES.md\"]\n"
       << "readme = { linux = \"release/README_LINUX.md\", "
       << "macos = \"release/README_MACOS.md\", "
-      << "windows = \"release/README_WINDOWS.md\" }\n";
+      << "windows = \"release/README_WINDOWS.md\" }\n"
+      << "unblock = { linux = \"release/UNBLOCK_LINUX.txt\", "
+      << "macos = \"release/UNBLOCK_MACOS.txt\", "
+      << "windows = \"release/UNBLOCK_WINDOWS.txt\" }\n";
 
     std::ofstream source { directory / "main.cpp" };
     source << "int main() {}\n";
@@ -79,6 +82,9 @@ namespace
     std::ofstream { directory / "release/README_LINUX.md" } << "linux release notes\n";
     std::ofstream { directory / "release/README_MACOS.md" } << "macos release notes\n";
     std::ofstream { directory / "release/README_WINDOWS.md" } << "windows release notes\n";
+    std::ofstream { directory / "release/UNBLOCK_LINUX.txt" } << "unblock linux\n";
+    std::ofstream { directory / "release/UNBLOCK_MACOS.txt" } << "unblock macos\n";
+    std::ofstream { directory / "release/UNBLOCK_WINDOWS.txt" } << "unblock windows\n";
     std::filesystem::create_directories(directory / "assets/nested");
     std::filesystem::create_directories(directory / "assets/.forge");
     std::ofstream { directory / "assets/background.tx" } << "background\n";
@@ -150,6 +156,14 @@ namespace
     expect(
       contains(release_readme_text.str(), expected_release_readme_text),
       "release stages the host platform README as README.txt"
+    );
+    std::ifstream release_unblock { directory.path() / ".forge/release/hello-0.1.0/UNBLOCK.txt" };
+    std::ostringstream release_unblock_text;
+    release_unblock_text << release_unblock.rdbuf();
+    const auto expected_release_unblock_text = "unblock " + hosted_platform();
+    expect(
+      contains(release_unblock_text.str(), expected_release_unblock_text),
+      "release stages the host platform unblock instructions as UNBLOCK.txt"
     );
     expect(
       std::filesystem::exists(

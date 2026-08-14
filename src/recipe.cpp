@@ -441,7 +441,7 @@ namespace forge
       return !variants.empty();
     }
 
-    bool parse_release_readme(std::string_view value, ReleaseReadme& readme)
+    bool parse_platform_files(std::string_view value, PlatformReleaseFiles& files)
     {
       value = trim(value);
 
@@ -479,12 +479,12 @@ namespace forge
         if (end >= value.size() || !parse_string(value.substr(0, end + 1), parsed))
           return false;
 
-        if (key == "linux" && readme.linux_path.empty())
-          readme.linux_path = parsed;
-        else if (key == "macos" && readme.macos_path.empty())
-          readme.macos_path = parsed;
-        else if (key == "windows" && readme.windows_path.empty())
-          readme.windows_path = parsed;
+        if (key == "linux" && files.linux_path.empty())
+          files.linux_path = parsed;
+        else if (key == "macos" && files.macos_path.empty())
+          files.macos_path = parsed;
+        else if (key == "windows" && files.windows_path.empty())
+          files.windows_path = parsed;
         else
           return false;
 
@@ -1198,7 +1198,9 @@ namespace forge
       else if (section == "box" && key == "variants")
         valid = parse_release_variants(value, recipe.box_variants);
       else if (section == "release" && key == "readme")
-        valid = parse_release_readme(value, recipe.release_readme);
+        valid = parse_platform_files(value, recipe.release_readme);
+      else if (section == "release" && key == "unblock")
+        valid = parse_platform_files(value, recipe.release_unblock);
       else if (section == "release" && key == "build_number_format")
       {
         std::string format;

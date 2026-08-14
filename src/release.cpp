@@ -242,18 +242,18 @@ namespace forge
       return true;
     }
 
-    std::filesystem::path selected_release_readme(const Recipe& recipe)
+    std::filesystem::path selected_platform_file(const PlatformReleaseFiles& files)
     {
       const auto platform = hosted_platform();
 
       if (platform == "linux")
-        return recipe.release_readme.linux_path;
+        return files.linux_path;
 
       if (platform == "macos")
-        return recipe.release_readme.macos_path;
+        return files.macos_path;
 
       if (platform == "windows")
-        return recipe.release_readme.windows_path;
+        return files.windows_path;
 
       return {};
     }
@@ -893,7 +893,7 @@ namespace forge
       }
     }
 
-    const auto release_readme = selected_release_readme(recipe);
+    const auto release_readme = selected_platform_file(recipe.release_readme);
 
     if (!release_readme.empty())
     {
@@ -904,6 +904,20 @@ namespace forge
       }
 
       if (!copy_file(project_directory / release_readme, staging_directory / "README.txt", error))
+        return 2;
+    }
+
+    const auto release_unblock = selected_platform_file(recipe.release_unblock);
+
+    if (!release_unblock.empty())
+    {
+      if (!is_resolved_project_path(project_directory, release_unblock))
+      {
+        error << "forge: release unblock paths must stay inside the project\n";
+        return 2;
+      }
+
+      if (!copy_file(project_directory / release_unblock, staging_directory / "UNBLOCK.txt", error))
         return 2;
     }
 

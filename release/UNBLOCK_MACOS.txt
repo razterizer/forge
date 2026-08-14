@@ -1,0 +1,16 @@
+Running Forge on macOS
+======================
+
+macOS may quarantine executables downloaded outside the App Store because the
+Forge release is not currently signed or notarized.
+
+Only continue if you downloaded Forge from the official razterizer/forge
+GitHub release and trust the file. In Terminal, open the extracted directory
+and run:
+
+    chmod +x forge
+    xattr -d com.apple.quarantine forge
+    ./forge --version
+
+If the quarantine attribute is not present, xattr reports "No such xattr" and
+no further action is needed.
