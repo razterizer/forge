@@ -262,7 +262,8 @@ cd path/to/project
 ```
 
 Forge builds executable, static-library, and dynamic-library projects with
-exact source paths. Libraries declare public headers under `include/`:
+exact source paths. Libraries declare public headers below `include/` or a
+declared project include root:
 
 ```toml
 [project]
@@ -277,10 +278,11 @@ public_headers = ["include/hello/hello.h"]
 include_dirs = ["vendor/imgui"]
 ```
 
-`include_dirs` adds private project-relative header search roots. `forge adopt`
-infers these roots when an include directive maps unambiguously to a header
-already in the project, including projects whose headers do not live under the
-conventional `include/` directory.
+`include_dirs` adds project-relative header search roots. A root containing a
+declared public header becomes part of the library's public interface; other
+roots remain private. `forge adopt` infers these roots when an include directive
+maps unambiguously to a header already in the project, including projects whose
+headers do not live under the conventional `include/` directory.
 
 Declare persistent preprocessor definitions for a legacy project target:
 
@@ -460,8 +462,20 @@ public_headers = ["include/hello/hello.h"]
 ```
 
 Forge generates and compiles one private validation translation unit per public
-header. These temporary sources remain under `.forge/generated/`; header-only
-boxes contain only the declared headers.
+header. When a library supports an aggregate umbrella header but its leaf
+headers are not standalone entry points, limit validation without omitting any
+packaged headers:
+
+```toml
+[sources]
+paths = []
+public_headers = ["src/example/detail.h", "src/example/example.hpp"]
+validation_headers = ["src/example/example.hpp"]
+include_dirs = ["src"]
+```
+
+These temporary sources remain under `.forge/generated/`; header-only boxes
+contain every declared public header beneath `include/`.
 
 Imported-library projects package existing vendor SDKs and precompiled
 artifacts without compiling them. They may depend on other Forge packages; the

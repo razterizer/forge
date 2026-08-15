@@ -1053,6 +1053,32 @@ namespace forge
         return true;
       };
 
+    const auto stage_public_header =
+      [&project_directory, &recipe, &staging_directory, &artifacts, &error](
+        const std::filesystem::path& header)
+      {
+        const auto include_path = public_header_include_path(
+          header,
+          recipe.include_directories
+        );
+
+        if (!include_path)
+        {
+          error << "forge: public header '" << header.generic_string()
+                << "' is not below a public include root\n";
+          return false;
+        }
+
+        return stage_artifact(
+          project_directory / header,
+          std::filesystem::path { "include" } / *include_path,
+          "public_header",
+          staging_directory,
+          artifacts,
+          error
+        );
+      };
+
     if (recipe.type == "executable")
     {
       if (!stage_artifact(
@@ -1086,14 +1112,7 @@ namespace forge
 
       for (const auto& header : recipe.public_headers)
       {
-        if (!stage_artifact(
-          project_directory / header,
-          header,
-          "public_header",
-          staging_directory,
-          artifacts,
-          error
-        ))
+        if (!stage_public_header(header))
         {
           return 2;
         }
@@ -1131,14 +1150,7 @@ namespace forge
 
       for (const auto& header : recipe.public_headers)
       {
-        if (!stage_artifact(
-          project_directory / header,
-          header,
-          "public_header",
-          staging_directory,
-          artifacts,
-          error
-        ))
+        if (!stage_public_header(header))
         {
           return 2;
         }
@@ -1151,14 +1163,7 @@ namespace forge
     {
       for (const auto& header : recipe.public_headers)
       {
-        if (!stage_artifact(
-          project_directory / header,
-          header,
-          "public_header",
-          staging_directory,
-          artifacts,
-          error
-        ))
+        if (!stage_public_header(header))
         {
           return 2;
         }

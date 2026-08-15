@@ -1050,27 +1050,61 @@ namespace forge
 
     if (visual_studio_project)
     {
-      if (!visual_studio_project->sources.empty())
+      const auto is_cmake_interface_library_with_subprojects =
+        visual_studio_project->format == "CMake"
+        && visual_studio_project->type == "header_only"
+        && visual_studio_project->has_cmake_subprojects;
+
+      if (is_cmake_interface_library_with_subprojects)
+      {
         sources = visual_studio_project->sources;
+        const auto scanned_headers = std::move(headers);
+        headers.clear();
 
-      if (!visual_studio_project->headers.empty())
-        headers = visual_studio_project->headers;
+        for (const auto& header : scanned_headers)
+        {
+          const auto path = std::filesystem::path { header };
+          const auto is_public = std::ranges::any_of(
+            visual_studio_project->include_directories,
+            [&path](const std::string& include_directory)
+            {
+              const auto relative = path.lexically_relative(include_directory);
+              return !relative.empty()
+                && relative.begin()->string() != "..";
+            }
+          );
 
-      public_headers.clear();
-      entry_points.clear();
+          if (is_public)
+            headers.push_back(header);
+        }
 
-      for (const auto& header : headers)
-      {
-        const auto path = std::filesystem::path { header };
-
-        if (!path.empty() && path.begin()->string() == "include")
-          public_headers.push_back(header);
+        public_headers = headers;
+        entry_points.clear();
       }
-
-      for (const auto& source : sources)
+      else
       {
-        if (contains_main_function(project_directory / source))
-          entry_points.push_back(source);
+        if (!visual_studio_project->sources.empty())
+          sources = visual_studio_project->sources;
+
+        if (!visual_studio_project->headers.empty())
+          headers = visual_studio_project->headers;
+
+        public_headers.clear();
+        entry_points.clear();
+
+        for (const auto& header : headers)
+        {
+          const auto path = std::filesystem::path { header };
+
+          if (!path.empty() && path.begin()->string() == "include")
+            public_headers.push_back(header);
+        }
+
+        for (const auto& source : sources)
+        {
+          if (contains_main_function(project_directory / source))
+            entry_points.push_back(source);
+        }
       }
     }
 
@@ -1223,6 +1257,34 @@ namespace forge
     const auto escaped_project_name = escape_toml_string(project_name);
     const auto formatted_sources = format_sources(sources);
     const auto formatted_include_directories = format_sources(include_directories);
+    std::vector<std::string> header_validation_headers;
+
+    if (visual_studio_project
+        && visual_studio_project->format == "CMake"
+        && visual_studio_project->type == "header_only"
+        && visual_studio_project->has_cmake_subprojects)
+    {
+      auto lowercase = [](std::string value)
+      {
+        std::ranges::transform(value, value.begin(), [](unsigned char character)
+        {
+          return static_cast<char>(std::tolower(character));
+        });
+        return value;
+      };
+      const auto project_stem = lowercase(visual_studio_project->name);
+
+      for (const auto& header : public_headers)
+      {
+        if (lowercase(std::filesystem::path { header }.stem().string()) == project_stem)
+        {
+          header_validation_headers.push_back(header);
+          break;
+        }
+      }
+    }
+
+    const auto formatted_header_validation_headers = format_sources(header_validation_headers);
     auto version_headers = infer_version_headers(project_directory, headers);
     bool initialize_version_header = explicit_version && version_headers.size() == 1;
 
@@ -1410,6 +1472,9 @@ namespace forge
 
       if (!public_headers.empty())
         recipe += "public_headers = " + formatted_headers + "\n";
+
+      if (!header_validation_headers.empty())
+        recipe += "validation_headers = " + formatted_header_validation_headers + "\n";
 
       if (!include_directories.empty())
         recipe += "include_dirs = " + formatted_include_directories + "\n";

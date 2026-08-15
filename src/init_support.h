@@ -18,6 +18,7 @@ namespace forge
     std::string name;
     std::string version;
     std::string type;
+    bool has_cmake_subprojects = false;
     int cpp_standard = 20;
     std::vector<std::string> sources;
     std::vector<std::string> headers;

@@ -1277,10 +1277,25 @@ namespace forge
         return false;
       }
 
-      for (std::size_t index = 0; index < recipe.public_headers.size(); ++index)
+      const auto& headers = recipe.header_validation_headers.empty()
+        ? recipe.public_headers
+        : recipe.header_validation_headers;
+
+      for (std::size_t index = 0; index < headers.size(); ++index)
       {
-        auto include_path = recipe.public_headers[index];
-        include_path = include_path.lexically_relative("include");
+        const auto include_path = public_header_include_path(
+          headers[index],
+          recipe.include_directories
+        );
+
+        if (!include_path)
+        {
+          error << "forge: public header '"
+                << headers[index].generic_string()
+                << "' is not below a public include root\n";
+          return false;
+        }
+
         std::ofstream source { directory / ("header-" + std::to_string(index) + ".cpp") };
 
         if (!source)
@@ -1289,10 +1304,27 @@ namespace forge
           return false;
         }
 
-        source << "#include <" << include_path.generic_string() << ">\n";
+        source << "#include <" << include_path->generic_string() << ">\n";
       }
 
       return true;
+    }
+
+    bool include_directory_publishes_headers(
+      const std::vector<std::filesystem::path>& headers,
+      const std::filesystem::path& include_directory)
+    {
+      return std::ranges::any_of(
+        headers,
+        [&include_directory](const std::filesystem::path& header)
+        {
+          const auto relative = header.lexically_relative(include_directory);
+          return !relative.empty()
+            && relative != "."
+            && !relative.is_absolute()
+            && relative.begin()->string() != "..";
+        }
+      );
     }
 
     void write_system_links(std::ostream& file,
@@ -1555,7 +1587,11 @@ namespace forge
         for (const auto& include_directory : target.include_directories)
         {
           const auto include_visibility =
-            target.type == "header_only" ? "INTERFACE" : "PRIVATE";
+            target.type == "header_only"
+              ? "INTERFACE"
+              : include_directory_publishes_headers(target.public_headers, include_directory)
+                ? "PUBLIC"
+                : "PRIVATE";
           file
             << "target_include_directories(" << target_name << ' ' << include_visibility << ' '
             << "\"${FORGE_PROJECT_ROOT}/"
@@ -1626,7 +1662,11 @@ namespace forge
       {
         file << "add_library(forge_project OBJECT\n";
 
-        for (std::size_t index = 0; index < recipe.public_headers.size(); ++index)
+        const auto& headers = recipe.header_validation_headers.empty()
+          ? recipe.public_headers
+          : recipe.header_validation_headers;
+
+        for (std::size_t index = 0; index < headers.size(); ++index)
         {
           file << "  \"${CMAKE_CURRENT_SOURCE_DIR}/header-validation/header-"
                << index << ".cpp\"\n";
@@ -1657,8 +1697,13 @@ namespace forge
 
       for (const auto& include_directory : recipe.include_directories)
       {
+        const auto include_visibility = include_directory_publishes_headers(
+          recipe.public_headers,
+          include_directory
+        ) ? "PUBLIC" : "PRIVATE";
         file
-          << "target_include_directories(forge_project PRIVATE \"${FORGE_PROJECT_ROOT}/"
+          << "target_include_directories(forge_project " << include_visibility
+          << " \"${FORGE_PROJECT_ROOT}/"
           << escape_cmake(include_directory.generic_string()) << "\")\n";
       }
 
@@ -3500,12 +3545,11 @@ namespace forge
       for (const auto& header : target.public_headers)
       {
         if (!is_resolved_project_path(project_directory, header)
-            || header.begin() == header.end()
-            || header.begin()->string() != "include"
+            || !public_header_include_path(header, target.include_directories)
             || !std::filesystem::is_regular_file(project_directory / header))
         {
           error << "forge: internal target public header '" << header.generic_string()
-                << "' must be a file under include/\n";
+                << "' must be a file below include/ or a declared include directory\n";
           return 2;
         }
       }
@@ -3583,16 +3627,27 @@ namespace forge
     for (const auto& header : recipe.public_headers)
     {
       if (!is_resolved_project_path(project_directory, header)
-          || header.begin() == header.end()
-          || header.begin()->string() != "include")
+          || !public_header_include_path(header, recipe.include_directories))
       {
-        error << "forge: public header paths must stay under include/\n";
+        error << "forge: public header paths must stay under include/ or a declared include directory\n";
         return 2;
       }
 
       if (!std::filesystem::is_regular_file(project_directory / header))
       {
         error << "forge: public header '" << header.generic_string() << "' does not exist\n";
+        return 2;
+      }
+    }
+
+    for (const auto& header : recipe.header_validation_headers)
+    {
+      if (!is_resolved_project_path(project_directory, header)
+          || !public_header_include_path(header, recipe.include_directories)
+          || !std::filesystem::is_regular_file(project_directory / header))
+      {
+        error << "forge: header validation header '" << header.generic_string()
+              << "' must be a public project header\n";
         return 2;
       }
     }
@@ -3777,9 +3832,12 @@ namespace forge
 
     if (recipe.type == "header_only")
     {
-      output << "Validated " << recipe.public_headers.size() << " public header";
+      const auto header_validation_count = recipe.header_validation_headers.empty()
+        ? recipe.public_headers.size()
+        : recipe.header_validation_headers.size();
+      output << "Validated " << header_validation_count << " public header";
 
-      if (recipe.public_headers.size() != 1)
+      if (header_validation_count != 1)
         output << 's';
 
       output << '\n';

@@ -166,6 +166,10 @@
         "public_headers": {
           "$ref": "#/$defs/publicHeaders"
         },
+        "validation_headers": {
+          "$ref": "#/$defs/projectPaths",
+          "description": "Public headers compiled for validation; defaults to every public header."
+        },
         "include_dirs": {
           "$ref": "#/$defs/projectPaths",
           "description": "Private project-relative include search directories."

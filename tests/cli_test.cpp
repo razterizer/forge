@@ -434,7 +434,7 @@ namespace
   void test_version()
   {
     constexpr std::array arguments { std::string_view { "--version" } };
-    constexpr std::string_view expected_version = "0.17.0+build.38";
+    constexpr std::string_view expected_version = "0.17.1+build.39";
     std::ostringstream output;
     std::ostringstream error;
 
@@ -1825,6 +1825,116 @@ namespace
       "a path dependency automatically selects the adopted library target: " + build_error.str()
     );
     expect(build_error.str().empty(), "adopted multi-target dependency build does not write an error");
+  }
+
+  void test_adopt_scopes_cmake_interface_library_to_public_headers()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "project(EnTT VERSION 3.16.0 LANGUAGES CXX)\n"
+      "add_library(EnTT INTERFACE)\n"
+      "target_compile_features(EnTT INTERFACE cxx_std_20)\n"
+      "target_include_directories(EnTT INTERFACE "
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)\n"
+      "add_subdirectory(testbed)\n"
+    );
+    write_file(
+      directory.path() / "src/entt/entt.hpp",
+      "#pragma once\n#include \"stl/algorithm.hpp\"\n"
+    );
+    write_file(
+      directory.path() / "src/entt/stl/algorithm.hpp",
+      "#pragma once\n"
+      "#if __has_include(<entt/ext/stl/algorithm.hpp>)\n"
+      "#include <entt/ext/stl/algorithm.hpp>\n"
+      "#else\n#include <algorithm>\n#endif\n"
+    );
+    write_file(
+      directory.path() / "src/entt/container/dense_map.hpp",
+      "#pragma once\n#include \"fwd.hpp\"\n"
+    );
+    write_file(directory.path() / "src/entt/container/fwd.hpp", "#pragma once\n");
+    write_file(directory.path() / "src/entt/core/fwd.hpp", "#pragma once\n");
+    write_file(
+      directory.path() / "testbed/CMakeLists.txt",
+      "add_executable(testbed application.cpp)\n"
+    );
+    write_file(
+      directory.path() / "testbed/application.cpp",
+      "#include <SDL3/SDL.h>\nint main() { return 0; }\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt handles a CMake interface library with optional subprojects"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "type = \"header_only\"")
+        && contains(recipe, "paths = []")
+        && contains(recipe, "public_headers = [\"src/entt/container/dense_map.hpp\"")
+        && contains(recipe, "validation_headers = [\"src/entt/entt.hpp\"]")
+        && contains(recipe, "include_dirs = [\"src\"]"),
+      "adopt scopes an interface library to its public CMake include root"
+    );
+    expect(
+      !contains(recipe, "testbed/application.cpp") && !contains(recipe, "[target.testbed]"),
+      "adopt excludes optional CMake subproject programs from the library recipe"
+    );
+    expect(
+      !contains(output.str(), "SDL3/SDL.h")
+        && !contains(output.str(), "entt/ext/stl/algorithm.hpp")
+        && !contains(output.str(), "skypjack/stl"),
+      "adopt ignores optional and direct local headers from excluded sources"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "scoped CMake interface library builds"
+    );
+    constexpr std::array box_arguments {
+      std::string_view { "box" },
+      std::string_view { "create" }
+    };
+    std::ostringstream box_output;
+    std::ostringstream box_error;
+    expect(
+      forge::cli::run(box_arguments, directory.path(), box_output, box_error) == 0,
+      "scoped CMake interface library creates a box"
+    );
+    std::filesystem::path box_path;
+
+    for (const auto& entry : std::filesystem::directory_iterator { directory.path() / ".forge/boxes" })
+    {
+      if (entry.path().extension() == ".cbox")
+        box_path = entry.path();
+    }
+
+    const auto box_path_string = box_path.string();
+    const std::array inspect_arguments {
+      std::string_view { "box" },
+      std::string_view { "inspect" },
+      std::string_view { box_path_string }
+    };
+    std::ostringstream inspect_output;
+    std::ostringstream inspect_error;
+    expect(
+      !box_path.empty()
+        && forge::cli::run(inspect_arguments, directory.path(), inspect_output, inspect_error) == 0
+        && contains(inspect_output.str(), "path = \"include/entt/entt.hpp\"")
+        && contains(inspect_output.str(), "path = \"include/entt/container/dense_map.hpp\""),
+      "source-root public headers are packaged beneath include/"
+    );
+    expect(error.str().empty(), "scoped CMake interface library adoption does not write an error");
+    expect(build_error.str().empty(), "scoped CMake interface library build does not write an error");
+    expect(box_error.str().empty(), "scoped CMake interface library boxing does not write an error");
+    expect(inspect_error.str().empty(), "scoped CMake interface library box inspection does not write an error");
   }
 
   void test_adopt_accepts_library_type_hint()
@@ -7626,6 +7736,7 @@ int main()
   test_adopt_imports_visual_studio_project();
   test_adopt_imports_cmake_project();
   test_adopt_preserves_cmake_interface_library_with_programs();
+  test_adopt_scopes_cmake_interface_library_to_public_headers();
   test_adopt_accepts_library_type_hint();
   test_adopt_explains_imported_library_hint_boundary();
   test_adopt_dependency_style_option();

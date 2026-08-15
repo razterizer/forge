@@ -205,6 +205,7 @@ namespace forge
   {
     std::ifstream file { path };
     std::vector<IncludedHeader> includes;
+    std::vector<std::optional<std::string>> optional_include_conditions;
     std::string line;
 
     while (std::getline(file, line))
@@ -223,26 +224,85 @@ namespace forge
 
       content.remove_prefix(directive);
 
-      if (!content.starts_with("include"))
+      const auto directive_end = content.find_first_of(" \t");
+      const auto directive_name = content.substr(0, directive_end);
+      const auto directive_value = directive_end == std::string_view::npos
+        ? std::string_view {}
+        : content.substr(directive_end + 1);
+      const auto optional_include = [](std::string_view value) -> std::optional<std::string>
+      {
+        constexpr std::string_view marker { "__has_include" };
+        const auto marker_position = value.find(marker);
+
+        if (marker_position == std::string_view::npos)
+          return std::nullopt;
+
+        const auto opening = value.find_first_of("<\"", marker_position + marker.size());
+
+        if (opening == std::string_view::npos)
+          return std::nullopt;
+
+        const auto closing = value.find(value[opening] == '<' ? '>' : '"', opening + 1);
+
+        if (closing == std::string_view::npos)
+          return std::nullopt;
+
+        return std::string { value.substr(opening + 1, closing - opening - 1) };
+      };
+
+      if (directive_name == "if" || directive_name == "ifdef" || directive_name == "ifndef")
+      {
+        optional_include_conditions.push_back(optional_include(directive_value));
+        continue;
+      }
+
+      if (directive_name == "elif")
+      {
+        if (!optional_include_conditions.empty())
+          optional_include_conditions.back() = optional_include(directive_value);
+
+        continue;
+      }
+
+      if (directive_name == "else")
+      {
+        if (!optional_include_conditions.empty())
+          optional_include_conditions.back().reset();
+
+        continue;
+      }
+
+      if (directive_name == "endif")
+      {
+        if (!optional_include_conditions.empty())
+          optional_include_conditions.pop_back();
+
+        continue;
+      }
+
+      if (directive_name != "include")
         continue;
 
-      content.remove_prefix(std::string_view { "include" }.size());
-      const auto delimiter = content.find_first_not_of(" \t");
+      const auto delimiter = directive_value.find_first_not_of(" \t");
 
       if (delimiter == std::string_view::npos
-          || (content[delimiter] != '<' && content[delimiter] != '"'))
+          || (directive_value[delimiter] != '<' && directive_value[delimiter] != '"'))
       {
         continue;
       }
 
-      const auto closing = content[delimiter] == '<' ? '>' : '"';
-      const auto end = content.find(closing, delimiter + 1);
+      const auto closing = directive_value[delimiter] == '<' ? '>' : '"';
+      const auto end = directive_value.find(closing, delimiter + 1);
 
       if (end != std::string_view::npos)
       {
-        auto include = std::string { content.substr(delimiter + 1, end - delimiter - 1) };
+        auto include = std::string { directive_value.substr(delimiter + 1, end - delimiter - 1) };
         std::replace(include.begin(), include.end(), '\\', '/');
-        includes.push_back({ std::move(include), content[delimiter] == '"' });
+
+        if (std::ranges::find(
+              optional_include_conditions,
+              std::optional<std::string> { include }) == optional_include_conditions.end())
+          includes.push_back({ std::move(include), directive_value[delimiter] == '"' });
       }
     }
 
@@ -260,10 +320,10 @@ namespace forge
         .generic_string();
 
     if (std::binary_search(headers.begin(), headers.end(), relative))
-      matches.insert(relative);
+      return relative;
 
     if (std::binary_search(headers.begin(), headers.end(), include))
-      matches.insert(include);
+      return include;
 
     const auto suffix = '/' + include;
 
@@ -965,10 +1025,13 @@ namespace forge
 
         const auto provides = std::ranges::any_of(
           target.public_headers,
-          [include](const std::filesystem::path& header)
+          [&target, include](const std::filesystem::path& header)
           {
-            const auto generic = header.generic_string();
-            return generic.starts_with("include/") && generic.substr(8) == include;
+            const auto include_path = public_header_include_path(
+              header,
+              target.include_directories
+            );
+            return include_path && include_path->generic_string() == include;
           }
         );
 
@@ -984,9 +1047,9 @@ namespace forge
 
     for (const auto& header : recipe.public_headers)
     {
-      const auto generic = header.generic_string();
+      const auto include_path = public_header_include_path(header, recipe.include_directories);
 
-      if (generic.starts_with("include/") && generic.substr(8) == include)
+      if (include_path && include_path->generic_string() == include)
         return recipe.name;
     }
 

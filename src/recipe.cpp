@@ -919,6 +919,8 @@ namespace forge
         valid = parse_sources(value, recipe.sources);
       else if (section == "sources" && key == "public_headers")
         valid = parse_sources(value, recipe.public_headers);
+      else if (section == "sources" && key == "validation_headers")
+        valid = parse_sources(value, recipe.header_validation_headers);
       else if (section == "sources" && key == "include_dirs")
         valid = parse_sources(value, recipe.include_directories);
       else if (section.starts_with("target."))
@@ -1431,6 +1433,7 @@ namespace forge
     recipe.cpp_standard = selected->cpp_standard;
     recipe.sources = selected->sources;
     recipe.public_headers = selected->public_headers;
+    recipe.header_validation_headers.clear();
     recipe.include_directories = selected->include_directories;
     recipe.macos_system_include_directories = selected->macos_system_include_directories;
     recipe.linux_system_include_directories = selected->linux_system_include_directories;

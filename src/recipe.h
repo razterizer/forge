@@ -138,6 +138,7 @@ namespace forge
     std::optional<int> build_number;
     std::vector<std::filesystem::path> sources;
     std::vector<std::filesystem::path> public_headers;
+    std::vector<std::filesystem::path> header_validation_headers;
     std::vector<std::filesystem::path> include_directories;
     std::vector<std::filesystem::path> macos_system_include_directories;
     std::vector<std::filesystem::path> linux_system_include_directories;
@@ -177,6 +178,41 @@ namespace forge
     std::vector<std::string> selected_internal_dependencies;
     std::optional<std::string> selected_target;
   };
+
+  // Returns the path a public header has from one of the package's public
+  // include roots.  Packages conventionally use include/, but CMake interface
+  // libraries such as EnTT legitimately publish headers directly from src/.
+  inline std::optional<std::filesystem::path> public_header_include_path(
+    const std::filesystem::path& header,
+    const std::vector<std::filesystem::path>& include_directories)
+  {
+    const auto path_below = [&header](const std::filesystem::path& root)
+      -> std::optional<std::filesystem::path>
+      {
+        const auto relative = header.lexically_relative(root);
+
+        if (relative.empty()
+            || relative == "."
+            || relative.is_absolute()
+            || relative.begin()->string() == "..")
+        {
+          return std::nullopt;
+        }
+
+        return relative;
+      };
+
+    if (const auto relative = path_below("include"))
+      return relative;
+
+    for (const auto& include_directory : include_directories)
+    {
+      if (const auto relative = path_below(include_directory))
+        return relative;
+    }
+
+    return std::nullopt;
+  }
 
   bool read_recipe(const std::filesystem::path& path,
                    Recipe& recipe,

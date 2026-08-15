@@ -1,5 +1,17 @@
 # Release notes
 
+## 0.17.1
+
+- Made `forge adopt` reliably adopt CMake interface libraries that publish
+  headers from source roots such as `src/`, while excluding optional CMake
+  subprojects and their unrelated dependencies.
+- Added public-header validation entry points. Header-only packages can keep
+  their complete installed header tree while validating an aggregate umbrella
+  header when individual leaf headers are not standalone entry points.
+- Made CMake project-source variables and optional `__has_include` branches
+  resolve without producing false dependency suggestions. Source-root headers
+  are packaged beneath the conventional `include/` directory in cboxes.
+
 ## 0.17.0
 
 - Added release-integrity validation before building or tagging: the current

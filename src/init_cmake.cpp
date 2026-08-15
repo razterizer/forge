@@ -161,7 +161,8 @@ namespace forge
     }
 
     std::string replace_cmake_paths(std::string value,
-                                    const std::filesystem::path& project_directory)
+                                    const std::filesystem::path& project_directory,
+                                    std::string_view project_name)
     {
       for (const auto variable : {
         std::string_view { "${CMAKE_CURRENT_SOURCE_DIR}" },
@@ -177,6 +178,19 @@ namespace forge
           value.replace(position, variable.size(), replacement);
           position += replacement.size();
         }
+      }
+
+      // CMake defines <PROJECT-NAME>_SOURCE_DIR alongside PROJECT_SOURCE_DIR.
+      // Projects commonly use this spelling in target include directories.
+      const auto project_source_directory =
+        "${" + std::string { project_name } + "_SOURCE_DIR}";
+      std::size_t position = 0;
+      const auto replacement = project_directory.generic_string();
+
+      while ((position = value.find(project_source_directory, position)) != std::string::npos)
+      {
+        value.replace(position, project_source_directory.size(), replacement);
+        position += replacement.size();
       }
 
       return value;
@@ -236,7 +250,9 @@ namespace forge
 
       for (const auto& command : cmake_commands(contents))
       {
-        if (command.name == "if" && !command.arguments.empty())
+        if (command.name == "add_subdirectory")
+          project.has_cmake_subprojects = true;
+        else if (command.name == "if" && !command.arguments.empty())
         {
           platform =
             command.arguments.front() == "APPLE" ? "macos"
@@ -345,7 +361,7 @@ namespace forge
               continue;
             }
 
-            const auto expanded = replace_cmake_paths(argument, directory);
+            const auto expanded = replace_cmake_paths(argument, directory, project.name);
 
             if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
               project.unresolved_properties.push_back(argument);
@@ -382,7 +398,7 @@ namespace forge
 
             const auto build_interface = cmake_build_interface_value(original_argument);
             const auto& argument = build_interface ? *build_interface : original_argument;
-            const auto expanded = replace_cmake_paths(argument, directory);
+            const auto expanded = replace_cmake_paths(argument, directory, project.name);
 
             if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
               project.unresolved_properties.push_back(original_argument);
