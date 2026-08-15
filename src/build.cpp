@@ -1468,13 +1468,50 @@ namespace forge
 #endif
       const auto root = manifest->parent_path();
       const auto installed = root / "vcpkg_installed" / triplet;
+      const auto vcpkg_root = root / ".forge" / "vcpkg";
+      const auto vcpkg_root_argument = "--vcpkg-root=" + vcpkg_root.generic_string();
 
       if (std::filesystem::is_directory(installed) || !::isatty(STDIN_FILENO))
         return true;
 
       std::ostringstream ignored_output;
 
-      if (process_runner({ "vcpkg", "version" }, root, ignored_output) != 0)
+      if (!std::filesystem::is_regular_file(vcpkg_root / "scripts" / "vcpkg-root"))
+      {
+        output << "forge: missing vcpkg ports tree\n"
+               << "Install provider with: git clone https://github.com/microsoft/vcpkg .forge/vcpkg ? [y/N] ";
+        std::string response;
+
+        if (!std::getline(std::cin, response)
+            || (response != "y" && response != "Y" && response != "yes" && response != "YES"))
+        {
+          error << "forge: vcpkg provider installation declined\n";
+          return false;
+        }
+
+        output << "Installing vcpkg provider...\n";
+
+        std::error_code filesystem_error;
+        std::filesystem::create_directories(vcpkg_root.parent_path(), filesystem_error);
+
+        if (filesystem_error)
+        {
+          error << "forge: could not create vcpkg provider directory\n";
+          return false;
+        }
+
+        if (process_runner(
+              { "git", "clone", "https://github.com/microsoft/vcpkg", vcpkg_root.generic_string() },
+              root,
+              error
+            ) != 0)
+        {
+          error << "forge: failed to install vcpkg ports tree\n";
+          return false;
+        }
+      }
+
+      if (process_runner({ "vcpkg", "version", vcpkg_root_argument }, root, ignored_output) != 0)
       {
         output << "forge: missing vcpkg provider\n"
                << "Install provider with: brew install vcpkg ? [y/N] ";
@@ -1507,9 +1544,13 @@ namespace forge
         return false;
       }
 
-      output << "Installing system provider...\n";
+      output << "Installing vcpkg dependencies...\n";
 
-      if (process_runner({ "vcpkg", "install", "--triplet=" + std::string { triplet } }, root, error) != 0)
+      std::vector<std::string> install_arguments { "vcpkg", "install" };
+      install_arguments.push_back(vcpkg_root_argument);
+      install_arguments.push_back("--triplet=" + std::string { triplet });
+
+      if (process_runner(install_arguments, root, error) != 0)
       {
         error << "forge: failed to install vcpkg dependencies\n";
         return false;
