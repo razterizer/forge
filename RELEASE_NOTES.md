@@ -1,5 +1,18 @@
 # Release notes
 
+## 0.17.3
+
+- Added `SHOWCASE.md`, a verified EnTT-to-cbox-to-EnTT-Pacman walkthrough
+  covering cbox consumption, SDL2 provider installation, and a legacy API
+  migration needed to run the game.
+- CMake adoption now selects the concrete target matching `project(...)` when
+  projects also define auxiliary header-only, C API, example, or test targets.
+  It retains only that target's sources and effective unconditional metadata,
+  including option-enabled source files.
+- Adopted CMake libraries can derive a semantic version from an exact packed
+  `<PROJECT>_VERSION` public-header macro, and known standard/platform headers
+  no longer become misleading dependency suggestions.
+
 ## 0.17.2
 
 - `forge adopt` now recognizes CMake `find_package(SDL2)` declarations and

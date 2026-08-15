@@ -434,7 +434,7 @@ namespace
   void test_version()
   {
     constexpr std::array arguments { std::string_view { "--version" } };
-    constexpr std::string_view expected_version = "0.17.2+build.40";
+    constexpr std::string_view expected_version = "0.17.3+build.41";
     std::ostringstream output;
     std::ostringstream error;
 
@@ -1746,6 +1746,83 @@ namespace
       "imported CMake project builds"
     );
     expect(build_error.str().empty(), "imported CMake build does not write an error");
+  }
+
+  void test_adopt_selects_named_cmake_library_target()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "project(FMT CXX)\n"
+      "option(FMT_OS \"Include OS-specific APIs.\" ON)\n"
+      "add_library(fmt src/format.cc)\n"
+      "target_compile_features(fmt PUBLIC cxx_std_11)\n"
+      "if(FMT_OS)\n"
+      "  target_sources(fmt PRIVATE src/os.cc)\n"
+      "else()\n"
+      "  target_compile_definitions(fmt PRIVATE FMT_OS=0)\n"
+      "endif()\n"
+      "add_library(fmt-header-only INTERFACE)\n"
+      "target_include_directories(fmt-header-only INTERFACE test/gtest)\n"
+      "target_compile_definitions(fmt-header-only INTERFACE FMT_HEADER_ONLY=1)\n"
+      "add_library(fmt-c src/fmt-c.cc)\n"
+      "target_compile_definitions(fmt-c PRIVATE FMT_LIB_EXPORT)\n"
+    );
+    write_file(
+      directory.path() / "include/fmt/base.h",
+      "#pragma once\n#define FMT_VERSION 120201\n"
+    );
+    write_file(
+      directory.path() / "include/fmt/format.h",
+      "#pragma once\nint format_answer();\n"
+    );
+    write_file(
+      directory.path() / "src/format.cc",
+      "#include <fmt/format.h>\nint format_answer() { return 40; }\n"
+    );
+    write_file(directory.path() / "src/os.cc", "int os_answer() { return 2; }\n");
+    write_file(directory.path() / "src/fmt-c.cc", "int c_answer() { return 3; }\n");
+    write_file(
+      directory.path() / "test/gtest/gtest.h",
+      "#include <absl/strings/string_view.h>\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt selects a CMake library matching the project name"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(contains(recipe, "version = \"12.2.1\""), "adopt derives a packed library version macro");
+    expect(
+      contains(recipe, "paths = [\"src/format.cc\", \"src/os.cc\"]")
+        && !contains(recipe, "src/fmt-c.cc"),
+      "adopt keeps sources owned by the selected CMake target"
+    );
+    expect(
+      !contains(recipe, "test/gtest")
+        && !contains(recipe, "FMT_HEADER_ONLY")
+        && !contains(recipe, "FMT_LIB_EXPORT")
+        && !contains(recipe, "FMT_OS=0"),
+      "adopt excludes auxiliary-target and inactive conditional CMake properties"
+    );
+    expect(
+      !contains(output.str(), "CMake targets require inferred Forge targets")
+        && !contains(output.str(), "absl/strings/string_view.h")
+        && !contains(output.str(), "unresolved dependency includes"),
+      "selected CMake target excludes auxiliary and known platform dependency suggestions"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "selected CMake library target builds"
+    );
+    expect(error.str().empty(), "selected CMake target adoption does not write an error");
+    expect(build_error.str().empty(), "selected CMake target build does not write an error");
   }
 
   void test_adopt_maps_cmake_system_package_providers()
@@ -7765,6 +7842,7 @@ int main()
   test_init_infers_local_include_directories();
   test_adopt_imports_visual_studio_project();
   test_adopt_imports_cmake_project();
+  test_adopt_selects_named_cmake_library_target();
   test_adopt_maps_cmake_system_package_providers();
   test_adopt_preserves_cmake_interface_library_with_programs();
   test_adopt_scopes_cmake_interface_library_to_public_headers();

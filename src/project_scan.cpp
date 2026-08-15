@@ -575,11 +575,13 @@ namespace forge
     bool looks_like_dependency_include(std::string_view include)
     {
       static const std::set<std::string_view> system_headers {
-        "assert.h", "complex.h", "conio.h", "ctype.h", "errno.h", "fenv.h", "float.h",
-        "inttypes.h", "limits.h", "locale.h", "math.h", "process.h", "setjmp.h",
+        "assert.h", "complex.h", "conio.h", "ctype.h", "errno.h", "fcntl.h", "fenv.h",
+        "float.h", "inttypes.h", "io.h", "ioLib.h", "limits.h", "locale.h", "math.h",
+        "process.h", "setjmp.h",
         "signal.h", "stdarg.h", "stdbool.h", "stddef.h", "stdint.h", "stdio.h",
         "stdlib.h", "string.h", "termios.h", "time.h", "uchar.h", "unistd.h", "wchar.h",
-        "wctype.h", "windows.h", "audioclient.h", "ksmedia.h", "mmdeviceapi.h",
+        "wctype.h", "windows.h", "cxxabi.h", "intrin.h", "winapifamily.h", "xlocale.h",
+        "audioclient.h", "ksmedia.h", "mmdeviceapi.h",
         "algorithm", "any", "array", "atomic", "barrier", "bit", "bitset",
         "cassert", "ccomplex", "cctype", "cerrno", "cfenv", "cfloat", "charconv",
         "chrono", "cinttypes", "ciso646", "climits", "clocale", "cmath",
@@ -587,9 +589,9 @@ namespace forge
         "coroutine", "csetjmp", "csignal", "cstdarg", "cstdbool", "cstddef",
         "cstdint", "cstdio", "cstdlib", "cstring", "ctgmath", "ctime", "cuchar",
         "cwchar", "cwctype", "deque",
-        "exception", "execution", "filesystem", "format", "forward_list",
+        "exception", "execution", "expected", "filesystem", "format", "forward_list",
         "fstream", "functional", "future", "initializer_list", "iomanip",
-        "ios", "iosfwd", "iostream", "istream", "iterator", "latch", "limits",
+        "ios", "iosfwd", "iostream", "istream", "iterator", "latch", "limits", "locale",
         "list", "map", "memory", "memory_resource", "mutex", "new", "numbers",
         "numeric", "optional", "ostream", "queue", "random", "ranges", "ratio",
         "regex", "scoped_allocator", "semaphore", "set", "shared_mutex",
@@ -597,7 +599,7 @@ namespace forge
         "streambuf", "string", "string_view", "syncstream", "system_error",
         "thread", "tuple", "type_traits", "typeindex", "typeinfo",
         "unordered_map", "unordered_set", "utility", "valarray", "variant",
-        "vector", "version"
+        "vector", "version", "ext/stdio_filebuf.h", "ext/stdio_sync_filebuf.h"
       };
 
       return

@@ -220,6 +220,20 @@ namespace forge
       return std::string { value.substr(prefix.size(), value.size() - prefix.size() - 1) };
     }
 
+    std::string lowercase(std::string value)
+    {
+      std::ranges::transform(value, value.begin(), [](unsigned char character)
+      {
+        return static_cast<char>(std::tolower(character));
+      });
+      return value;
+    }
+
+    bool cmake_option_value(std::string_view value)
+    {
+      return value == "ON" || value == "TRUE" || value == "YES" || value == "1";
+    }
+
   } // namespace
 
   std::optional<VisualStudioProject> read_cmake_project(
@@ -243,7 +257,116 @@ namespace forge
       project.format = "CMake";
       project.name = path.parent_path().filename().string();
       const auto directory = path.parent_path();
-      std::set<std::string> targets;
+      const auto commands = cmake_commands(contents);
+      int function_depth = 0;
+
+      for (const auto& command : commands)
+      {
+        if (command.name == "function" || command.name == "macro")
+        {
+          ++function_depth;
+          continue;
+        }
+
+        if (command.name == "endfunction" || command.name == "endmacro")
+        {
+          function_depth = std::max(0, function_depth - 1);
+          continue;
+        }
+
+        if (function_depth != 0)
+          continue;
+
+        if (command.name == "project" && !command.arguments.empty())
+        {
+          project.name = command.arguments.front();
+          break;
+        }
+      }
+
+      std::map<std::string, bool> options;
+      std::vector<CMakeCommand> declared_targets;
+      function_depth = 0;
+
+      for (const auto& command : commands)
+      {
+        if (command.name == "function" || command.name == "macro")
+        {
+          ++function_depth;
+          continue;
+        }
+
+        if (command.name == "endfunction" || command.name == "endmacro")
+        {
+          function_depth = std::max(0, function_depth - 1);
+          continue;
+        }
+
+        if (function_depth != 0)
+          continue;
+
+        if (command.name == "option" && command.arguments.size() > 2)
+          options[command.arguments.front()] = cmake_option_value(command.arguments.back());
+        else if (command.name == "add_executable" || command.name == "add_library")
+        {
+          if (command.arguments.empty()
+              || command.arguments.front().find('$') != std::string::npos
+              || (command.name == "add_library"
+                  && command.arguments.size() > 1
+                  && command.arguments[1] == "ALIAS"))
+          {
+            continue;
+          }
+
+          declared_targets.push_back(command);
+        }
+      }
+
+      const auto project_target = std::ranges::find_if(
+        declared_targets,
+        [&project](const CMakeCommand& command)
+        {
+          return lowercase(command.arguments.front()) == lowercase(project.name);
+        }
+      );
+      const auto selected_target = project_target != declared_targets.end()
+        ? std::optional<std::string> { project_target->arguments.front() }
+        : declared_targets.size() == 1
+        ? std::optional<std::string> { declared_targets.front().arguments.front() }
+        : std::optional<std::string> {};
+      const auto target_is_selected = [&selected_target](const CMakeCommand& command)
+      {
+        return !selected_target
+          || (!command.arguments.empty() && command.arguments.front() == *selected_target);
+      };
+      const auto target_type = [](const CMakeCommand& command)
+      {
+        if (command.name == "add_executable")
+          return std::string { "executable" };
+
+        if (command.arguments.size() > 1
+            && (command.arguments[1] == "SHARED" || command.arguments[1] == "MODULE"))
+        {
+          return std::string { "dynamic_library" };
+        }
+
+        return command.arguments.size() > 1 && command.arguments[1] == "INTERFACE"
+          ? std::string { "header_only" }
+          : std::string { "static_library" };
+      };
+
+      if (selected_target)
+      {
+        const auto selected = std::ranges::find_if(
+          declared_targets,
+          [&selected_target](const CMakeCommand& command)
+          {
+            return command.arguments.front() == *selected_target;
+          }
+        );
+        project.type = target_type(*selected);
+      }
+
       std::map<std::string, std::string> frameworks;
       std::map<std::string, std::string> pkg_config_targets;
       const auto add_known_system_package = [&project](std::string_view package)
@@ -258,36 +381,127 @@ namespace forge
         }
       };
       std::string platform;
-
-      for (const auto& command : cmake_commands(contents))
+      struct ConditionalScope
       {
-        if (command.name == "add_subdirectory")
-          project.has_cmake_subprojects = true;
-        else if (command.name == "if" && !command.arguments.empty())
+        bool parent_active;
+        bool branch_matched;
+      };
+      std::vector<ConditionalScope> conditional_scopes;
+      bool active = true;
+      function_depth = 0;
+
+      const auto condition_value = [&options](const std::vector<std::string>& arguments)
+      {
+        if (arguments.empty())
+          return false;
+
+        const auto negated = arguments.front() == "NOT";
+        if (negated && arguments.size() == 1)
+          return false;
+
+        const auto& name = arguments[negated ? 1 : 0];
+        const auto value = options.contains(name) && options.at(name);
+        return negated ? !value : value;
+      };
+      const auto add_target_path = [&project, &directory](std::string_view argument)
+      {
+        const auto expanded = replace_cmake_paths(std::string { argument }, directory, project.name);
+
+        if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
         {
-          platform =
-            command.arguments.front() == "APPLE" ? "macos"
-            : command.arguments.front() == "WIN32" ? "windows"
-            : command.arguments.front() == "UNIX" ? "linux"
-            : "";
+          project.unresolved_properties.push_back(std::string { argument });
+          return;
         }
-        else if (command.name == "elseif" && !command.arguments.empty())
+
+        const auto relative = project_relative_path(directory, expanded);
+
+        if (!relative)
+          return;
+
+        const auto extension = std::filesystem::path { *relative }.extension().string();
+
+        if (extension == ".cpp" || extension == ".cc" || extension == ".cxx")
+          project.sources.push_back(*relative);
+        else if (extension == ".h" || extension == ".hpp" || extension == ".hh")
+          project.headers.push_back(*relative);
+      };
+
+      for (const auto& command : commands)
+      {
+        if (command.name == "function" || command.name == "macro")
         {
+          ++function_depth;
+          continue;
+        }
+        else if (command.name == "endfunction" || command.name == "endmacro")
+        {
+          function_depth = std::max(0, function_depth - 1);
+          continue;
+        }
+
+        if (function_depth != 0)
+          continue;
+
+        if (command.name == "if")
+        {
+          const auto value = condition_value(command.arguments);
+          conditional_scopes.push_back({ active, value });
+          active = active && value;
           platform =
-            command.arguments.front() == "APPLE" ? "macos"
-            : command.arguments.front() == "WIN32" ? "windows"
-            : command.arguments.front() == "UNIX" ? "linux"
+            !command.arguments.empty() && command.arguments.front() == "APPLE" ? "macos"
+            : !command.arguments.empty() && command.arguments.front() == "WIN32" ? "windows"
+            : !command.arguments.empty() && command.arguments.front() == "UNIX" ? "linux"
             : "";
+          continue;
+        }
+        else if (command.name == "elseif")
+        {
+          if (!conditional_scopes.empty())
+          {
+            auto& scope = conditional_scopes.back();
+            const auto value = !scope.branch_matched && condition_value(command.arguments);
+            scope.branch_matched = scope.branch_matched || value;
+            active = scope.parent_active && value;
+          }
+          platform =
+            !command.arguments.empty() && command.arguments.front() == "APPLE" ? "macos"
+            : !command.arguments.empty() && command.arguments.front() == "WIN32" ? "windows"
+            : !command.arguments.empty() && command.arguments.front() == "UNIX" ? "linux"
+            : "";
+          continue;
+        }
+        else if (command.name == "else")
+        {
+          if (!conditional_scopes.empty())
+          {
+            auto& scope = conditional_scopes.back();
+            active = scope.parent_active && !scope.branch_matched;
+            scope.branch_matched = true;
+          }
+          continue;
         }
         else if (command.name == "endif")
+        {
+          if (!conditional_scopes.empty())
+          {
+            active = conditional_scopes.back().parent_active;
+            conditional_scopes.pop_back();
+          }
           platform.clear();
+          continue;
+        }
+
+        if (command.name == "add_subdirectory")
+          project.has_cmake_subprojects = true;
         else if (command.name == "find_library" && command.arguments.size() > 1)
           frameworks[command.arguments[0]] = command.arguments[1];
         else if (command.name == "find_package" && !command.arguments.empty())
           add_known_system_package(command.arguments.front());
         else if (command.name == "pkg_check_modules" && command.arguments.size() > 1)
           pkg_config_targets["PkgConfig::" + command.arguments[0]] = command.arguments.back();
-        else if (command.name == "target_link_libraries" && command.arguments.size() > 1)
+        else if (command.name == "target_link_libraries"
+                 && command.arguments.size() > 1
+                 && target_is_selected(command))
         {
           for (std::size_t index = 1; index < command.arguments.size(); ++index)
           {
@@ -343,20 +557,8 @@ namespace forge
             continue;
           }
 
-          targets.insert(command.arguments.front());
-
-          if (targets.size() == 1)
-          {
-            project.type = command.name == "add_executable" ? "executable" : "static_library";
-
-            if (command.name == "add_library" && command.arguments.size() > 1)
-            {
-              if (command.arguments[1] == "SHARED" || command.arguments[1] == "MODULE")
-                project.type = "dynamic_library";
-              else if (command.arguments[1] == "INTERFACE")
-                project.type = "header_only";
-            }
-          }
+          if (!target_is_selected(command) || !active)
+            continue;
 
           for (std::size_t index = 1; index < command.arguments.size(); ++index)
           {
@@ -374,22 +576,25 @@ namespace forge
               continue;
             }
 
-            const auto expanded = replace_cmake_paths(argument, directory, project.name);
-
-            if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
-              project.unresolved_properties.push_back(argument);
-            else if (const auto relative = project_relative_path(directory, expanded))
-            {
-              const auto extension = std::filesystem::path { *relative }.extension().string();
-
-              if (extension == ".cpp" || extension == ".cc" || extension == ".cxx")
-                project.sources.push_back(*relative);
-              else if (extension == ".h" || extension == ".hpp" || extension == ".hh")
-                project.headers.push_back(*relative);
-            }
+            add_target_path(argument);
           }
         }
-        else if (command.name == "target_compile_features" && command.arguments.size() > 1)
+        else if (command.name == "target_sources"
+                 && command.arguments.size() > 1
+                 && target_is_selected(command)
+                 && active)
+        {
+          for (std::size_t index = 1; index < command.arguments.size(); ++index)
+          {
+            const auto& argument = command.arguments[index];
+
+            if (!is_cmake_scope(argument))
+              add_target_path(argument);
+          }
+        }
+        else if (command.name == "target_compile_features"
+                 && command.arguments.size() > 1
+                 && target_is_selected(command))
         {
           for (const auto& argument : command.arguments)
           {
@@ -397,7 +602,9 @@ namespace forge
               project.cpp_standard = std::stoi(argument.substr(8));
           }
         }
-        else if (command.name == "target_include_directories" && command.arguments.size() > 1)
+        else if (command.name == "target_include_directories"
+                 && command.arguments.size() > 1
+                 && target_is_selected(command))
         {
           for (std::size_t index = 1; index < command.arguments.size(); ++index)
           {
@@ -419,7 +626,10 @@ namespace forge
               project.include_directories.push_back(*relative);
           }
         }
-        else if (command.name == "target_compile_definitions" && command.arguments.size() > 1)
+        else if (command.name == "target_compile_definitions"
+                 && command.arguments.size() > 1
+                 && target_is_selected(command)
+                 && active)
         {
           for (std::size_t index = 1; index < command.arguments.size(); ++index)
           {
@@ -433,11 +643,11 @@ namespace forge
         }
       }
 
-      if (targets.size() > 1)
+      if (!selected_target && declared_targets.size() > 1)
       {
         project.type.clear();
         project.unresolved_properties.push_back(
-          std::to_string(targets.size()) + " CMake targets require inferred Forge targets"
+          std::to_string(declared_targets.size()) + " CMake targets require inferred Forge targets"
         );
       }
 

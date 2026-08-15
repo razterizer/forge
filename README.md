@@ -236,7 +236,12 @@ When a project directory contains `CMakeLists.txt`, `forge adopt` imports
 concrete target sources, the project name and output type, C++ standard,
 include directories, and preprocessor definitions. Generator expressions,
 unexpanded variables, and ambiguous multi-target details are reported for
-manual review. CMake remains authoritative when generated Visual Studio
+manual review. When a concrete CMake target matches the `project(...)` name,
+adoption scopes metadata to that target rather than merging auxiliary example,
+test, header-only, or compatibility targets. A project that calculates its
+version from an exact packed `<PROJECT>_VERSION` public-header macro can use
+that value when CMake itself does not declare a version. CMake remains
+authoritative when generated Visual Studio
 solution, Visual Studio project, or Xcode project files are present. A
 top-level CMake project that defines only concrete `add_subdirectory(...)`
 projects becomes a Forge workspace.

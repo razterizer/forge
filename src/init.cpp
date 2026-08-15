@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <fstream>
 #include <iterator>
 #include <map>
@@ -346,6 +347,51 @@ namespace forge
 
       std::ranges::sort(candidates, {}, &VersionHeaderCandidate::path);
       return candidates;
+    }
+
+    std::optional<std::string> infer_packed_macro_version(
+      const std::filesystem::path& project_directory,
+      const std::vector<std::string>& headers,
+      std::string_view project_name)
+    {
+      static const std::regex definition {
+        R"regex(^\s*#\s*define\s+([A-Z_][A-Z0-9_]*)_VERSION\s+([0-9]+)\b)regex"
+      };
+      const auto expected_prefix = version_macro_prefix(project_name);
+
+      for (const auto& header : headers)
+      {
+        std::ifstream file { project_directory / header };
+        std::string line;
+
+        while (std::getline(file, line))
+        {
+          std::smatch match;
+
+          if (!std::regex_search(line, match, definition)
+              || match[1].str() != expected_prefix)
+          {
+            continue;
+          }
+
+          int packed = 0;
+          const auto value = match[2].str();
+          const auto parsed = std::from_chars(value.data(), value.data() + value.size(), packed);
+
+          if (parsed.ec != std::errc {}
+              || parsed.ptr != value.data() + value.size()
+              || packed < 10000)
+          {
+            continue;
+          }
+
+          return std::to_string(packed / 10000) + "."
+            + std::to_string((packed / 100) % 100) + "."
+            + std::to_string(packed % 100);
+        }
+      }
+
+      return std::nullopt;
     }
 
     std::vector<SiblingDependency> visual_studio_dependencies(
@@ -1117,8 +1163,30 @@ namespace forge
           if (contains_main_function(project_directory / source))
             entry_points.push_back(source);
         }
+        }
       }
-    }
+
+      if (visual_studio_project
+          && visual_studio_project->format == "CMake"
+          && !visual_studio_project->type.empty())
+      {
+        const auto is_test_path = [](const std::string& header)
+        {
+          const auto path = std::filesystem::path { header };
+
+          if (path.empty())
+            return false;
+
+          auto first = path.begin()->string();
+          std::ranges::transform(first, first.begin(), [](unsigned char character)
+          {
+            return static_cast<char>(std::tolower(character));
+          });
+          return first == "test" || first == "tests" || first == "testing";
+        };
+
+        std::erase_if(headers, is_test_path);
+      }
 
     runtime_headers.insert(runtime_headers.end(), headers.begin(), headers.end());
     std::ranges::sort(runtime_headers);
@@ -1243,7 +1311,7 @@ namespace forge
     const auto metadata_version =
       visual_studio_project && !visual_studio_project->version.empty()
         ? std::optional<std::string> { visual_studio_project->version }
-        : std::optional<std::string> {};
+        : infer_packed_macro_version(project_directory, headers, project_name);
     const auto project_version =
       explicit_version
         ? explicit_version->version
