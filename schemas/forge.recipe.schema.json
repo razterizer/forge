@@ -366,6 +366,10 @@
             },
             "uniqueItems": true,
             "description": "Optional platform targets that enable this dependency. Omit to use the dependency on every target."
+          },
+          "provides": {
+            "$ref": "#/$defs/linkNames",
+            "description": "System-provider capabilities supplied by this dependency. Selecting it replaces the matching manager-provided requirement."
           }
         },
         "oneOf": [

@@ -770,6 +770,75 @@ namespace
     );
   }
 
+  void test_local_dependency_replaces_selected_system_provider()
+  {
+    TemporaryDirectory directory;
+    const auto application = directory.path() / "application";
+    const auto spdlog = directory.path() / "spdlog";
+    std::filesystem::create_directories(application / "include/application");
+    std::filesystem::create_directories(spdlog / "include/spdlog");
+    std::ofstream { application / "include/application/application.h" } << "#pragma once\n";
+    std::ofstream { spdlog / "forge.recipe.toml" }
+      << "[project]\n"
+      << "name = \"spdlog\"\n"
+      << "version = \"1.0.0\"\n"
+      << "type = \"header_only\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = []\n"
+      << "public_headers = [\"include/spdlog/spdlog.h\"]\n";
+    std::ofstream { spdlog / "include/spdlog/spdlog.h" } << "#pragma once\n";
+    std::ofstream recipe { application / "forge.recipe.toml" };
+    recipe
+      << "[project]\n"
+      << "name = \"application\"\n"
+      << "version = \"1.0.0\"\n"
+      << "type = \"header_only\"\n"
+      << "cpp_std = 20\n\n"
+      << "[sources]\n"
+      << "paths = []\n"
+      << "public_headers = [\"include/application/application.h\"]\n\n"
+      << "[build]\n"
+      << "macos_libraries = [\"spdlog\"]\n"
+      << "macos_brew_packages = [\"fmt\", \"spdlog\"]\n"
+      << "linux_libraries = [\"spdlog\"]\n"
+      << "linux_apt_packages = [\"libfmt-dev\", \"libspdlog-dev\"]\n"
+      << "windows_libraries = [\"spdlog\"]\n"
+      << "\n[dependencies.style.local-source]\n"
+      << "spdlog = { path = \"../spdlog\", provides = [\"spdlog\"] }\n";
+    recipe.close();
+    forge::BuildOptions options;
+    options.style = "local-source";
+    std::ostringstream output;
+    std::ostringstream error;
+    std::map<std::filesystem::path, std::filesystem::path> archives;
+    const forge::ProcessRunner runner =
+      [&archives](const std::vector<std::string>& arguments,
+         const std::filesystem::path& working_directory,
+         std::ostream&)
+      {
+        if (arguments.size() > 2 && arguments[1] == "-E" && arguments[2] == "tar")
+          return fake_cmake_tar(arguments, working_directory, archives) ? 0 : 2;
+
+        return 0;
+      };
+
+    const auto result = forge::build_project(application, options, runner, output, error);
+    expect(
+      result == 0,
+      "local provider dependency builds without its package-manager requirement"
+    );
+    const auto generated = read_file(application / ".forge/generated/CMakeLists.txt");
+    expect(
+      !contains(generated, "find_library(FORGE_forge_project_MACOS_LIBRARY_0 spdlog)")
+        && !contains(generated, "brew --prefix \"spdlog\"")
+        && !contains(generated, "brew --prefix \"fmt\""),
+      "local spdlog provider suppresses its system libraries and provider packages"
+    );
+    expect(contains(output.str(), "Resolving dependency spdlog"), "local provider dependency is resolved");
+    expect(error.str().empty(), "local provider replacement is clean");
+  }
+
   void test_build_generates_named_target_system_package_hint_diagnostics()
   {
     TemporaryDirectory directory;
@@ -2409,6 +2478,7 @@ int main()
   test_dependency_style_validates_rule_shape();
   test_selector_recipe_keeps_legacy_workflow_profile();
   test_build_generates_system_package_hint_diagnostics();
+  test_local_dependency_replaces_selected_system_provider();
   test_build_generates_named_target_system_package_hint_diagnostics();
   test_build_skips_dependencies_filtered_to_other_targets();
   test_build_selects_named_target();

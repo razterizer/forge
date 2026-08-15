@@ -640,12 +640,15 @@ namespace forge
         const auto kind = trim(value.substr(0, equals));
         value = trim(value.substr(equals + 1));
 
-        if (kind == "targets" && dependency.targets.empty())
+        if ((kind == "targets" || kind == "provides")
+            && (kind == "targets" ? dependency.targets.empty() : dependency.provides.empty()))
         {
           const auto end = value.find(']');
 
+          auto& names = kind == "targets" ? dependency.targets : dependency.provides;
+
           if (end == std::string_view::npos
-              || !parse_names(value.substr(0, end + 1), dependency.targets))
+              || !parse_link_names(value.substr(0, end + 1), names))
           {
             return false;
           }

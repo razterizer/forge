@@ -32,6 +32,9 @@ namespace forge
     std::string variant;
     std::string resolved_target;
     std::vector<std::string> targets;
+    // Named system-provider capabilities supplied by this dependency. When
+    // selected, these replace the matching package-manager requirements.
+    std::vector<std::string> provides;
   };
 
   struct ImportProfile

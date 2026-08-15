@@ -631,6 +631,21 @@ Supported dependency styles mirror the existing dependency forms:
 `github-package`. Forge validates dependencies declared below an exact style
 selector against that form.
 
+A selected dependency can replace a CMake-adopted system provider. This makes
+it practical to switch a library such as spdlog between Homebrew and an
+adjacent Forge checkout without editing the generated system-link settings:
+
+```toml
+[dependencies.style.local-source]
+spdlog = { path = "../spdlog", provides = ["spdlog"] }
+```
+
+Use `forge build --style=local-source` (or set that style in `[defaults]`) to
+use the checkout. Without that selection, the recipe keeps using its declared
+package-manager provider. `provides` names the adopted provider capability;
+Forge removes the corresponding platform library and package-manager hints,
+including spdlog's `fmt` provider dependency.
+
 Legacy `[profile.<name>.dependencies]`, `[profile.<name>.build]`, and
 `--sysprofile` remain readable during CI migration. On recipes without selector
 rules, `--profile=<name>` retains its legacy combined-profile behavior.

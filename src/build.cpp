@@ -103,6 +103,62 @@ namespace forge
       return names;
     }
 
+    void erase_system_provider_values(std::vector<std::string>& values,
+                                      std::initializer_list<std::string_view> names)
+    {
+      std::erase_if(values, [&names](const std::string& value)
+      {
+        return std::ranges::find(names, value) != names.end();
+      });
+    }
+
+    void replace_system_provider_requirements(Recipe& recipe)
+    {
+      const auto erase = [&recipe](std::initializer_list<std::string_view> macos_libraries,
+                                   std::initializer_list<std::string_view> macos_brew_packages,
+                                   std::initializer_list<std::string_view> linux_libraries,
+                                   std::initializer_list<std::string_view> linux_apt_packages,
+                                   std::initializer_list<std::string_view> windows_libraries)
+      {
+        erase_system_provider_values(recipe.macos_libraries, macos_libraries);
+        erase_system_provider_values(recipe.macos_brew_packages, macos_brew_packages);
+        erase_system_provider_values(recipe.linux_libraries, linux_libraries);
+        erase_system_provider_values(recipe.linux_apt_packages, linux_apt_packages);
+        erase_system_provider_values(recipe.windows_libraries, windows_libraries);
+      };
+
+      for (const auto& dependency : recipe.dependencies)
+      {
+        for (const auto& capability : dependency.provides)
+        {
+          if (capability == "SDL2")
+            erase({ "SDL2" }, { "sdl2-compat" }, { "SDL2" }, { "libsdl2-dev" }, { "SDL2" });
+          else if (capability == "glfw" || capability == "glfw3")
+            erase({ "glfw" }, { "glfw" }, { "glfw" }, { "libglfw3-dev" }, { "glfw3" });
+          else if (capability == "EnTT" || capability == "entt")
+            erase({}, { "entt" }, {}, { "libentt-dev" }, {});
+          else if (capability == "glm")
+            erase({}, { "glm" }, {}, { "libglm-dev" }, {});
+          else if (capability == "yaml-cpp")
+            erase({ "yaml-cpp" }, { "yaml-cpp" }, { "yaml-cpp" }, { "libyaml-cpp-dev" }, { "yaml-cpp" });
+          else if (capability == "spdlog")
+            erase(
+              { "spdlog" },
+              { "fmt", "spdlog" },
+              { "spdlog" },
+              { "libfmt-dev", "libspdlog-dev" },
+              { "spdlog" }
+            );
+          else if (capability == "fmt")
+            erase({}, { "fmt" }, {}, { "libfmt-dev" }, {});
+          else if (capability == "nfd" || capability == "nativefiledialog-extended")
+            erase({ "nfd" }, { "nativefiledialog-extended" }, { "nfd" }, {}, { "nfd" });
+          else
+            erase({ capability }, { capability }, { capability }, { capability }, { capability });
+        }
+      }
+    }
+
     bool validate_selected_dependency_includes(
       const std::filesystem::path& project_directory,
       const Recipe& recipe,
@@ -2643,6 +2699,7 @@ namespace forge
                 {},
                 {},
                 {},
+                {},
                 {}
               }
             );
@@ -3619,6 +3676,8 @@ namespace forge
     {
       return 2;
     }
+
+    replace_system_provider_requirements(recipe);
 
     if (is_root_project)
     {
