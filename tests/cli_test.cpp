@@ -434,7 +434,7 @@ namespace
   void test_version()
   {
     constexpr std::array arguments { std::string_view { "--version" } };
-    constexpr std::string_view expected_version = "0.15.1+build.36";
+    constexpr std::string_view expected_version = "0.16.0+build.37";
     std::ostringstream output;
     std::ostringstream error;
 
@@ -5654,7 +5654,23 @@ namespace
   void test_imported_library_box_round_trip()
   {
     TemporaryDirectory directory;
+    const auto support = directory.path() / "support";
     const auto project = directory.path() / "vendor-sdk";
+    write_file(
+      support / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"support\"\n"
+      "version = \"1.0.0\"\n"
+      "type = \"header_only\"\n"
+      "cpp_std = 20\n\n"
+      "[sources]\n"
+      "paths = []\n"
+      "public_headers = [\"include/support/support.h\"]\n"
+    );
+    write_file(
+      support / "include/support/support.h",
+      "#pragma once\ninline int support() { return 42; }\n"
+    );
     write_file(
       project / "forge.recipe.toml",
       "[project]\n"
@@ -5669,7 +5685,9 @@ namespace
       "runtime = \"default\"\n"
       "public_headers = [\"vendor/include\"]\n"
       "static_libraries = [\"vendor/lib/sdk.a\"]\n"
-      "dynamic_libraries = [\"vendor/runtime/sdk.so\"]\n"
+      "dynamic_libraries = [\"vendor/runtime/sdk.so\"]\n\n"
+      "[dependencies]\n"
+      "support = { path = \"../support\" }\n"
     );
     write_file(project / "vendor/include/vendor/sdk.h", "int sdk();\n");
     write_file(project / "vendor/lib/sdk.a", "static library\n");
@@ -5699,7 +5717,23 @@ namespace
     }
 
     expect(!box.empty(), "imported-library box creation produces a cbox archive");
+    const auto extracted = directory.path() / box.stem();
     const auto box_string = box.string();
+    const std::array extract_arguments {
+      std::string_view { "box" },
+      std::string_view { "extract" },
+      std::string_view { box_string }
+    };
+    std::ostringstream extract_output;
+    std::ostringstream extract_error;
+    expect(
+      forge::cli::run(extract_arguments, directory.path(), extract_output, extract_error) == 0,
+      "imported-library box with dependencies extracts"
+    );
+    expect(
+      std::filesystem::exists(extracted / "dependencies/support.cbox"),
+      "imported-library box embeds its dependency box"
+    );
     const std::array verify_arguments {
       std::string_view { "box" },
       std::string_view { "verify" },
@@ -5714,6 +5748,7 @@ namespace
     );
     expect(contains(verify_output.str(), "Verified"), "imported-library verification reports success");
     expect(create_error.str().empty(), "imported-library box creation does not write an error");
+    expect(extract_error.str().empty(), "imported-library box extraction does not write an error");
     expect(verify_error.str().empty(), "imported-library verification does not write an error");
   }
 
@@ -5886,6 +5921,21 @@ namespace
       ),
       "build stages every imported dynamic-library runtime"
     );
+#ifdef _WIN32
+    expect(
+      std::filesystem::exists(
+        application / ".forge/deps/vendor-sdk/lib" / third_import_library.filename()
+      ),
+      "build installs the imported Windows import library"
+    );
+    expect(
+      contains(
+        read_file(application / ".forge/generated/CMakeLists.txt"),
+        "IMPORTED_IMPLIB"
+      ),
+      "build links an imported Windows DLL through its import library"
+    );
+#endif
     constexpr std::array release_arguments { std::string_view { "release" } };
     std::ostringstream release_output;
     std::ostringstream release_error;

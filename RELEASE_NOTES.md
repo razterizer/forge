@@ -1,5 +1,16 @@
 # Release notes
 
+## 0.16.0
+
+- Imported-library packages can now depend on and embed other Forge packages,
+  making vendor SDK dependency graphs reproducible.
+- Hardened the OpenAL-style platform-adapter workflow: header-only adapters can
+  carry target-filtered imported libraries while other hosts retain their
+  platform system-library requirements.
+- Preserved imported-library release-workflow skipping on hosts without a
+  matching import profile, and documented cross-target workflow-release lock
+  updates and Windows DLL/import-library packaging coverage.
+
 ## 0.15.1
 
 - Added `[release].unblock` for platform-specific executable unblocking

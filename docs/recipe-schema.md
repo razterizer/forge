@@ -178,6 +178,11 @@ version remains recorded metadata for inspection, but compatible hosted runners
 may move between patch or minor compiler releases without invalidating an
 otherwise matching imported-library box.
 
+Imported libraries may also use `[dependencies]` (including target-filtered
+dependencies). Forge resolves and embeds those cboxes without compiling the
+imported SDK itself. Header-only adapters may likewise select system OpenAL on
+macOS/Linux while declaring a target-filtered Windows imported OpenAL package.
+
 For projects built by Forge, `[project].cpp_std` tells Forge which C++ standard
 to use for the build. Forge then records that value as `[toolchain].cpp_std` in
 the compiled box so consumers can check binary compatibility. Imported-library

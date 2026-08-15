@@ -1169,12 +1169,6 @@ namespace forge
     }
     else if (recipe.type == "imported_library")
     {
-      if (!recipe.dependencies.empty())
-      {
-        error << "forge: imported_library dependencies are not supported yet\n";
-        return 2;
-      }
-
       const auto profile = std::find_if(
         recipe.imports.begin(),
         recipe.imports.end(),

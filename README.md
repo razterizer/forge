@@ -464,7 +464,10 @@ header. These temporary sources remain under `.forge/generated/`; header-only
 boxes contain only the declared headers.
 
 Imported-library projects package existing vendor SDKs and precompiled
-artifacts without compiling them:
+artifacts without compiling them. They may depend on other Forge packages; the
+resolved dependency boxes are embedded just like dependencies of source-built
+libraries. This is useful for a Windows-only vendor SDK such as OpenAL that
+ships alongside a portable support package:
 
 ```toml
 [project]
@@ -487,7 +490,7 @@ Each `[import.<os>-<arch>]` profile is target-specific. Header directory
 contents are mapped under `include/`; static and import libraries are mapped
 under `lib/`; dynamic-library runtimes are mapped under `runtime/`.
 `forge box create` packages the matching current-target profile without
-invoking a compiler.
+invoking a compiler, while still resolving and embedding its dependencies.
 
 Compiled boxes record the actual compiler, exact compiler version, C++ standard,
 build configuration, and standard-library/runtime ABI selected by CMake. Forge

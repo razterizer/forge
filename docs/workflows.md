@@ -196,6 +196,19 @@ matching Forge-managed marker.
 Bump the recipe version before publishing another release. Exceptional manual
 tag repair remains outside Forge's release workflow.
 
+Before running hosted releases, lock each workflow-only GitHub dependency for
+every hosted target. For example, a Windows-only imported OpenAL dependency in
+a header-only adapter is locked without cross-compiling it:
+
+```sh
+forge update 3rdparty_OpenAL --profile=workflow-release --target=windows-x86_64
+```
+
+Use `--release-targets` when the workflow profile has dependencies on the full
+Linux, macOS, and Windows matrix. The resulting target-specific entries coexist
+in `forge.lock.toml`; portable header-only boxes remain a single `target =
+"any"` entry. Commit that lockfile with the recipe before publishing.
+
 ## Remaining workflow roadmap
 
 1. Keep `[profile.workflow-release.dependencies]` as the reproducible place for

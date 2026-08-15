@@ -855,12 +855,6 @@ namespace forge
                                    std::ostream& output,
                                    std::ostream& error)
     {
-      if (!recipe.dependencies.empty())
-      {
-        error << "forge: imported_library dependencies are not supported yet\n";
-        return false;
-      }
-
       const auto profile = std::find_if(
         recipe.imports.begin(),
         recipe.imports.end(),
@@ -3539,10 +3533,18 @@ namespace forge
       return 2;
     }
 
-    if (recipe.type == "imported_library")
-      return validate_imported_project(project_directory, recipe, output, error) ? 0 : 2;
+    // Imported libraries do not have sources to compile, but they still own a
+    // dependency graph.  Resolve that graph below so it is recorded in the
+    // package and can be reproduced by consumers.
+    if (recipe.type == "imported_library"
+        && !validate_imported_project(project_directory, recipe, output, error))
+    {
+      return 2;
+    }
 
-    if (recipe.sources.empty() && recipe.type != "header_only")
+    if (recipe.sources.empty()
+        && recipe.type != "header_only"
+        && recipe.type != "imported_library")
     {
       error << "forge: recipe contains no source files\n";
       return 2;
@@ -3662,6 +3664,12 @@ namespace forge
       output << "Updated locked dependencies for " << dependency_target() << '\n';
       return 0;
     }
+
+    // Import profiles are prebuilt artifacts.  Their dependencies have now
+    // been resolved and retained under .forge/dependency-boxes for box
+    // creation, but there is no CMake project to configure or build.
+    if (recipe.type == "imported_library")
+      return 0;
 
     if (!stage_runtime_dependencies(build_directory / "runtime", dependencies, error))
       return 2;
