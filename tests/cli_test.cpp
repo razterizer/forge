@@ -3768,6 +3768,10 @@ namespace
       "int main() { std::cout << message() << answer() << \"\\\\n\"; }\n"
     );
     write_file(directory.path() / "Tests/unit_tests.cpp", "int main() {}\n");
+    write_file(
+      directory.path() / "RELEASE_NOTES.md",
+      "# Release notes\n\n## 0.1.0\n\n- Release.\n"
+    );
     constexpr std::array build_arguments {
       std::string_view { "build" },
       std::string_view { "examples" }
@@ -5400,6 +5404,10 @@ namespace
       "#include <hello/hello.h>\n"
       "int hello() { return 42; }\n"
     );
+    write_file(
+      project_directory / "RELEASE_NOTES.md",
+      "# Release notes\n\n## 1.0.0\n\n- Release.\n"
+    );
     constexpr std::array create_arguments {
       std::string_view { "box" },
       std::string_view { "create" }
@@ -5906,6 +5914,10 @@ namespace
       "#include <second/second.h>\n"
       "#include <third/third.h>\n"
       "int main() { return first() + second() + third() == 43 ? 0 : 1; }\n"
+    );
+    write_file(
+      application / "RELEASE_NOTES.md",
+      "# Release notes\n\n## 1.0.0\n\n- Release.\n"
     );
     constexpr std::array run_arguments { std::string_view { "build-and-run" } };
     std::ostringstream run_output;
@@ -7207,6 +7219,10 @@ namespace
       application / "main.cpp",
       "#include <greeting/greeting.h>\n"
       "int main() { return greeting() == 42 ? 0 : 1; }\n"
+    );
+    write_file(
+      application / "RELEASE_NOTES.md",
+      "# Release notes\n\n## 1.0.0\n\n- Release.\n"
     );
     constexpr std::array run_arguments { std::string_view { "build-and-run" } };
     std::ostringstream run_output;
