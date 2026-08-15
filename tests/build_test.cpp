@@ -839,6 +839,49 @@ namespace
     expect(error.str().empty(), "local provider replacement is clean");
   }
 
+  void test_build_uses_ancestor_vcpkg_manifest_paths()
+  {
+    TemporaryDirectory directory;
+    const auto application = directory.path() / "application";
+    write_header_only_project(application);
+    std::ofstream { directory.path() / "vcpkg.json" }
+      << "{\"name\":\"example\",\"version\":\"1.0.0\",\"dependencies\":[\"stb\"]}\n";
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&,
+         const std::filesystem::path&,
+         std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::build_project(application, runner, output, error) == 0,
+      "build accepts a vcpkg manifest inherited from its project root"
+    );
+    const auto generated = read_file(application / ".forge/generated/CMakeLists.txt");
+#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
+    constexpr auto triplet = "arm64-osx";
+#elif defined(__APPLE__)
+    constexpr auto triplet = "x64-osx";
+#elif defined(_WIN32)
+    constexpr auto triplet = "x64-windows";
+#elif defined(__aarch64__) || defined(__arm64__)
+    constexpr auto triplet = "arm64-linux";
+#else
+    constexpr auto triplet = "x64-linux";
+#endif
+    expect(
+      contains(
+        generated,
+        (directory.path() / "vcpkg_installed" / triplet / "include").generic_string()
+      ),
+      "generated CMake exposes the vcpkg manifest include directory"
+    );
+    expect(error.str().empty(), "vcpkg manifest path setup is clean");
+  }
+
   void test_build_generates_named_target_system_package_hint_diagnostics()
   {
     TemporaryDirectory directory;
@@ -2479,6 +2522,7 @@ int main()
   test_selector_recipe_keeps_legacy_workflow_profile();
   test_build_generates_system_package_hint_diagnostics();
   test_local_dependency_replaces_selected_system_provider();
+  test_build_uses_ancestor_vcpkg_manifest_paths();
   test_build_generates_named_target_system_package_hint_diagnostics();
   test_build_skips_dependencies_filtered_to_other_targets();
   test_build_selects_named_target();

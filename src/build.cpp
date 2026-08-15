@@ -1452,7 +1452,117 @@ namespace forge
 
       return true;
     }
+
+    bool ensure_vcpkg_manifest_dependencies(const std::optional<std::filesystem::path>& manifest,
+                                            const ProcessRunner& process_runner,
+                                            std::ostream& output,
+                                            std::ostream& error)
+    {
+      if (!manifest)
+        return true;
+
+#if defined(__aarch64__) || defined(__arm64__)
+      constexpr auto triplet = "arm64-osx";
+#else
+      constexpr auto triplet = "x64-osx";
 #endif
+      const auto root = manifest->parent_path();
+      const auto installed = root / "vcpkg_installed" / triplet;
+
+      if (std::filesystem::is_directory(installed) || !::isatty(STDIN_FILENO))
+        return true;
+
+      std::ostringstream ignored_output;
+
+      if (process_runner({ "vcpkg", "version" }, root, ignored_output) != 0)
+      {
+        output << "forge: missing vcpkg provider\n"
+               << "Install provider with: brew install vcpkg ? [y/N] ";
+        std::string response;
+
+        if (!std::getline(std::cin, response)
+            || (response != "y" && response != "Y" && response != "yes" && response != "YES"))
+        {
+          error << "forge: system provider installation declined\n";
+          return false;
+        }
+
+        output << "Installing system provider...\n";
+
+        if (process_runner({ "brew", "install", "vcpkg" }, root, error) != 0)
+        {
+          error << "forge: failed to install vcpkg\n";
+          return false;
+        }
+      }
+
+      output << "forge: missing vcpkg dependencies from " << manifest->string() << "\n"
+             << "Install provider with: vcpkg install --triplet=" << triplet << " ? [y/N] ";
+      std::string response;
+
+      if (!std::getline(std::cin, response)
+          || (response != "y" && response != "Y" && response != "yes" && response != "YES"))
+      {
+        error << "forge: system provider installation declined\n";
+        return false;
+      }
+
+      output << "Installing system provider...\n";
+
+      if (process_runner({ "vcpkg", "install", "--triplet=" + std::string { triplet } }, root, error) != 0)
+      {
+        error << "forge: failed to install vcpkg dependencies\n";
+        return false;
+      }
+
+      return true;
+    }
+#endif
+
+    std::optional<std::filesystem::path> find_vcpkg_manifest(
+      const std::filesystem::path& project_directory
+    )
+    {
+      std::error_code error;
+      auto directory = std::filesystem::weakly_canonical(project_directory, error);
+
+      if (error)
+        return std::nullopt;
+
+      while (true)
+      {
+        const auto manifest = directory / "vcpkg.json";
+
+        if (std::filesystem::is_regular_file(manifest))
+          return manifest;
+
+        if (std::filesystem::exists(directory / ".git"))
+          return std::nullopt;
+
+        const auto parent = directory.parent_path();
+
+        if (parent == directory)
+          return std::nullopt;
+
+        directory = parent;
+      }
+    }
+
+    std::filesystem::path vcpkg_installation_directory(const std::filesystem::path& manifest)
+    {
+#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
+      constexpr auto triplet = "arm64-osx";
+#elif defined(__APPLE__)
+      constexpr auto triplet = "x64-osx";
+#elif defined(_WIN32)
+      constexpr auto triplet = "x64-windows";
+#elif defined(__aarch64__) || defined(__arm64__)
+      constexpr auto triplet = "arm64-linux";
+#else
+      constexpr auto triplet = "x64-linux";
+#endif
+      return manifest.parent_path() / "vcpkg_installed" / triplet;
+    }
 
     void write_system_links(std::ostream& file,
                             std::string_view target,
@@ -1638,6 +1748,25 @@ namespace forge
       file << "endif()\n";
     }
 
+    void write_vcpkg_provider_paths(std::ostream& file,
+                                    std::string_view target,
+                                    std::string_view visibility,
+                                    const std::optional<std::filesystem::path>& manifest)
+    {
+      if (!manifest)
+        return;
+
+      const auto installation = vcpkg_installation_directory(*manifest);
+
+      file
+        << "if(EXISTS \"" << escape_cmake((installation / "include").generic_string()) << "\")\n"
+        << "  target_include_directories(" << target << " SYSTEM " << visibility << " \""
+        << escape_cmake((installation / "include").generic_string()) << "\")\n"
+        << "  target_link_directories(" << target << ' ' << visibility << " \""
+        << escape_cmake((installation / "lib").generic_string()) << "\")\n"
+        << "endif()\n";
+    }
+
     void write_system_library_directories(
       std::ostream& file,
       std::string_view target,
@@ -1669,7 +1798,8 @@ namespace forge
       write_group("WIN32", windows_library_directories);
     }
 
-    bool write_generated_cmake(const std::filesystem::path& path,
+    bool write_generated_cmake(const std::filesystem::path& project_directory,
+                               const std::filesystem::path& path,
                                const Recipe& recipe,
                                const std::vector<ResolvedDependency>& dependencies,
                                std::ostream& error)
@@ -1712,6 +1842,7 @@ namespace forge
         << "\"runtime = \\\"${FORGE_RUNTIME}\\\"\\n\")\n\n";
 
       std::map<std::string, std::string> internal_target_names;
+      const auto vcpkg_manifest = find_vcpkg_manifest(project_directory);
 
       for (std::size_t index = 0; index < recipe.internal_targets.size(); ++index)
       {
@@ -1772,6 +1903,12 @@ namespace forge
           target_name,
           target.type == "header_only" ? "INTERFACE" : "PRIVATE",
           target.macos_brew_packages
+        );
+        write_vcpkg_provider_paths(
+          file,
+          target_name,
+          target.type == "header_only" ? "INTERFACE" : "PRIVATE",
+          vcpkg_manifest
         );
 
         write_system_include_directories(
@@ -1889,6 +2026,7 @@ namespace forge
         "PRIVATE",
         recipe.macos_brew_packages
       );
+      write_vcpkg_provider_paths(file, "forge_project", "PRIVATE", vcpkg_manifest);
 
       write_system_include_directories(
         file,
@@ -3699,6 +3837,16 @@ namespace forge
     {
       return 2;
     }
+
+    if (!ensure_vcpkg_manifest_dependencies(
+          find_vcpkg_manifest(project_directory),
+          process_runner,
+          output,
+          error
+        ))
+    {
+      return 2;
+    }
 #endif
 
     for (const auto& target : recipe.internal_targets)
@@ -3967,6 +4115,7 @@ namespace forge
            error
          ))
         || !write_generated_cmake(
+          project_directory,
           generated_directory / "CMakeLists.txt",
           recipe,
           dependencies,
