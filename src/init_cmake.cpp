@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <fstream>
 #include <iterator>
 #include <map>
@@ -519,6 +520,20 @@ namespace forge
           }
 
           variables[command.arguments.front()] = std::move(values);
+
+          if (command.arguments.front() == "CMAKE_CXX_STANDARD"
+              && !variables[command.arguments.front()].empty())
+          {
+            const auto& standard = variables[command.arguments.front()].front();
+            const auto [end, error] = std::from_chars(
+              standard.data(),
+              standard.data() + standard.size(),
+              project.cpp_standard
+            );
+
+            if (error != std::errc {} || end != standard.data() + standard.size())
+              project.cpp_standard = 20;
+          }
         }
         else if (command.name == "list"
                  && command.arguments.size() > 2

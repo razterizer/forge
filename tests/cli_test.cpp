@@ -1841,7 +1841,8 @@ namespace
     constexpr std::array arguments { std::string_view { "adopt" } };
     write_file(
       directory.path() / "CMakeLists.txt",
-      "project(spdlog CXX)\nadd_library(spdlog src/spdlog.cpp)\n"
+      "project(spdlog CXX)\nset(CMAKE_CXX_STANDARD 11)\n"
+      "add_library(spdlog src/spdlog.cpp)\n"
     );
     write_file(directory.path() / "src/spdlog.cpp", "int answer() { return 42; }\n");
     write_file(
@@ -1857,8 +1858,9 @@ namespace
     );
     expect(
       contains(read_file(directory.path() / "forge.recipe.toml"), "version = \"1.17.0\"")
+        && contains(read_file(directory.path() / "forge.recipe.toml"), "cpp_std = 11")
         && error.str().empty(),
-      "adopt derives a semantic version from component version macros"
+      "adopt derives a semantic version and C++ standard from CMake metadata"
     );
   }
 
