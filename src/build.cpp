@@ -1470,9 +1470,25 @@ namespace forge
       const auto installed = root / "vcpkg_installed" / triplet;
       const auto vcpkg_root = root / ".forge" / "vcpkg";
       const auto vcpkg_root_argument = "--vcpkg-root=" + vcpkg_root.generic_string();
+      const auto completion_marker = root / ".forge" / ("vcpkg-manifest-" + std::string { triplet } + ".sha256");
 
-      if (std::filesystem::is_directory(installed) || !::isatty(STDIN_FILENO))
+      if (!::isatty(STDIN_FILENO))
         return true;
+
+      std::string manifest_checksum;
+
+      if (!sha256_file(*manifest, manifest_checksum, error))
+        return false;
+
+      std::ifstream completion_file { completion_marker };
+      std::string completed_checksum;
+
+      if (std::getline(completion_file, completed_checksum)
+          && completed_checksum == manifest_checksum
+          && std::filesystem::is_directory(installed / "include"))
+      {
+        return true;
+      }
 
       std::ostringstream ignored_output;
 
@@ -1577,6 +1593,16 @@ namespace forge
         error << "forge: failed to install vcpkg dependencies\n";
         return false;
       }
+
+      std::ofstream marker { completion_marker };
+
+      if (!marker)
+      {
+        error << "forge: could not write vcpkg dependency completion marker\n";
+        return false;
+      }
+
+      marker << manifest_checksum << '\n';
 
       return true;
     }
