@@ -1533,6 +1533,28 @@ namespace forge
         }
       }
 
+      if (process_runner({ "brew", "list", "--versions", "pkg-config" }, root, ignored_output) != 0)
+      {
+        output << "forge: missing vcpkg host tool pkg-config\n"
+               << "Install provider with: brew install pkg-config ? [y/N] ";
+        std::string response;
+
+        if (!std::getline(std::cin, response)
+            || (response != "y" && response != "Y" && response != "yes" && response != "YES"))
+        {
+          error << "forge: vcpkg host tool installation declined\n";
+          return false;
+        }
+
+        output << "Installing vcpkg host tool...\n";
+
+        if (process_runner({ "brew", "install", "pkg-config" }, root, error) != 0)
+        {
+          error << "forge: failed to install vcpkg host tool pkg-config\n";
+          return false;
+        }
+      }
+
       output << "forge: missing vcpkg dependencies from " << manifest->string() << "\n"
              << "Install provider with: vcpkg install --triplet=" << triplet << " ? [y/N] ";
       std::string response;
