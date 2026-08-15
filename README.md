@@ -29,6 +29,13 @@ Studio solution while keeping each `forge.recipe.toml` authoritative.
 
 Forge is currently in the design and prototyping phase.
 
+## Showcase
+
+[Package EnTT and run EnTT-Pacman](SHOWCASE.md) is a verified end-to-end
+walkthrough: adopt an existing header-only CMake library, create a cbox,
+consume it from a game, install its declared SDL2 provider with confirmation,
+and run the result.
+
 ## Motivation
 
 Modern C++ projects often require significant amounts of glue:
