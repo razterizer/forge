@@ -23,6 +23,7 @@ namespace forge
     std::vector<std::string> sources;
     std::vector<std::string> headers;
     std::vector<std::string> include_directories;
+    std::vector<std::string> public_include_directories;
     std::vector<std::string> definitions;
     std::vector<std::string> macos_frameworks;
     std::vector<std::string> macos_libraries;

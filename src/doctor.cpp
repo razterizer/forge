@@ -386,6 +386,15 @@ namespace forge
         }
       }
 
+      for (const auto& rule : recipe.dependency_rules)
+      {
+        for (const auto& dependency : rule.dependencies)
+        {
+          if (declared(dependency))
+            return true;
+        }
+      }
+
       return false;
     }
 

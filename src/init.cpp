@@ -1192,7 +1192,18 @@ namespace forge
         {
           const auto path = std::filesystem::path { header };
 
-          if (!path.empty() && path.begin()->string() == "include")
+          const auto is_cmake_public_header =
+            visual_studio_project->format == "CMake"
+            && std::ranges::any_of(
+              visual_studio_project->public_include_directories,
+              [&path](const std::string& include_directory)
+              {
+                const auto relative = path.lexically_relative(include_directory);
+                return !relative.empty() && relative.begin()->string() != "..";
+              }
+            );
+
+          if ((!path.empty() && path.begin()->string() == "include") || is_cmake_public_header)
             public_headers.push_back(header);
         }
 

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <functional>
 #include <fstream>
 #include <iterator>
 #include <map>
@@ -216,10 +217,16 @@ namespace forge
     {
       constexpr std::string_view prefix { "$<BUILD_INTERFACE:" };
 
-      if (!value.starts_with(prefix) || !value.ends_with('>'))
+      if (!value.starts_with(prefix))
         return std::nullopt;
 
-      return std::string { value.substr(prefix.size(), value.size() - prefix.size() - 1) };
+      const auto closing = value.find('>', prefix.size());
+
+      if (closing == std::string_view::npos)
+        return std::nullopt;
+
+      return std::string { value.substr(prefix.size(), closing - prefix.size()) }
+        + std::string { value.substr(closing + 1) };
     }
 
     std::string lowercase(std::string value)
@@ -234,6 +241,127 @@ namespace forge
     bool cmake_option_value(std::string_view value)
     {
       return value == "ON" || value == "TRUE" || value == "YES" || value == "1";
+    }
+
+    bool cmake_variable_value(std::string_view value)
+    {
+      const auto normalized = lowercase(std::string { value });
+      return !normalized.empty()
+        && normalized != "off"
+        && normalized != "false"
+        && normalized != "no"
+        && normalized != "0"
+        && normalized != "ignore"
+        && !normalized.ends_with("-notfound");
+    }
+
+    std::vector<std::string> cmake_condition_tokens(const std::vector<std::string>& arguments)
+    {
+      std::vector<std::string> tokens;
+
+      for (const auto& argument : arguments)
+      {
+        std::string token;
+
+        for (const auto character : argument)
+        {
+          if (character == '(' || character == ')')
+          {
+            if (!token.empty())
+            {
+              tokens.push_back(std::move(token));
+              token.clear();
+            }
+
+            tokens.emplace_back(1, character);
+          }
+          else
+            token += character;
+        }
+
+        if (!token.empty())
+          tokens.push_back(std::move(token));
+      }
+
+      return tokens;
+    }
+
+    bool cmake_glob_match(std::string_view value, std::string_view pattern)
+    {
+      std::string expression { "^" };
+
+      for (const auto character : pattern)
+      {
+        if (character == '*')
+          expression += ".*";
+        else if (character == '?')
+          expression += '.';
+        else
+        {
+          if (std::string_view { R"(\\.^$|()[]{}+)" }.find(character) != std::string_view::npos)
+            expression += '\\';
+
+          expression += character;
+        }
+      }
+
+      expression += '$';
+      return std::regex_match(value.begin(), value.end(), std::regex { expression });
+    }
+
+    std::vector<std::string> cmake_glob_paths(const std::filesystem::path& directory,
+                                              std::string pattern,
+                                              bool recursive,
+                                              std::string_view project_name)
+    {
+      pattern = replace_cmake_paths(std::move(pattern), directory, project_name);
+      const auto path = std::filesystem::path { pattern };
+      const auto root = path.is_absolute() ? path.parent_path() : directory / path.parent_path();
+      const auto name = path.filename().string();
+      std::vector<std::string> result;
+      std::error_code error;
+
+      const auto add = [&directory, &name, &result](const std::filesystem::directory_entry& entry)
+      {
+        std::error_code entry_error;
+
+        if (!entry.is_regular_file(entry_error) || !cmake_glob_match(entry.path().filename().string(), name))
+          return;
+
+        if (const auto relative = project_relative_path(directory, entry.path()))
+          result.push_back(*relative);
+      };
+
+      if (recursive)
+      {
+        for (std::filesystem::recursive_directory_iterator iterator {
+               root,
+               std::filesystem::directory_options::skip_permission_denied,
+               error
+             }, end;
+             !error && iterator != end;
+             iterator.increment(error))
+        {
+          add(*iterator);
+        }
+      }
+      else
+      {
+        for (std::filesystem::directory_iterator iterator {
+               root,
+               std::filesystem::directory_options::skip_permission_denied,
+               error
+             }, end;
+             !error && iterator != end;
+             iterator.increment(error))
+        {
+          add(*iterator);
+        }
+      }
+
+      std::ranges::sort(result);
+      result.erase(std::unique(result.begin(), result.end()), result.end());
+      return result;
     }
 
   } // namespace
@@ -392,19 +520,141 @@ namespace forge
       bool active = true;
       function_depth = 0;
       std::map<std::string, std::vector<std::string>> variables;
+      std::map<std::string, std::vector<std::string>> foreach_values;
+      std::map<std::string, std::string> foreach_find_patterns;
 
-      const auto condition_value = [&options](const std::vector<std::string>& arguments)
+      const auto condition_value = [&options, &variables, &foreach_find_patterns](
+        const std::vector<std::string>& arguments
+      )
       {
-        if (arguments.empty())
-          return false;
+        const auto tokens = cmake_condition_tokens(arguments);
+        std::size_t position = 0;
 
-        const auto negated = arguments.front() == "NOT";
-        if (negated && arguments.size() == 1)
-          return false;
+        const auto variable = [&options, &variables](std::string_view name)
+        {
+          if (name == "APPLE")
+          {
+#if defined(__APPLE__)
+            return true;
+#else
+            return false;
+#endif
+          }
 
-        const auto& name = arguments[negated ? 1 : 0];
-        const auto value = options.contains(name) && options.at(name);
-        return negated ? !value : value;
+          if (name == "WIN32")
+          {
+#if defined(_WIN32)
+            return true;
+#else
+            return false;
+#endif
+          }
+
+          if (name == "UNIX")
+          {
+#if defined(__unix__) || defined(__APPLE__)
+            return true;
+#else
+            return false;
+#endif
+          }
+
+          if (name == "ON" || name == "TRUE" || name == "YES" || name == "1")
+            return true;
+
+          if (name == "OFF" || name == "FALSE" || name == "NO" || name == "0")
+            return false;
+
+          if (options.contains(std::string { name }))
+            return options.at(std::string { name });
+
+          if (variables.contains(std::string { name }) && !variables.at(std::string { name }).empty())
+            return cmake_variable_value(variables.at(std::string { name }).front());
+
+          return false;
+        };
+        std::function<bool()> expression;
+        std::function<bool()> conjunction;
+        std::function<bool()> unary;
+        unary = [&]()
+        {
+          if (position >= tokens.size())
+            return false;
+
+          if (tokens[position] == "NOT")
+          {
+            ++position;
+            return !unary();
+          }
+
+          if (tokens[position] == "(")
+          {
+            ++position;
+            const auto value = expression();
+
+            if (position < tokens.size() && tokens[position] == ")")
+              ++position;
+
+            return value;
+          }
+
+          if (tokens[position] == "DEFINED")
+          {
+            ++position;
+
+            if (position >= tokens.size())
+              return false;
+
+            const auto& name = tokens[position++];
+            return options.contains(name) || variables.contains(name);
+          }
+
+          const auto find_result = [](std::string_view name)
+          {
+            if (name.starts_with("${") && name.ends_with('}'))
+              return std::string { name.substr(2, name.size() - 3) };
+
+            return std::string { name };
+          };
+          const auto name = find_result(tokens[position]);
+
+          if (foreach_find_patterns.contains(name)
+              && position + 2 < tokens.size()
+              && tokens[position + 1] == "EQUAL"
+              && tokens[position + 2] == "-1")
+          {
+            position += 3;
+            return false;
+          }
+
+          return variable(tokens[position++]);
+        };
+        conjunction = [&]()
+        {
+          auto value = unary();
+
+          while (position < tokens.size() && tokens[position] == "AND")
+          {
+            ++position;
+            value = unary() && value;
+          }
+
+          return value;
+        };
+        expression = [&]()
+        {
+          auto value = conjunction();
+
+          while (position < tokens.size() && tokens[position] == "OR")
+          {
+            ++position;
+            value = conjunction() || value;
+          }
+
+          return value;
+        };
+
+        return expression();
       };
       const auto expand_argument = [&variables](std::string_view argument)
       {
@@ -535,6 +785,105 @@ namespace forge
               project.cpp_standard = 20;
           }
         }
+        else if (command.name == "foreach" && command.arguments.size() > 1 && active)
+        {
+          auto& values = foreach_values[command.arguments.front()];
+          values.clear();
+
+          for (std::size_t index = 1; index < command.arguments.size(); ++index)
+          {
+            const auto expanded = expand_argument(command.arguments[index]);
+            values.insert(values.end(), expanded.begin(), expanded.end());
+          }
+        }
+        else if (command.name == "endforeach")
+        {
+          if (!command.arguments.empty())
+          {
+            foreach_values.erase(command.arguments.front());
+            foreach_find_patterns.erase(command.arguments.front());
+          }
+          else
+          {
+            foreach_values.clear();
+            foreach_find_patterns.clear();
+          }
+        }
+        else if (command.name == "string"
+                 && command.arguments.size() > 3
+                 && command.arguments.front() == "FIND"
+                 && active)
+        {
+          const auto& haystack = command.arguments[1];
+
+          if (haystack.starts_with("${") && haystack.ends_with('}'))
+          {
+            const auto variable = haystack.substr(2, haystack.size() - 3);
+
+            if (foreach_values.contains(variable))
+            {
+              const auto patterns = expand_argument(command.arguments[2]);
+
+              if (!patterns.empty())
+                foreach_find_patterns[command.arguments[3]] = patterns.front();
+            }
+          }
+        }
+        else if (command.name == "list"
+                 && command.arguments.size() > 2
+                 && command.arguments.front() == "REMOVE_ITEM"
+                 && active)
+        {
+          auto& values = variables[command.arguments[1]];
+
+          for (std::size_t index = 2; index < command.arguments.size(); ++index)
+          {
+            const auto& item = command.arguments[index];
+
+            if (!item.starts_with("${") || !item.ends_with('}'))
+              continue;
+
+            const auto variable = item.substr(2, item.size() - 3);
+
+            if (!foreach_values.contains(variable) || foreach_find_patterns.empty())
+              continue;
+
+            for (const auto& [result, pattern] : foreach_find_patterns)
+            {
+              (void)result;
+              std::erase_if(values, [&pattern](const std::string& value)
+              {
+                return value.find(pattern) != std::string::npos;
+              });
+            }
+          }
+        }
+        else if (command.name == "file"
+                 && command.arguments.size() > 2
+                 && active
+                 && (command.arguments.front() == "GLOB"
+                     || command.arguments.front() == "GLOB_RECURSE"))
+        {
+          const auto recursive = command.arguments.front() == "GLOB_RECURSE";
+          auto index = std::size_t { 2 };
+
+          if (index < command.arguments.size() && command.arguments[index] == "CONFIGURE_DEPENDS")
+            ++index;
+
+          auto& values = variables[command.arguments[1]];
+
+          for (; index < command.arguments.size(); ++index)
+          {
+            for (const auto& pattern : expand_argument(command.arguments[index]))
+            {
+              const auto paths = cmake_glob_paths(directory, pattern, recursive, project.name);
+              values.insert(values.end(), paths.begin(), paths.end());
+            }
+          }
+
+          std::ranges::sort(values);
+          values.erase(std::unique(values.begin(), values.end()), values.end());
+        }
         else if (command.name == "list"
                  && command.arguments.size() > 2
                  && command.arguments[0] == "APPEND"
@@ -566,6 +915,16 @@ namespace forge
 
             if (is_cmake_scope(argument))
               continue;
+
+            if (platform == "macos" && argument.starts_with("-framework "))
+            {
+              const auto framework = argument.substr(std::string_view { "-framework " }.size());
+
+              if (!framework.empty())
+                project.macos_frameworks.push_back(framework);
+
+              continue;
+            }
 
             if (argument.starts_with("${") && argument.ends_with('}'))
             {
@@ -669,12 +1028,20 @@ namespace forge
                  && command.arguments.size() > 1
                  && target_is_selected(command))
         {
+          bool public_include_directory = false;
+
           for (std::size_t index = 1; index < command.arguments.size(); ++index)
           {
             const auto& original_argument = command.arguments[index];
 
-            if (is_cmake_scope(original_argument)
-                || original_argument.starts_with("$<INSTALL_INTERFACE:"))
+            if (is_cmake_scope(original_argument))
+            {
+              public_include_directory = original_argument == "PUBLIC"
+                || original_argument == "INTERFACE";
+              continue;
+            }
+
+            if (original_argument.starts_with("$<INSTALL_INTERFACE:"))
             {
               continue;
             }
@@ -689,7 +1056,12 @@ namespace forge
               if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
                 project.unresolved_properties.push_back(original_argument);
               else if (const auto relative = project_relative_path(directory, expanded))
+              {
                 project.include_directories.push_back(*relative);
+
+                if (public_include_directory)
+                  project.public_include_directories.push_back(*relative);
+              }
             }
           }
         }
@@ -722,6 +1094,7 @@ namespace forge
         &project.sources,
         &project.headers,
         &project.include_directories,
+        &project.public_include_directories,
         &project.definitions,
         &project.macos_frameworks,
         &project.macos_libraries,

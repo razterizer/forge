@@ -1864,6 +1864,85 @@ namespace
     );
   }
 
+  void test_adopt_expands_active_cmake_source_globs()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "project(PlatformLibrary CXX)\n"
+      "set(CMAKE_CXX_STANDARD 20)\n"
+      "if(APPLE)\n"
+      "  set(EXCLUDED_SOURCE_DIRECTORY /excluded/)\n"
+      "  file(GLOB_RECURSE PLATFORM_SOURCES CONFIGURE_DEPENDS src/common/*.cpp src/macos/*.cpp src/excluded/*.cpp)\n"
+      "elseif(WIN32)\n"
+      "  file(GLOB_RECURSE PLATFORM_SOURCES src/common/*.cpp src/windows/*.cpp)\n"
+      "else()\n"
+      "  file(GLOB_RECURSE PLATFORM_SOURCES src/common/*.cpp src/linux/*.cpp)\n"
+      "endif()\n"
+      "foreach(SOURCE_PATH ${PLATFORM_SOURCES})\n"
+      "  string(FIND ${SOURCE_PATH} ${EXCLUDED_SOURCE_DIRECTORY} EXCLUDED_SOURCE)\n"
+      "  if(NOT ${EXCLUDED_SOURCE} EQUAL -1)\n"
+      "    list(REMOVE_ITEM PLATFORM_SOURCES ${SOURCE_PATH})\n"
+      "  endif()\n"
+      "endforeach(SOURCE_PATH)\n"
+      "file(GLOB VENDOR_SOURCES vendor/*.cpp)\n"
+      "add_library(PlatformLibrary STATIC ${PLATFORM_SOURCES} ${VENDOR_SOURCES})\n"
+      "target_include_directories(PlatformLibrary PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)\n"
+      "if(APPLE)\n"
+      "  target_link_libraries(PlatformLibrary PUBLIC \"-framework AppKit\")\n"
+      "endif()\n"
+    );
+    write_file(directory.path() / "src/common/common.cpp", "int common() { return 1; }\n");
+    write_file(directory.path() / "src/macos/platform.cpp", "int platform() { return 2; }\n");
+    write_file(directory.path() / "src/windows/platform.cpp", "int platform() { return 3; }\n");
+    write_file(directory.path() / "src/linux/platform.cpp", "int platform() { return 4; }\n");
+    write_file(directory.path() / "src/excluded/platform.cpp", "int excluded() { return 5; }\n");
+    write_file(directory.path() / "vendor/vendor.cpp", "int vendor() { return 5; }\n");
+    write_file(directory.path() / "include/platform.h", "#pragma once\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt accepts CMake source glob lists"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+#if defined(__APPLE__)
+    constexpr std::string_view active_source { "src/macos/platform.cpp" };
+    constexpr std::string_view inactive_source { "src/windows/platform.cpp" };
+#elif defined(_WIN32)
+    constexpr std::string_view active_source { "src/windows/platform.cpp" };
+    constexpr std::string_view inactive_source { "src/linux/platform.cpp" };
+#else
+    constexpr std::string_view active_source { "src/linux/platform.cpp" };
+    constexpr std::string_view inactive_source { "src/macos/platform.cpp" };
+#endif
+    expect(
+      contains(recipe, std::string { active_source })
+        && contains(recipe, "src/common/common.cpp")
+        && contains(recipe, "vendor/vendor.cpp")
+        && !contains(recipe, std::string { inactive_source })
+        && !contains(recipe, "src/excluded/platform.cpp")
+        && contains(recipe, "include_dirs = [\"include\"]")
+        && contains(recipe, "cpp_std = 20")
+#if defined(__APPLE__)
+        && contains(recipe, "macos_frameworks = [\"AppKit\"]"),
+#else
+        ,
+#endif
+      "adopt expands active platform source globs and CMake include directories"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "glob-based imported CMake library builds"
+    );
+    expect(error.str().empty() && build_error.str().empty(), "glob-based adoption is clean");
+  }
+
   void test_adopt_maps_cmake_system_package_providers()
   {
     TemporaryDirectory directory;
@@ -2442,7 +2521,7 @@ namespace
     write_file(
       directory.path() / "Core/CMakeLists.txt",
       "project(Core)\nadd_library(Core STATIC src/core.cpp)\n"
-      "target_include_directories(Core PUBLIC ${PROJECT_SOURCE_DIR}/include)\n"
+      "target_include_directories(Core PUBLIC ${PROJECT_SOURCE_DIR}/api)\n"
     );
     write_file(
       directory.path() / "Core/Generated.vcxproj",
@@ -2452,7 +2531,7 @@ namespace
       directory.path() / "Core/src/core.cpp",
       "#include <Core/core.h>\nint answer() { return 42; }\n"
     );
-    write_file(directory.path() / "Core/include/Core/core.h", "#pragma once\nint answer();\n");
+    write_file(directory.path() / "Core/api/Core/core.h", "#pragma once\nint answer();\n");
     write_file(
       directory.path() / "Tool/CMakeLists.txt",
       "project(Tool)\nadd_executable(Tool main.cpp)\n"
@@ -2668,6 +2747,7 @@ namespace
     const auto answer = directory.path() / "answer";
     constexpr std::array adopt_arguments { std::string_view { "adopt" } };
     constexpr std::array build_arguments { std::string_view { "build" } };
+    constexpr std::array doctor_arguments { std::string_view { "doctor" } };
     write_file(
       answer / "forge.recipe.toml",
       "[project]\n"
@@ -2723,6 +2803,17 @@ namespace
       "adopted project builds with its inferred sibling dependency"
     );
     expect(build_error.str().empty(), "inferred sibling dependency build does not write an error");
+    std::ostringstream doctor_output;
+    std::ostringstream doctor_error;
+    expect(
+      forge::cli::run(doctor_arguments, application, doctor_output, doctor_error) == 0,
+      "doctor accepts an inferred style-scoped local dependency"
+    );
+    expect(
+      !contains(doctor_output.str(), "dependency appears to be local but is not declared"),
+      "doctor recognises style-scoped local dependencies"
+    );
+    expect(doctor_error.str().empty(), "style-scoped dependency diagnostic is clean");
   }
 
   void test_adopt_infers_named_target_sibling_project_dependencies()
@@ -7883,6 +7974,7 @@ int main()
   test_adopt_imports_cmake_project();
   test_adopt_selects_named_cmake_library_target();
   test_adopt_infers_component_version_macro();
+  test_adopt_expands_active_cmake_source_globs();
   test_adopt_maps_cmake_system_package_providers();
   test_adopt_preserves_cmake_interface_library_with_programs();
   test_adopt_scopes_cmake_interface_library_to_public_headers();
