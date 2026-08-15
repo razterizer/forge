@@ -3630,8 +3630,7 @@ namespace forge
     }
 
 #ifdef __APPLE__
-    if (is_root_project
-        && !install_missing_macos_brew_packages(
+    if (!install_missing_macos_brew_packages(
           recipe,
           project_directory,
           process_runner,
