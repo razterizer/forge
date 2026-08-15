@@ -324,9 +324,10 @@ never prompts or installs system packages in non-interactive or CI builds.
 When a project or one of its parent directories has a `vcpkg.json` manifest,
 Forge uses its `vcpkg_installed/<triplet>` include and library directories.
 On an interactive macOS build whose manifest dependencies are not installed,
-Forge offers to install the `vcpkg` provider through Homebrew and then runs the
-manifest install in its project root. This keeps CMake packages such as `Stb`
-on their declared vcpkg source rather than guessing a different system package.
+Forge offers to clone the vcpkg ports tree into `.forge/vcpkg`, install the
+`vcpkg` executable through Homebrew if necessary, and then runs the manifest
+install using that checkout. This keeps CMake packages such as `Stb` on their
+declared vcpkg source rather than guessing a different system package.
 
 Declare persistent preprocessor definitions for a legacy project target:
 
