@@ -4792,6 +4792,10 @@ namespace
       "[profile.workflow-release.build]\nconfiguration = \"Release\"\n"
     );
     write_file(directory.path() / "include/project.h", "#pragma once\n");
+    write_file(
+      directory.path() / "RELEASE_NOTES.md",
+      "# Release notes\n\n## 1.0.0\n\n- Release.\n"
+    );
     constexpr std::array arguments {
       std::string_view { "workflow" },
       std::string_view { "prepare-release" }
@@ -4832,6 +4836,10 @@ namespace
     write_file(directory.path() / "include/vendor/vendor.h", "#pragma once\n");
     write_file(directory.path() / "lib/vendor.lib", "import library\n");
     write_file(directory.path() / "lib/vendor.dll", "dynamic library\n");
+    write_file(
+      directory.path() / "RELEASE_NOTES.md",
+      "# Release notes\n\n## 1.0.0\n\n- Release.\n"
+    );
     constexpr std::array strict_arguments {
       std::string_view { "workflow" },
       std::string_view { "prepare-release" }
