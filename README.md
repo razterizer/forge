@@ -284,6 +284,21 @@ roots remain private. `forge adopt` infers these roots when an include directive
 maps unambiguously to a header already in the project, including projects whose
 headers do not live under the conventional `include/` directory.
 
+System dependencies remain explicit and portable. For example, SDL2 can use a
+native package provider on macOS and Debian-family Linux hosts:
+
+```toml
+[build]
+macos_libraries = ["SDL2"]
+macos_brew_packages = ["sdl2-compat"]
+linux_libraries = ["SDL2"]
+linux_apt_packages = ["libsdl2-dev"]
+```
+
+When an interactive macOS build finds a declared Homebrew package missing,
+Forge offers the exact `brew install` command before configuring the project.
+It never prompts or installs system packages in non-interactive or CI builds.
+
 Declare persistent preprocessor definitions for a legacy project target:
 
 ```toml

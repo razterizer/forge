@@ -434,7 +434,7 @@ namespace
   void test_version()
   {
     constexpr std::array arguments { std::string_view { "--version" } };
-    constexpr std::string_view expected_version = "0.17.1+build.39";
+    constexpr std::string_view expected_version = "0.17.2+build.40";
     std::ostringstream output;
     std::ostringstream error;
 
@@ -1746,6 +1746,36 @@ namespace
       "imported CMake project builds"
     );
     expect(build_error.str().empty(), "imported CMake build does not write an error");
+  }
+
+  void test_adopt_maps_cmake_system_package_providers()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "project(Pacman LANGUAGES CXX)\n"
+      "find_package(SDL2 REQUIRED)\n"
+      "add_executable(Pacman main.cpp)\n"
+      "target_link_libraries(Pacman PRIVATE ${SDL2_LIBRARY})\n"
+    );
+    write_file(directory.path() / "main.cpp", "int main() {}\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt accepts a CMake project with a known system package"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "macos_libraries = [\"SDL2\"]")
+        && contains(recipe, "macos_brew_packages = [\"sdl2-compat\"]")
+        && contains(recipe, "linux_libraries = [\"SDL2\"]")
+        && contains(recipe, "linux_apt_packages = [\"libsdl2-dev\"]"),
+      "adopt maps known CMake system packages to platform providers"
+    );
+    expect(error.str().empty(), "system-package CMake adoption does not write an error");
   }
 
   void test_adopt_preserves_cmake_interface_library_with_programs()
@@ -7735,6 +7765,7 @@ int main()
   test_init_infers_local_include_directories();
   test_adopt_imports_visual_studio_project();
   test_adopt_imports_cmake_project();
+  test_adopt_maps_cmake_system_package_providers();
   test_adopt_preserves_cmake_interface_library_with_programs();
   test_adopt_scopes_cmake_interface_library_to_public_headers();
   test_adopt_accepts_library_type_hint();

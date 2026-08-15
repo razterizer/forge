@@ -246,6 +246,17 @@ namespace forge
       std::set<std::string> targets;
       std::map<std::string, std::string> frameworks;
       std::map<std::string, std::string> pkg_config_targets;
+      const auto add_known_system_package = [&project](std::string_view package)
+      {
+        if (package == "SDL2")
+        {
+          project.macos_libraries.push_back("SDL2");
+          project.macos_brew_packages.push_back("sdl2-compat");
+          project.linux_libraries.push_back("SDL2");
+          project.linux_apt_packages.push_back("libsdl2-dev");
+          project.windows_libraries.push_back("SDL2");
+        }
+      };
       std::string platform;
 
       for (const auto& command : cmake_commands(contents))
@@ -272,6 +283,8 @@ namespace forge
           platform.clear();
         else if (command.name == "find_library" && command.arguments.size() > 1)
           frameworks[command.arguments[0]] = command.arguments[1];
+        else if (command.name == "find_package" && !command.arguments.empty())
+          add_known_system_package(command.arguments.front());
         else if (command.name == "pkg_check_modules" && command.arguments.size() > 1)
           pkg_config_targets["PkgConfig::" + command.arguments[0]] = command.arguments.back();
         else if (command.name == "target_link_libraries" && command.arguments.size() > 1)
@@ -435,7 +448,9 @@ namespace forge
         &project.definitions,
         &project.macos_frameworks,
         &project.macos_libraries,
+        &project.macos_brew_packages,
         &project.linux_libraries,
+        &project.linux_apt_packages,
         &project.windows_libraries,
         &project.unresolved_properties
       })

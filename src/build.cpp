@@ -16,6 +16,7 @@
 #include <chrono>
 #include <fstream>
 #include <functional>
+#include <iostream>
 #include <map>
 #include <optional>
 #include <set>
@@ -24,6 +25,10 @@
 #include <system_error>
 #include <thread>
 #include <vector>
+
+#ifdef __APPLE__
+#include <unistd.h>
+#endif
 
 namespace forge
 {
@@ -1327,6 +1332,72 @@ namespace forge
       );
     }
 
+#ifdef __APPLE__
+    bool install_missing_macos_brew_packages(const Recipe& recipe,
+                                             const std::filesystem::path& project_directory,
+                                             const ProcessRunner& process_runner,
+                                             std::ostream& output,
+                                             std::ostream& error)
+    {
+      if (recipe.macos_brew_packages.empty() || !::isatty(STDIN_FILENO))
+        return true;
+
+      std::vector<std::string> missing_packages;
+
+      for (const auto& package : recipe.macos_brew_packages)
+      {
+        std::ostringstream ignored_output;
+
+        if (process_runner({ "brew", "list", "--versions", package }, project_directory, ignored_output) != 0)
+          missing_packages.push_back(package);
+      }
+
+      if (missing_packages.empty())
+        return true;
+
+      output << "forge: missing system librar";
+
+      if (recipe.macos_libraries.size() == 1)
+        output << "y " << recipe.macos_libraries.front();
+      else if (!recipe.macos_libraries.empty())
+      {
+        output << "ies";
+
+        for (const auto& library : recipe.macos_libraries)
+          output << " " << library;
+      }
+      else
+        output << "y provider package";
+
+      output << "\nInstall provider with: brew install";
+
+      for (const auto& package : missing_packages)
+        output << ' ' << package;
+
+      output << " ? [y/N] ";
+      std::string response;
+
+      if (!std::getline(std::cin, response)
+          || (response != "y" && response != "Y" && response != "yes" && response != "YES"))
+      {
+        error << "forge: system provider installation declined\n";
+        return false;
+      }
+
+      output << "Installing system provider...\n";
+      std::vector<std::string> install_arguments { "brew", "install" };
+      install_arguments.insert(install_arguments.end(), missing_packages.begin(), missing_packages.end());
+
+      if (process_runner(install_arguments, project_directory, error) != 0)
+      {
+        error << "forge: failed to install system provider package\n";
+        return false;
+      }
+
+      return true;
+    }
+#endif
+
     void write_system_links(std::ostream& file,
                             std::string_view target,
                             std::string_view visibility,
@@ -1469,6 +1540,46 @@ namespace forge
       write_group("WIN32", windows_include_directories);
     }
 
+    void write_macos_brew_provider_paths(
+      std::ostream& file,
+      std::string_view target,
+      std::string_view visibility,
+      const std::vector<std::string>& packages)
+    {
+      if (packages.empty())
+        return;
+
+      file << "if(APPLE)\n";
+
+      for (std::size_t index = 0; index < packages.size(); ++index)
+      {
+        const auto variable = "FORGE_" + std::string { target }
+          + "_BREW_PREFIX_" + std::to_string(index);
+        const auto result = variable + "_RESULT";
+        file
+          << "  execute_process(COMMAND brew --prefix \""
+          << escape_cmake(packages[index])
+          << "\" OUTPUT_VARIABLE " << variable
+          << " RESULT_VARIABLE " << result
+          << " OUTPUT_STRIP_TRAILING_WHITESPACE)\n"
+          << "  if(" << result << " EQUAL 0)\n"
+          << "    list(PREPEND CMAKE_PREFIX_PATH \"${" << variable << "}\")\n"
+          << "    target_include_directories(" << target << " SYSTEM " << visibility
+          << " \"${" << variable << "}/include\")\n";
+
+        if (packages[index] == "sdl2-compat")
+        {
+          file
+            << "    target_include_directories(" << target << " SYSTEM " << visibility
+            << " \"${" << variable << "}/include/SDL2\")\n";
+        }
+
+        file << "  endif()\n";
+      }
+
+      file << "endif()\n";
+    }
+
     void write_system_library_directories(
       std::ostream& file,
       std::string_view target,
@@ -1598,6 +1709,13 @@ namespace forge
             << escape_cmake(include_directory.generic_string()) << "\")\n";
         }
 
+        write_macos_brew_provider_paths(
+          file,
+          target_name,
+          target.type == "header_only" ? "INTERFACE" : "PRIVATE",
+          target.macos_brew_packages
+        );
+
         write_system_include_directories(
           file,
           target_name,
@@ -1706,6 +1824,13 @@ namespace forge
           << " \"${FORGE_PROJECT_ROOT}/"
           << escape_cmake(include_directory.generic_string()) << "\")\n";
       }
+
+      write_macos_brew_provider_paths(
+        file,
+        "forge_project",
+        "PRIVATE",
+        recipe.macos_brew_packages
+      );
 
       write_system_include_directories(
         file,
@@ -3501,6 +3626,20 @@ namespace forge
         options.compile_definitions.end()
       );
     }
+
+#ifdef __APPLE__
+    if (is_root_project
+        && !install_missing_macos_brew_packages(
+          recipe,
+          project_directory,
+          process_runner,
+          output,
+          error
+        ))
+    {
+      return 2;
+    }
+#endif
 
     for (const auto& target : recipe.internal_targets)
     {

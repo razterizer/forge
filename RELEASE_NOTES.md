@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.17.2
+
+- `forge adopt` now recognizes CMake `find_package(SDL2)` declarations and
+  emits portable SDL2 system-library requirements with Homebrew and Apt
+  provider mappings.
+- Interactive macOS builds offer to install missing declared Homebrew provider
+  packages, then use their discovered CMake prefixes for headers and libraries.
+  Non-interactive and CI builds never prompt or install packages.
+
 ## 0.17.1
 
 - Made `forge adopt` reliably adopt CMake interface libraries that publish

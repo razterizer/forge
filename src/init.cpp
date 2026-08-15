@@ -259,10 +259,20 @@ namespace forge
         additional.macos_libraries.begin(),
         additional.macos_libraries.end()
       );
+      project.macos_brew_packages.insert(
+        project.macos_brew_packages.end(),
+        additional.macos_brew_packages.begin(),
+        additional.macos_brew_packages.end()
+      );
       project.linux_libraries.insert(
         project.linux_libraries.end(),
         additional.linux_libraries.begin(),
         additional.linux_libraries.end()
+      );
+      project.linux_apt_packages.insert(
+        project.linux_apt_packages.end(),
+        additional.linux_apt_packages.begin(),
+        additional.linux_apt_packages.end()
       );
       project.windows_libraries.insert(
         project.windows_libraries.end(),
@@ -608,7 +618,9 @@ namespace forge
       for (const auto& [key, values] : {
         std::pair { std::string_view { "macos_frameworks" }, &project.macos_frameworks },
         std::pair { std::string_view { "macos_libraries" }, &project.macos_libraries },
+        std::pair { std::string_view { "macos_brew_packages" }, &project.macos_brew_packages },
         std::pair { std::string_view { "linux_libraries" }, &project.linux_libraries },
+        std::pair { std::string_view { "linux_apt_packages" }, &project.linux_apt_packages },
         std::pair { std::string_view { "windows_libraries" }, &project.windows_libraries }
       })
       {
