@@ -717,6 +717,11 @@ project. Updating one target preserves entries previously resolved for other
 targets. Portable header-only cboxes use one `target = "any"` lock entry that
 is reused on every host.
 
+Release preparation checks the current recipe against `RELEASE_NOTES.md` and
+any configured `[version_header]`. The release-note heading and every generated
+version-header macro must match the recipe version and build number before
+Forge starts a release build or creates a Git tag.
+
 When selecting a box with build metadata, include it in the dependency version:
 
 ```toml
@@ -1242,6 +1247,11 @@ retry.
 Forge never replaces an existing local or remote release tag. Bump the recipe
 version before publishing another release; repair an exceptional broken tag
 manually only after reviewing its published assets and downstream consumers.
+
+`forge release-git --dry-run` performs the same local hosted release
+preparation after tag preflight, then reports the tag it would create. It never
+creates or pushes a tag; inspect the generated `.forge/release/` artifacts as
+needed.
 
 Generated GitHub workflows react to `release-*` and `v*`. A custom tag format
 must match one of those patterns, or the generated workflow triggers must be

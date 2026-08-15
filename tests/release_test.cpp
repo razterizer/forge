@@ -1,5 +1,7 @@
 #include "release.h"
+#include "target_support.h"
 #include "test_support.h"
+#include "versioning.h"
 
 #include <filesystem>
 #include <fstream>
@@ -199,7 +201,53 @@ namespace
       "release excludes nested Forge state"
     );
     expect(contains(output.str(), "Released"), "release reports the archive");
+    const auto manifest = directory.path() / ".forge/release"
+      / ("RELEASE_MANIFEST-" + forge::current_target() + ".toml");
+    const auto manifest_checksum = std::filesystem::path { manifest.string() + ".sha256" };
+    expect(std::filesystem::is_regular_file(manifest), "release writes an artifact manifest");
+    expect(
+      std::filesystem::is_regular_file(manifest_checksum),
+      "release writes a checksum for its artifact manifest"
+    );
+    std::ifstream manifest_file { manifest };
+    std::ostringstream manifest_text;
+    manifest_text << manifest_file.rdbuf();
+    expect(
+      contains(manifest_text.str(), "path = \"hello-0.1.0/hello")
+        && contains(manifest_text.str(), "sha256 = \""),
+      "release manifest records staged artifacts and checksums"
+    );
     expect(error.str().empty(), "successful release does not write an error");
+  }
+
+  void test_release_rejects_stale_version_header_before_building()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream recipe { directory.path() / "forge.recipe.toml", std::ios::app };
+    recipe << "\n[version_header]\npath = \"include/hello/version.h\"\nprefix = \"HELLO\"\n";
+    recipe.close();
+    std::filesystem::create_directories(directory.path() / "include/hello");
+    std::ofstream { directory.path() / "include/hello/version.h" }
+      << forge::generated_version_header("HELLO", { "0.0.0", std::nullopt });
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::release_project(directory.path(), runner, output, error) == 2,
+      "release rejects a version header that disagrees with the recipe"
+    );
+    expect(invocations == 0, "release validates version metadata before building");
+    expect(contains(error.str(), "does not match recipe version"), "version-header mismatch is explained");
   }
 
   void test_release_reports_archive_failure()
@@ -312,7 +360,7 @@ namespace
       forge::release_project(directory.path(), runner, output, error) == 2,
       "release rejects missing version notes"
     );
-    expect(invocations == 2, "missing version notes are rejected before archiving");
+    expect(invocations == 0, "missing version notes are rejected before building");
     expect(contains(error.str(), "were not found"), "release explains missing version notes");
   }
 
@@ -446,7 +494,7 @@ namespace
     options.dry_run = true;
 
     const forge::ProcessRunner runner =
-      [&commands](const std::vector<std::string>& command,
+      [&commands, &directory](const std::vector<std::string>& command,
                   const std::filesystem::path&,
                   std::ostream&)
       {
@@ -455,6 +503,23 @@ namespace
           return 1;
         if (command_contains(command, "ls-remote"))
           return 2;
+
+        if (command.size() > 1 && command[1] == "--build")
+        {
+          std::filesystem::create_directories(directory.path() / ".forge/build");
+#ifdef _WIN32
+          std::ofstream { directory.path() / ".forge/build/hello.exe" };
+#else
+          std::ofstream { directory.path() / ".forge/build/hello" };
+#endif
+        }
+
+        if (command.size() > 2 && command[1] == "-E" && command[2] == "tar")
+        {
+          std::filesystem::create_directories(directory.path() / ".forge/release");
+          std::ofstream { directory.path() / ".forge/release/hello-0.1.0.zip" };
+        }
+
         return 0;
       };
 
@@ -462,15 +527,16 @@ namespace
       forge::release_git(directory.path(), options, runner, output, error) == 0,
       "Git release dry-run succeeds"
     );
-    expect(commands.size() == 5, "Git release dry-run only runs preflight commands");
+    expect(commands.size() == 8, "Git release dry-run also prepares hosted release assets");
     expect(
       !command_contains(commands.back(), "tag") && !command_contains(commands.back(), "push"),
       "Git release dry-run does not tag or push"
     );
     expect(
       contains(output.str(), "Release preflight passed for release-0.1.0")
-      && contains(output.str(), "Version: 0.1.0")
-      && contains(output.str(), "Tag: release-0.1.0"),
+        && contains(output.str(), "Version: 0.1.0")
+        && contains(output.str(), "Tag: release-0.1.0")
+        && contains(output.str(), "Prepared release assets"),
       "Git release dry-run reports release identity"
     );
     expect(error.str().empty(), "successful Git release dry-run does not write an error");
@@ -630,6 +696,7 @@ namespace
 int main()
 {
   test_release_stages_files_and_creates_archive_command();
+  test_release_rejects_stale_version_header_before_building();
   test_release_reports_archive_failure();
   test_release_rejects_file_outside_project();
   test_release_rejects_missing_version_notes();

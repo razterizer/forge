@@ -5,7 +5,9 @@
 #include "file_support.h"
 #include "recipe.h"
 #include "runtime_assets.h"
+#include "sha256.h"
 #include "target_support.h"
+#include "versioning.h"
 
 #include <algorithm>
 #include <array>
@@ -508,6 +510,210 @@ namespace forge
       return true;
     }
 
+    bool validate_release_integrity(const std::filesystem::path& project_directory,
+                                    const Recipe& recipe,
+                                    std::ostream& error)
+    {
+      const auto notes_path = project_directory / "RELEASE_NOTES.md";
+
+      if (!std::filesystem::is_regular_file(notes_path))
+      {
+        error << "forge: release preparation requires RELEASE_NOTES.md with a section for '"
+              << release_notes_heading(recipe) << "'\n";
+        return false;
+      }
+
+      std::optional<std::string> notes;
+
+      if (!extract_release_notes(notes_path, release_notes_heading(recipe), notes, error))
+        return false;
+
+      if (recipe.version_header_path.empty())
+        return true;
+
+      const auto header_path = project_directory / recipe.version_header_path;
+
+      if (!is_resolved_project_path(project_directory, recipe.version_header_path)
+          || !std::filesystem::is_regular_file(header_path))
+      {
+        error << "forge: version header '" << recipe.version_header_path.generic_string()
+              << "' does not exist or leaves the project\n";
+        return false;
+      }
+
+      std::ifstream header { header_path };
+
+      if (!header)
+      {
+        error << "forge: could not read version header '" << header_path.string() << "'\n";
+        return false;
+      }
+
+      const InitialVersion version { recipe.version, recipe.build_number };
+      const auto first = version.version.find('.');
+      const auto second = version.version.find('.', first + 1);
+      const auto macro = recipe.version_header_prefix + "_VERSION_";
+      const std::array expected {
+        std::pair { macro + "STR", "\"" + qualified_initial_version(version) + "\"" },
+        std::pair { macro + "MAJOR", version.version.substr(0, first) },
+        std::pair { macro + "MINOR", version.version.substr(first + 1, second - first - 1) },
+        std::pair { macro + "PATCH", version.version.substr(second + 1) },
+        std::pair { macro + "BUILD", std::to_string(version.build_number.value_or(0)) }
+      };
+      std::array<bool, 5> matched {};
+      std::string line;
+
+      while (std::getline(header, line))
+      {
+        auto definition = trim(line);
+
+        if (!definition.starts_with("#define"))
+          continue;
+
+        definition.remove_prefix(std::string_view { "#define" }.size());
+        definition = trim(definition);
+        const auto separator = definition.find_first_of(" \t");
+
+        if (separator == std::string_view::npos)
+          continue;
+
+        const auto name = definition.substr(0, separator);
+        const auto value = trim(definition.substr(separator));
+
+        for (std::size_t index = 0; index < expected.size(); ++index)
+        {
+          if (name == expected[index].first && value == expected[index].second)
+            matched[index] = true;
+        }
+      }
+
+      if (!std::ranges::all_of(matched, [](bool value) { return value; }))
+      {
+        error << "forge: version header '" << recipe.version_header_path.generic_string()
+              << "' does not match recipe version '" << recipe.version;
+
+        if (recipe.build_number)
+          error << "' and build number " << *recipe.build_number;
+
+        error << "; run forge bump after updating release metadata\n";
+        return false;
+      }
+
+      return true;
+    }
+
+    bool write_release_manifest(const std::filesystem::path& project_directory,
+                                const std::filesystem::path& release_directory,
+                                const Recipe& recipe,
+                                std::ostream& output,
+                                std::ostream& error)
+    {
+      struct ReleaseArtifact
+      {
+        std::filesystem::path path;
+        std::string sha256;
+      };
+
+      std::vector<ReleaseArtifact> artifacts;
+      std::error_code filesystem_error;
+
+      for (const auto& entry : std::filesystem::recursive_directory_iterator {
+             release_directory,
+             filesystem_error
+           })
+      {
+        if (filesystem_error)
+        {
+          error << "forge: could not inspect release artifacts\n";
+          return false;
+        }
+
+        if (!entry.is_regular_file())
+          continue;
+
+        const auto relative = entry.path().lexically_relative(release_directory);
+
+        if (relative.filename().string().starts_with("RELEASE_MANIFEST-"))
+          continue;
+
+        std::string checksum;
+
+        if (!sha256_file(entry.path(), checksum, error))
+          return false;
+
+        artifacts.push_back({ relative, std::move(checksum) });
+      }
+
+      const auto boxes_directory = project_directory / "boxes";
+
+      if (std::filesystem::is_directory(boxes_directory))
+      {
+        for (const auto& entry : std::filesystem::directory_iterator { boxes_directory, filesystem_error })
+        {
+          if (filesystem_error)
+          {
+            error << "forge: could not inspect published box artifacts\n";
+            return false;
+          }
+
+          if (!entry.is_regular_file())
+            continue;
+
+          std::string checksum;
+
+          if (!sha256_file(entry.path(), checksum, error))
+            return false;
+
+          artifacts.push_back(
+            { std::filesystem::path { "boxes" } / entry.path().filename(), std::move(checksum) }
+          );
+        }
+      }
+
+      std::ranges::sort(
+        artifacts,
+        {},
+        [](const ReleaseArtifact& artifact)
+        {
+          return artifact.path.generic_string();
+        }
+      );
+
+      std::ostringstream manifest;
+      manifest << "format = 1\n"
+               << "name = \"" << recipe.name << "\"\n"
+               << "version = \"" << package_version(recipe) << "\"\n"
+               << "target = \"" << current_target() << "\"\n";
+
+      for (const auto& artifact : artifacts)
+      {
+        manifest << "\n[[artifact]]\n"
+                 << "path = \"" << artifact.path.generic_string() << "\"\n"
+                 << "sha256 = \"" << artifact.sha256 << "\"\n";
+      }
+
+      const auto manifest_filename = "RELEASE_MANIFEST-" + current_target() + ".toml";
+      const auto manifest_path = release_directory / manifest_filename;
+
+      if (!write_file(manifest_path, manifest.str(), error))
+        return false;
+
+      std::string checksum;
+
+      if (!sha256_file(manifest_path, checksum, error)
+          || !write_file(
+            release_directory / (manifest_filename + ".sha256"),
+            checksum + "  " + manifest_filename + "\n",
+            error
+          ))
+      {
+        return false;
+      }
+
+      output << "Wrote release manifest " << manifest_path.string() << '\n';
+      return true;
+    }
+
     std::string current_date()
     {
       const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -752,6 +958,9 @@ namespace forge
       return 2;
     }
 
+    if (!validate_release_integrity(project_directory, recipe, error))
+      return 2;
+
     BuildOptions options;
     options.target = target;
     options.profile = profile;
@@ -966,7 +1175,7 @@ namespace forge
     }
 
     output << "Released " << archive_path.string() << '\n';
-    return 0;
+    return write_release_manifest(project_directory, release_directory, recipe, output, error) ? 0 : 2;
   }
 
   } // namespace
@@ -1129,6 +1338,9 @@ namespace forge
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
       return 2;
 
+    if (!validate_release_integrity(project_directory, recipe, error))
+      return 2;
+
     if (!validate_workflow_release_dependencies(recipe, error))
       return 2;
 
@@ -1182,7 +1394,13 @@ namespace forge
       if (create_hosted_executable_bundle(project_directory, recipe, process_runner, output, error) != 0)
         return 2;
 
-      return 0;
+      return write_release_manifest(
+        project_directory,
+        project_directory / ".forge" / "release",
+        recipe,
+        output,
+        error
+      ) ? 0 : 2;
     }
 
     if (!select_recipe_target(recipe, options.target, error))
@@ -1325,6 +1543,9 @@ namespace forge
       return 2;
     }
 
+    if (!write_release_manifest(project_directory, release_directory, recipe, output, error))
+      return 2;
+
     output << "Prepared release assets\n";
     return 0;
   }
@@ -1346,6 +1567,9 @@ namespace forge
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
+      return 2;
+
+    if (!validate_release_integrity(project_directory, recipe, error))
       return 2;
 
     std::string tag;
@@ -1370,6 +1594,12 @@ namespace forge
 
     if (options.dry_run)
     {
+      PrepareReleaseOptions prepare_options;
+      prepare_options.skip_unsupported = true;
+
+      if (prepare_release(project_directory, prepare_options, process_runner, output, error) != 0)
+        return 2;
+
       output << "Release preflight passed for " << tag << '\n'
              << "Version: " << release_notes_heading(recipe) << '\n'
              << "Tag: " << tag << '\n';

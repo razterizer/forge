@@ -201,7 +201,7 @@ namespace forge
 
       return
         "  forge-release-boxes:\n"
-        "    # forge-managed: release-boxes@5\n"
+        "    # forge-managed: release-boxes@6\n"
         "    name: Publish Forge cboxes\n"
         "    if: startsWith(github.ref, 'refs/tags/')\n"
         "    runs-on: " + std::string { runner } + "\n"
@@ -235,7 +235,7 @@ namespace forge
         "        run: " + std::string { forge_executable } + " workflow prepare-release --skip-unsupported\n"
         + publish_release_steps(
           "Publish Forge release boxes",
-          "boxes/*.cbox,boxes/*.sha256"
+          "boxes/*.cbox,boxes/*.sha256,.forge/release/RELEASE_MANIFEST-*.toml,.forge/release/RELEASE_MANIFEST-*.toml.sha256"
         );
     }
 
@@ -253,7 +253,7 @@ namespace forge
         "release-boxes",
         "Publish Forge cboxes and checksums from Git tag workflows",
         "forge-release-boxes",
-        "# forge-managed: release-boxes@5",
+        "# forge-managed: release-boxes@6",
         release_boxes_job
       }
     };
@@ -574,7 +574,7 @@ namespace forge
         "\n"
         + publish_release_steps(
           "Publish GitHub release",
-          ".forge/release/*.zip,boxes/*.cbox,boxes/*.sha256",
+          ".forge/release/*.zip,boxes/*.cbox,boxes/*.sha256,.forge/release/RELEASE_MANIFEST-*.toml,.forge/release/RELEASE_MANIFEST-*.toml.sha256",
           ".forge/release/RELEASE_NOTES.md"
         );
 
@@ -646,6 +646,12 @@ namespace forge
         "            cp \"$box\" \"hosted-assets/$filename\"\n"
         "            (cd hosted-assets && sha256sum \"$filename\" > \"$filename.sha256\")\n"
         "          done\n"
+        "          for manifest in .forge/release/RELEASE_MANIFEST-*.toml; do\n"
+        "            [ -e \"$manifest\" ] || continue\n"
+        "            filename=$(basename \"${manifest%.toml}\")-" + std::string { compatibility } + ".toml\n"
+        "            cp \"$manifest\" \"hosted-assets/$filename\"\n"
+        "            (cd hosted-assets && sha256sum \"$filename\" > \"$filename.sha256\")\n"
+        "          done\n"
         "          cp .forge/release/RELEASE_NOTES.md hosted-assets/\n"
         "\n"
         "      - name: Upload Linux release assets\n"
@@ -695,8 +701,8 @@ namespace forge
           "        run: |\n"
           "          mkdir release-assets\n"
           "          cp linux-modern/RELEASE_NOTES.md release-assets/\n"
-          "          cp linux-modern/*.cbox linux-modern/*.sha256 release-assets/ 2>/dev/null || true\n"
-          "          cp linux-legacy/*.cbox linux-legacy/*.sha256 release-assets/ 2>/dev/null || true\n"
+          "          cp linux-modern/*.cbox linux-modern/*.sha256 linux-modern/*.toml release-assets/ 2>/dev/null || true\n"
+          "          cp linux-legacy/*.cbox linux-legacy/*.sha256 linux-legacy/*.toml release-assets/ 2>/dev/null || true\n"
           "          for archive in linux-modern/*-linux-modern.zip; do\n"
           "            [ -e \"$archive\" ] || continue\n"
           "            base=$(basename \"${archive%-modern.zip}\")\n"
@@ -711,7 +717,7 @@ namespace forge
           "\n"
           + publish_release_steps(
             "Publish GitHub release",
-            "release-assets/*.tar.gz,release-assets/*.cbox,release-assets/*.sha256",
+            "release-assets/*.tar.gz,release-assets/*.cbox,release-assets/*.sha256,release-assets/RELEASE_MANIFEST-*.toml",
             "release-assets/RELEASE_NOTES.md"
           );
     }

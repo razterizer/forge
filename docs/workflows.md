@@ -73,6 +73,13 @@ dependency graph or platform-specific requirements make the box target-specific.
 Existing workflow and release-note files are left unchanged. Tag creation remains
 an explicit opt-in action.
 
+Before preparing assets, Forge checks that `RELEASE_NOTES.md` has the current
+release section and that a configured generated version header exactly matches
+the recipe version and build number. Preparation writes a target-qualified
+`RELEASE_MANIFEST-<os>-<arch>.toml` beside the focused release notes, listing
+every staged artifact and its SHA-256 checksum, plus a `.sha256` file for the
+manifest itself. Generated workflows publish those manifests with their assets.
+
 The Windows adapter explicitly initializes the x64 MSVC developer environment
 and selects `cl` for its bootstrap build. The same environment is inherited by
 `forge workflow prepare-release`, ensuring released Windows artifacts use MSVC rather
@@ -196,6 +203,11 @@ matching Forge-managed marker.
 Bump the recipe version before publishing another release. Exceptional manual
 tag repair remains outside Forge's release workflow.
 
+`forge release-git --dry-run` performs the same local hosted release
+preparation, including manifests, after Git tag preflight. It does not create
+or push a tag; inspect or remove the resulting `.forge/release/` state as
+needed.
+
 Before running hosted releases, lock each workflow-only GitHub dependency for
 every hosted target. For example, a Windows-only imported OpenAL dependency in
 a header-only adapter is locked without cross-compiling it:
@@ -220,8 +232,8 @@ in `forge.lock.toml`; portable header-only boxes remain a single `target =
 4. Keep `release-boxes` and other hosted release asset jobs updateable while
    preserving `--skip-unsupported` behavior for platform-specific imported
    libraries.
-5. Add release variants, platform-specific release contents, generated release
-   manifests, and dry runs for release preparation, tagging, and publication.
+5. Add release variants and platform-specific release contents beyond the
+   current target-qualified manifests and dry-run preparation.
 6. Add package distribution planning, starting with GitHub-hosted `.deb` or
    APT-style installation, then a version-aware `razterizer/setup-forge`
    action.

@@ -961,8 +961,19 @@ namespace forge
 
     if (std::filesystem::exists(recipe_path, filesystem_error))
     {
-      error << "forge: '" << recipe_path.string() << "' already exists\n";
-      return 2;
+      Recipe existing;
+
+      if (!read_recipe(recipe_path, existing, error))
+        return 2;
+
+      if (options.initial_version || options.version_header_path)
+      {
+        error << "forge: explicit version initialization cannot modify an existing recipe\n";
+        return 2;
+      }
+
+      output << "Already adopted " << recipe_path.string() << "; recipe preserved\n";
+      return 0;
     }
 
     if (filesystem_error)
@@ -1475,14 +1486,16 @@ namespace forge
     else if (!sibling_dependencies.empty())
     {
       recipe
-        += "\n# TODO: Replace local dependencies with reproducible workflow dependencies.\n"
+        += "\n# TODO(workflow-release): replace each local dependency with a published pin.\n"
         "# [profile.workflow-release.dependencies]\n";
 
       for (const auto& dependency : sibling_dependencies)
       {
         recipe += "# " + dependency.name
           + " = { github = \"owner/" + dependency.name
-          + "\", version = \"<published-version>\" }\n";
+          + "\", version = \"<published-version>\" }\n"
+          + "# forge update " + dependency.name
+          + " --profile=workflow-release --release-targets\n";
       }
     }
 

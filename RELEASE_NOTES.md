@@ -1,5 +1,18 @@
 # Release notes
 
+## 0.17.0
+
+- Added release-integrity validation before building or tagging: the current
+  release-note section and any configured generated version header must match
+  the recipe version and build number.
+- `forge release` and hosted release preparation now write target-qualified
+  release manifests containing SHA-256 checksums for every staged artifact,
+  plus a checksum for each manifest itself.
+- Extended `forge release-git --dry-run` through local hosted release
+  preparation while preserving its no-tag, no-push guarantee.
+- Made repeated `forge adopt` runs safe and non-destructive, and made generated
+  workflow-release TODOs name the required cross-target lock update command.
+
 ## 0.16.0
 
 - Imported-library packages can now depend on and embed other Forge packages,

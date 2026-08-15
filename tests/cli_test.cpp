@@ -434,7 +434,7 @@ namespace
   void test_version()
   {
     constexpr std::array arguments { std::string_view { "--version" } };
-    constexpr std::string_view expected_version = "0.16.0+build.37";
+    constexpr std::string_view expected_version = "0.17.0+build.38";
     std::ostringstream output;
     std::ostringstream error;
 
@@ -3032,7 +3032,7 @@ namespace
     }
   }
 
-  void test_init_refuses_to_overwrite()
+  void test_init_preserves_existing_recipe_on_repeat()
   {
     TemporaryDirectory directory;
     constexpr std::array arguments { std::string_view { "adopt" } };
@@ -3045,14 +3045,17 @@ namespace
     const auto original_recipe = read_file(directory.path() / "forge.recipe.toml");
 
     expect(
-      forge::cli::run(arguments, directory.path(), second_output, second_error) == 2,
-      "adopt refuses to overwrite an existing recipe"
+      forge::cli::run(arguments, directory.path(), second_output, second_error) == 0,
+      "adopt succeeds safely when a recipe already exists"
     );
     expect(
       read_file(directory.path() / "forge.recipe.toml") == original_recipe,
       "adopt preserves an existing recipe"
     );
-    expect(contains(second_error.str(), "already exists"), "adopt explains overwrite refusal");
+    expect(
+      contains(second_output.str(), "Already adopted") && second_error.str().empty(),
+      "adopt reports that the existing recipe was preserved"
+    );
   }
 
   void test_init_preserves_existing_release_support()
@@ -3154,12 +3157,12 @@ namespace
     const auto updated = read_file(workflow);
     expect(
       contains(updated, "  forge-release-boxes:\n")
-      && contains(updated, "# forge-managed: release-boxes@5")
+      && contains(updated, "# forge-managed: release-boxes@6")
       && contains(updated, "Resolve latest Forge release")
       && contains(updated, "ref: ${{ steps.forge-release.outputs.result }}")
       && contains(updated, "if: startsWith(github.ref, 'refs/tags/')")
       && contains(updated, "forge workflow prepare-release")
-      && contains(updated, "artifacts: boxes/*.cbox,boxes/*.sha256")
+      && contains(updated, "artifacts: boxes/*.cbox,boxes/*.sha256,.forge/release/RELEASE_MANIFEST-*.toml")
       && contains(updated, "replacesArtifacts: false")
       && contains(updated, "if: steps.publish-release.outcome == 'failure'"),
       "workflow feature application injects the managed release-boxes job"
@@ -3383,8 +3386,8 @@ namespace
     expect(contains(current_output.str(), "release-boxes  current"), "workflow status reports current feature");
 
     auto outdated = current;
-    const auto marker = outdated.find("# forge-managed: release-boxes@5");
-    outdated.replace(marker, std::string_view { "# forge-managed: release-boxes@5" }.size(),
+    const auto marker = outdated.find("# forge-managed: release-boxes@6");
+    outdated.replace(marker, std::string_view { "# forge-managed: release-boxes@6" }.size(),
                      "# forge-managed: release-boxes@1");
     write_file(workflow, outdated);
     std::ostringstream outdated_output;
@@ -7622,7 +7625,7 @@ int main()
   test_init_infers_multiple_executables();
   test_adopt_infers_mapped_runtime_asset();
   test_init_groups_sources_by_local_include_graph();
-  test_init_refuses_to_overwrite();
+  test_init_preserves_existing_recipe_on_repeat();
   test_init_preserves_existing_release_support();
   test_workflow_adds_release_boxes_feature();
   test_workflow_feature_refuses_unmanaged_collision();
