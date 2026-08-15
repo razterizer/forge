@@ -546,6 +546,7 @@ namespace forge
         else if (package == "spdlog")
         {
           add_requirement("spdlog", "spdlog", "spdlog", "libspdlog-dev", "spdlog");
+          add_requirement({}, "fmt", {}, "libfmt-dev", {});
         }
         else if (package == "nativefiledialog-extended")
         {

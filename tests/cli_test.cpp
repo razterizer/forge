@@ -2001,10 +2001,10 @@ namespace
       contains(recipe, "macos_libraries = [\"glfw\", \"nfd\", \"spdlog\", \"yaml-cpp\"]")
         && contains(
           recipe,
-          "macos_brew_packages = [\"entt\", \"glfw\", \"glm\", "
+          "macos_brew_packages = [\"entt\", \"fmt\", \"glfw\", \"glm\", "
           "\"nativefiledialog-extended\", \"spdlog\", \"yaml-cpp\"]"
         )
-        && contains(recipe, "linux_apt_packages = [\"libentt-dev\", \"libglfw3-dev\", \"libglm-dev\", \"libspdlog-dev\", \"libyaml-cpp-dev\"]"),
+        && contains(recipe, "linux_apt_packages = [\"libentt-dev\", \"libfmt-dev\", \"libglfw3-dev\", \"libglm-dev\", \"libspdlog-dev\", \"libyaml-cpp-dev\"]"),
       "adopt maps common CMake C++ packages to system providers"
     );
     expect(error.str().empty(), "common CMake package adoption is clean");
