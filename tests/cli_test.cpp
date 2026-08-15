@@ -1973,6 +1973,43 @@ namespace
     expect(error.str().empty(), "system-package CMake adoption does not write an error");
   }
 
+  void test_adopt_maps_common_cmake_cpp_package_providers()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "project(GraphicsApp LANGUAGES CXX)\n"
+      "find_package(glfw3 CONFIG REQUIRED)\n"
+      "find_package(EnTT CONFIG REQUIRED)\n"
+      "find_package(glm CONFIG REQUIRED)\n"
+      "find_package(yaml-cpp CONFIG REQUIRED)\n"
+      "find_package(spdlog CONFIG REQUIRED)\n"
+      "add_executable(GraphicsApp main.cpp)\n"
+      "target_link_libraries(GraphicsApp PRIVATE nfd)\n"
+    );
+    write_file(directory.path() / "main.cpp", "int main() {}\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt accepts common CMake C++ package requirements"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "macos_libraries = [\"glfw\", \"nfd\", \"spdlog\", \"yaml-cpp\"]")
+        && contains(
+          recipe,
+          "macos_brew_packages = [\"entt\", \"glfw\", \"glm\", "
+          "\"nativefiledialog-extended\", \"spdlog\", \"yaml-cpp\"]"
+        )
+        && contains(recipe, "linux_apt_packages = [\"libentt-dev\", \"libglfw3-dev\", \"libglm-dev\", \"libspdlog-dev\", \"libyaml-cpp-dev\"]"),
+      "adopt maps common CMake C++ packages to system providers"
+    );
+    expect(error.str().empty(), "common CMake package adoption is clean");
+  }
+
   void test_adopt_preserves_cmake_interface_library_with_programs()
   {
     TemporaryDirectory directory;
@@ -7976,6 +8013,7 @@ int main()
   test_adopt_infers_component_version_macro();
   test_adopt_expands_active_cmake_source_globs();
   test_adopt_maps_cmake_system_package_providers();
+  test_adopt_maps_common_cmake_cpp_package_providers();
   test_adopt_preserves_cmake_interface_library_with_programs();
   test_adopt_scopes_cmake_interface_library_to_public_headers();
   test_adopt_accepts_library_type_hint();

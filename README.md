@@ -310,9 +310,16 @@ linux_libraries = ["SDL2"]
 linux_apt_packages = ["libsdl2-dev"]
 ```
 
-When an interactive macOS build finds a declared Homebrew package missing,
+When adopting CMake, Forge recognises `find_package` requirements for SDL2,
+GLFW, EnTT, glm, yaml-cpp, and spdlog, plus the `nfd` link target provided by
+nativefiledialog-extended. It records the matching curated Homebrew and Apt
+provider hints where known; other packages stay visible for manual review
+rather than being guessed from their header names.
+
+When an interactive macOS build finds declared Homebrew packages missing,
 Forge offers the exact `brew install` command before configuring the project.
-It never prompts or installs system packages in non-interactive or CI builds.
+It adds the provider's include and library directories while configuring. Forge
+never prompts or installs system packages in non-interactive or CI builds.
 
 Declare persistent preprocessor definitions for a legacy project target:
 

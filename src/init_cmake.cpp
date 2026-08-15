@@ -501,14 +501,61 @@ namespace forge
       std::map<std::string, std::string> pkg_config_targets;
       const auto add_known_system_package = [&project](std::string_view package)
       {
+        const auto add_requirement = [&project](std::string_view macos_library,
+                                                std::string_view macos_brew_package,
+                                                std::string_view linux_library,
+                                                std::string_view linux_apt_package,
+                                                std::string_view windows_library)
+        {
+          if (!macos_library.empty())
+            project.macos_libraries.emplace_back(macos_library);
+
+          if (!macos_brew_package.empty())
+            project.macos_brew_packages.emplace_back(macos_brew_package);
+
+          if (!linux_library.empty())
+            project.linux_libraries.emplace_back(linux_library);
+
+          if (!linux_apt_package.empty())
+            project.linux_apt_packages.emplace_back(linux_apt_package);
+
+          if (!windows_library.empty())
+            project.windows_libraries.emplace_back(windows_library);
+        };
+
         if (package == "SDL2")
         {
-          project.macos_libraries.push_back("SDL2");
-          project.macos_brew_packages.push_back("sdl2-compat");
-          project.linux_libraries.push_back("SDL2");
-          project.linux_apt_packages.push_back("libsdl2-dev");
-          project.windows_libraries.push_back("SDL2");
+          add_requirement("SDL2", "sdl2-compat", "SDL2", "libsdl2-dev", "SDL2");
         }
+        else if (package == "glfw3")
+        {
+          add_requirement("glfw", "glfw", "glfw", "libglfw3-dev", "glfw3");
+        }
+        else if (package == "EnTT")
+        {
+          add_requirement({}, "entt", {}, "libentt-dev", {});
+        }
+        else if (package == "glm")
+        {
+          add_requirement({}, "glm", {}, "libglm-dev", {});
+        }
+        else if (package == "yaml-cpp")
+        {
+          add_requirement("yaml-cpp", "yaml-cpp", "yaml-cpp", "libyaml-cpp-dev", "yaml-cpp");
+        }
+        else if (package == "spdlog")
+        {
+          add_requirement("spdlog", "spdlog", "spdlog", "libspdlog-dev", "spdlog");
+        }
+        else if (package == "nativefiledialog-extended")
+        {
+          add_requirement("nfd", "nativefiledialog-extended", "nfd", {}, "nfd");
+        }
+      };
+      const auto add_known_system_link = [&add_known_system_package](std::string_view library)
+      {
+        if (library == "nfd")
+          add_known_system_package("nativefiledialog-extended");
       };
       std::string platform;
       struct ConditionalScope
@@ -938,6 +985,8 @@ namespace forge
             else if (argument.find('$') == std::string::npos
                      && argument.find("::") == std::string::npos)
             {
+              add_known_system_link(argument);
+
               auto* libraries =
                 platform == "macos" ? &project.macos_libraries
                 : platform == "linux" ? &project.linux_libraries

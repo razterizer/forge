@@ -1563,9 +1563,11 @@ namespace forge
           << " RESULT_VARIABLE " << result
           << " OUTPUT_STRIP_TRAILING_WHITESPACE)\n"
           << "  if(" << result << " EQUAL 0)\n"
-          << "    list(PREPEND CMAKE_PREFIX_PATH \"${" << variable << "}\")\n"
-          << "    target_include_directories(" << target << " SYSTEM " << visibility
-          << " \"${" << variable << "}/include\")\n";
+            << "    list(PREPEND CMAKE_PREFIX_PATH \"${" << variable << "}\")\n"
+            << "    target_include_directories(" << target << " SYSTEM " << visibility
+            << " \"${" << variable << "}/include\")\n"
+            << "    target_link_directories(" << target << ' ' << visibility
+            << " \"${" << variable << "}/lib\")\n";
 
         if (packages[index] == "sdl2-compat")
         {
