@@ -487,6 +487,17 @@ namespace forge
       return true;
     }
 
+    bool release_notes_are_ready(std::string_view notes)
+    {
+      const auto first = notes.find_first_not_of(" \t\r\n");
+
+      if (first == std::string_view::npos)
+        return false;
+
+      const auto content = notes.substr(first, notes.find_last_not_of(" \t\r\n") - first + 1);
+      return content != "- Describe changes.";
+    }
+
     bool write_release_notes(const std::filesystem::path& path,
                              const std::string& notes,
                              std::ostream& error)
@@ -527,6 +538,13 @@ namespace forge
 
       if (!extract_release_notes(notes_path, release_notes_heading(recipe), notes, error))
         return false;
+
+      if (!notes || !release_notes_are_ready(*notes))
+      {
+        error << "forge: release notes for version '" << release_notes_heading(recipe)
+              << "' are empty or still contain the generated placeholder\n";
+        return false;
+      }
 
       if (recipe.version_header_path.empty())
         return true;

@@ -1282,8 +1282,10 @@ uses the configured dotted or SemVer form. Custom formats support `<name>`,
 date; `<target>` is the current OS and architecture; and `<configuration>` is
 `release`.
 
-GitHub releases require a Git repository with clean tracked and staged state
-and reject invalid or existing local or remote tags before tagging. Forge
+GitHub releases require a Git repository with clean tracked and staged state,
+a non-empty current-version release-note section (not the generated
+`- Describe changes.` placeholder), and reject invalid or existing local or
+remote tags before tagging. Forge
 creates an annotated tag from the matching release notes and pushes it to
 `origin`. If pushing fails, the local tag remains for inspection or a manual
 retry.

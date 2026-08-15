@@ -364,6 +364,37 @@ namespace
     expect(contains(error.str(), "were not found"), "release explains missing version notes");
   }
 
+  void test_release_git_rejects_empty_or_placeholder_notes()
+  {
+    TemporaryDirectory directory;
+    write_project(directory.path());
+    std::ofstream { directory.path() / "RELEASE_NOTES.md" }
+      << "# Release notes\n\n"
+      << "## 0.1.0\n\n"
+      << "- Describe changes.\n";
+    int invocations = 0;
+    std::ostringstream output;
+    std::ostringstream error;
+    const forge::ProcessRunner runner =
+      [&invocations](const std::vector<std::string>&,
+                     const std::filesystem::path&,
+                     std::ostream&)
+      {
+        ++invocations;
+        return 0;
+      };
+
+    expect(
+      forge::release_git(directory.path(), {}, runner, output, error) == 2,
+      "Git release rejects generated placeholder release notes"
+    );
+    expect(invocations == 0, "placeholder release notes are rejected before tag preflight");
+    expect(
+      contains(error.str(), "are empty or still contain the generated placeholder"),
+      "Git release explains placeholder release notes"
+    );
+  }
+
   void test_release_extracts_build_qualified_notes()
   {
     TemporaryDirectory directory;
@@ -700,6 +731,7 @@ int main()
   test_release_reports_archive_failure();
   test_release_rejects_file_outside_project();
   test_release_rejects_missing_version_notes();
+  test_release_git_rejects_empty_or_placeholder_notes();
   test_release_extracts_build_qualified_notes();
   test_release_creates_and_pushes_custom_tag();
   test_release_git_dry_run_preflights_without_tagging();
