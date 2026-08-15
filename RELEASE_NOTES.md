@@ -1,5 +1,16 @@
 # Release notes
 
+## 0.17.4
+
+- CMake adoption resolves simple `set(...)` and `list(APPEND ...)` source lists
+  for the selected target, respects inactive default option branches, and can
+  derive versions from exact `<PROJECT>_VER_MAJOR`, `_MINOR`, and `_PATCH`
+  macros. This correctly adopts projects such as spdlog without pulling in
+  their tests and benchmarks.
+- Dependency suggestions for compiled CMake libraries now follow headers
+  reached by their selected sources, avoiding optional public-header adapters
+  that are not part of the library's default build.
+
 ## 0.17.3
 
 - Added `SHOWCASE.md`, a verified EnTT-to-cbox-to-EnTT-Pacman walkthrough

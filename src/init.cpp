@@ -394,6 +394,44 @@ namespace forge
       return std::nullopt;
     }
 
+    std::optional<std::string> infer_component_macro_version(
+      const std::filesystem::path& project_directory,
+      const std::vector<std::string>& headers,
+      std::string_view project_name)
+    {
+      static const std::regex definition {
+        R"regex(^\s*#\s*define\s+([A-Z_][A-Z0-9_]*)_VER_(MAJOR|MINOR|PATCH)\s+([0-9]+)\b)regex"
+      };
+      const auto expected_prefix = version_macro_prefix(project_name);
+
+      for (const auto& header : headers)
+      {
+        std::ifstream file { project_directory / header };
+        std::map<std::string, std::string> components;
+        std::string line;
+
+        while (std::getline(file, line))
+        {
+          std::smatch match;
+
+          if (std::regex_search(line, match, definition)
+              && match[1].str() == expected_prefix)
+          {
+            components[match[2].str()] = match[3].str();
+          }
+        }
+
+        if (components.contains("MAJOR")
+            && components.contains("MINOR")
+            && components.contains("PATCH"))
+        {
+          return components["MAJOR"] + "." + components["MINOR"] + "." + components["PATCH"];
+        }
+      }
+
+      return std::nullopt;
+    }
+
     std::vector<SiblingDependency> visual_studio_dependencies(
       const std::filesystem::path& project_directory,
       const VisualStudioProject& project)
@@ -1206,6 +1244,24 @@ namespace forge
 
     auto include_directories = infer_include_directories(project_directory, sources, headers);
 
+    auto dependency_headers = headers;
+
+    if (visual_studio_project
+        && visual_studio_project->format == "CMake"
+        && (visual_studio_project->type == "static_library"
+            || visual_studio_project->type == "dynamic_library"))
+    {
+      std::set<std::string> reachable;
+
+      for (const auto& source : sources)
+      {
+        const auto source_headers = reachable_local_headers(project_directory, source, headers);
+        reachable.insert(source_headers.begin(), source_headers.end());
+      }
+
+      dependency_headers.assign(reachable.begin(), reachable.end());
+    }
+
     if (visual_studio_project)
     {
       include_directories.insert(
@@ -1223,7 +1279,7 @@ namespace forge
     if (show_progress)
       report_subprogress(output, 2, dependency_progress_total, "Scanning unresolved includes");
 
-    auto unresolved = unresolved_includes(project_directory, sources, headers);
+    auto unresolved = unresolved_includes(project_directory, sources, dependency_headers);
 
     if (show_progress)
       report_subprogress(output, 3, dependency_progress_total, "Matching sibling Forge projects");
@@ -1239,7 +1295,7 @@ namespace forge
       unresolved,
       include_directories,
       sources,
-      headers
+      dependency_headers
     );
 
     if (show_progress)
@@ -1308,10 +1364,17 @@ namespace forge
     const auto project_name = visual_studio_project
       ? visual_studio_project->name
       : project_directory.filename().string();
+    const auto inferred_header_version = infer_packed_macro_version(
+      project_directory,
+      headers,
+      project_name
+    );
     const auto metadata_version =
       visual_studio_project && !visual_studio_project->version.empty()
         ? std::optional<std::string> { visual_studio_project->version }
-        : infer_packed_macro_version(project_directory, headers, project_name);
+        : inferred_header_version
+        ? inferred_header_version
+        : infer_component_macro_version(project_directory, headers, project_name);
     const auto project_version =
       explicit_version
         ? explicit_version->version

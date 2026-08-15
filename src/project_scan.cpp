@@ -575,13 +575,15 @@ namespace forge
     bool looks_like_dependency_include(std::string_view include)
     {
       static const std::set<std::string_view> system_headers {
-        "assert.h", "complex.h", "conio.h", "ctype.h", "errno.h", "fcntl.h", "fenv.h",
+        "AvailabilityMacros.h", "TargetConditionals.h", "assert.h", "complex.h", "conio.h",
+        "ctype.h", "dirent.h", "direct.h", "errno.h", "fcntl.h", "fenv.h",
         "float.h", "inttypes.h", "io.h", "ioLib.h", "limits.h", "locale.h", "math.h",
-        "process.h", "setjmp.h",
+        "netdb.h", "process.h", "pthread.h", "pthread_np.h", "setjmp.h", "share.h",
         "signal.h", "stdarg.h", "stdbool.h", "stddef.h", "stdint.h", "stdio.h",
-        "stdlib.h", "string.h", "termios.h", "time.h", "uchar.h", "unistd.h", "wchar.h",
-        "wctype.h", "windows.h", "cxxabi.h", "intrin.h", "winapifamily.h", "xlocale.h",
-        "audioclient.h", "ksmedia.h", "mmdeviceapi.h",
+        "stdlib.h", "string.h", "syslog.h", "termios.h", "thread.h", "time.h", "uchar.h",
+        "unistd.h", "wchar.h", "wctype.h", "windows.h", "cxxabi.h", "fileapi.h", "intrin.h",
+        "lwp.h", "winapifamily.h", "winbase.h", "wincon.h", "winsock2.h", "ws2tcpip.h",
+        "xlocale.h", "audioclient.h", "ksmedia.h", "mmdeviceapi.h",
         "algorithm", "any", "array", "atomic", "barrier", "bit", "bitset",
         "cassert", "ccomplex", "cctype", "cerrno", "cfenv", "cfloat", "charconv",
         "chrono", "cinttypes", "ciso646", "climits", "clocale", "cmath",

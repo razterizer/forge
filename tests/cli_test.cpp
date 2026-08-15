@@ -434,7 +434,7 @@ namespace
   void test_version()
   {
     constexpr std::array arguments { std::string_view { "--version" } };
-    constexpr std::string_view expected_version = "0.17.3+build.41";
+    constexpr std::string_view expected_version = "0.17.4+build.42";
     std::ostringstream output;
     std::ostringstream error;
 
@@ -1757,13 +1757,19 @@ namespace
       directory.path() / "CMakeLists.txt",
       "project(FMT CXX)\n"
       "option(FMT_OS \"Include OS-specific APIs.\" ON)\n"
-      "add_library(fmt src/format.cc)\n"
-      "target_compile_features(fmt PUBLIC cxx_std_11)\n"
+      "option(FMT_SHARED \"Build a shared library.\" OFF)\n"
+      "set(FMT_SRCS src/format.cc)\n"
       "if(FMT_OS)\n"
-      "  target_sources(fmt PRIVATE src/os.cc)\n"
+      "  list(APPEND FMT_SRCS src/os.cc)\n"
       "else()\n"
       "  target_compile_definitions(fmt PRIVATE FMT_OS=0)\n"
       "endif()\n"
+      "if(FMT_SHARED)\n"
+      "  add_library(fmt SHARED ${FMT_SRCS})\n"
+      "else()\n"
+      "  add_library(fmt STATIC ${FMT_SRCS})\n"
+      "endif()\n"
+      "target_compile_features(fmt PUBLIC cxx_std_11)\n"
       "add_library(fmt-header-only INTERFACE)\n"
       "target_include_directories(fmt-header-only INTERFACE test/gtest)\n"
       "target_compile_definitions(fmt-header-only INTERFACE FMT_HEADER_ONLY=1)\n"
@@ -1777,6 +1783,10 @@ namespace
     write_file(
       directory.path() / "include/fmt/format.h",
       "#pragma once\nint format_answer();\n"
+    );
+    write_file(
+      directory.path() / "include/fmt/optional.h",
+      "#include <absl/strings/string_view.h>\n"
     );
     write_file(
       directory.path() / "src/format.cc",
@@ -1800,7 +1810,7 @@ namespace
     expect(
       contains(recipe, "paths = [\"src/format.cc\", \"src/os.cc\"]")
         && !contains(recipe, "src/fmt-c.cc"),
-      "adopt keeps sources owned by the selected CMake target"
+      "adopt resolves selected-target source lists and ignores inactive target declarations"
     );
     expect(
       !contains(recipe, "test/gtest")
@@ -1823,6 +1833,33 @@ namespace
     );
     expect(error.str().empty(), "selected CMake target adoption does not write an error");
     expect(build_error.str().empty(), "selected CMake target build does not write an error");
+  }
+
+  void test_adopt_infers_component_version_macro()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "project(spdlog CXX)\nadd_library(spdlog src/spdlog.cpp)\n"
+    );
+    write_file(directory.path() / "src/spdlog.cpp", "int answer() { return 42; }\n");
+    write_file(
+      directory.path() / "include/spdlog/version.h",
+      "#define SPDLOG_VER_MAJOR 1\n#define SPDLOG_VER_MINOR 17\n#define SPDLOG_VER_PATCH 0\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt accepts a CMake library with component version macros"
+    );
+    expect(
+      contains(read_file(directory.path() / "forge.recipe.toml"), "version = \"1.17.0\"")
+        && error.str().empty(),
+      "adopt derives a semantic version from component version macros"
+    );
   }
 
   void test_adopt_maps_cmake_system_package_providers()
@@ -7843,6 +7880,7 @@ int main()
   test_adopt_imports_visual_studio_project();
   test_adopt_imports_cmake_project();
   test_adopt_selects_named_cmake_library_target();
+  test_adopt_infers_component_version_macro();
   test_adopt_maps_cmake_system_package_providers();
   test_adopt_preserves_cmake_interface_library_with_programs();
   test_adopt_scopes_cmake_interface_library_to_public_headers();

@@ -240,7 +240,10 @@ manual review. When a concrete CMake target matches the `project(...)` name,
 adoption scopes metadata to that target rather than merging auxiliary example,
 test, header-only, or compatibility targets. A project that calculates its
 version from an exact packed `<PROJECT>_VERSION` public-header macro can use
-that value when CMake itself does not declare a version. CMake remains
+that value when CMake itself does not declare a version; the corresponding
+`<PROJECT>_VER_MAJOR`, `_MINOR`, and `_PATCH` macro form is supported too.
+Simple CMake source lists assembled with `set(...)` and `list(APPEND ...)` are
+resolved for the selected target. CMake remains
 authoritative when generated Visual Studio
 solution, Visual Studio project, or Xcode project files are present. A
 top-level CMake project that defines only concrete `add_subdirectory(...)`

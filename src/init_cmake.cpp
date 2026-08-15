@@ -166,6 +166,7 @@ namespace forge
     {
       for (const auto variable : {
         std::string_view { "${CMAKE_CURRENT_SOURCE_DIR}" },
+        std::string_view { "${CMAKE_CURRENT_LIST_DIR}" },
         std::string_view { "${CMAKE_SOURCE_DIR}" },
         std::string_view { "${PROJECT_SOURCE_DIR}" }
       })
@@ -389,6 +390,7 @@ namespace forge
       std::vector<ConditionalScope> conditional_scopes;
       bool active = true;
       function_depth = 0;
+      std::map<std::string, std::vector<std::string>> variables;
 
       const auto condition_value = [&options](const std::vector<std::string>& arguments)
       {
@@ -402,6 +404,18 @@ namespace forge
         const auto& name = arguments[negated ? 1 : 0];
         const auto value = options.contains(name) && options.at(name);
         return negated ? !value : value;
+      };
+      const auto expand_argument = [&variables](std::string_view argument)
+      {
+        if (argument.starts_with("${") && argument.ends_with('}'))
+        {
+          const auto name = std::string { argument.substr(2, argument.size() - 3) };
+
+          if (variables.contains(name))
+            return variables.at(name);
+        }
+
+        return std::vector<std::string> { std::string { argument } };
       };
       const auto add_target_path = [&project, &directory](std::string_view argument)
       {
@@ -491,7 +505,35 @@ namespace forge
           continue;
         }
 
-        if (command.name == "add_subdirectory")
+        if (command.name == "set" && !command.arguments.empty() && active)
+        {
+          std::vector<std::string> values;
+
+          for (std::size_t index = 1; index < command.arguments.size(); ++index)
+          {
+            if (command.arguments[index] == "CACHE" || command.arguments[index] == "PARENT_SCOPE")
+              break;
+
+            const auto expanded = expand_argument(command.arguments[index]);
+            values.insert(values.end(), expanded.begin(), expanded.end());
+          }
+
+          variables[command.arguments.front()] = std::move(values);
+        }
+        else if (command.name == "list"
+                 && command.arguments.size() > 2
+                 && command.arguments[0] == "APPEND"
+                 && active)
+        {
+          auto& values = variables[command.arguments[1]];
+
+          for (std::size_t index = 2; index < command.arguments.size(); ++index)
+          {
+            const auto expanded = expand_argument(command.arguments[index]);
+            values.insert(values.end(), expanded.begin(), expanded.end());
+          }
+        }
+        else if (command.name == "add_subdirectory")
           project.has_cmake_subprojects = true;
         else if (command.name == "find_library" && command.arguments.size() > 1)
           frameworks[command.arguments[0]] = command.arguments[1];
@@ -560,6 +602,8 @@ namespace forge
           if (!target_is_selected(command) || !active)
             continue;
 
+          project.type = target_type(command);
+
           for (std::size_t index = 1; index < command.arguments.size(); ++index)
           {
             const auto& argument = command.arguments[index];
@@ -576,7 +620,8 @@ namespace forge
               continue;
             }
 
-            add_target_path(argument);
+            for (const auto& expanded : expand_argument(argument))
+              add_target_path(expanded);
           }
         }
         else if (command.name == "target_sources"
@@ -589,7 +634,10 @@ namespace forge
             const auto& argument = command.arguments[index];
 
             if (!is_cmake_scope(argument))
-              add_target_path(argument);
+            {
+              for (const auto& expanded : expand_argument(argument))
+                add_target_path(expanded);
+            }
           }
         }
         else if (command.name == "target_compile_features"
@@ -618,12 +666,16 @@ namespace forge
 
             const auto build_interface = cmake_build_interface_value(original_argument);
             const auto& argument = build_interface ? *build_interface : original_argument;
-            const auto expanded = replace_cmake_paths(argument, directory, project.name);
 
-            if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
-              project.unresolved_properties.push_back(original_argument);
-            else if (const auto relative = project_relative_path(directory, expanded))
-              project.include_directories.push_back(*relative);
+            for (const auto& resolved : expand_argument(argument))
+            {
+              const auto expanded = replace_cmake_paths(resolved, directory, project.name);
+
+              if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
+                project.unresolved_properties.push_back(original_argument);
+              else if (const auto relative = project_relative_path(directory, expanded))
+                project.include_directories.push_back(*relative);
+            }
           }
         }
         else if (command.name == "target_compile_definitions"
