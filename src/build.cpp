@@ -1492,7 +1492,7 @@ namespace forge
 
       std::ostringstream ignored_output;
 
-      if (!std::filesystem::is_regular_file(vcpkg_root / "scripts" / "vcpkg-root"))
+      if (!std::filesystem::is_regular_file(vcpkg_root / ".vcpkg-root"))
       {
         output << "forge: missing vcpkg ports tree\n"
                << "Install provider with: git clone https://github.com/microsoft/vcpkg .forge/vcpkg ? [y/N] ";
