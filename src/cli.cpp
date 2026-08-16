@@ -117,17 +117,13 @@ namespace forge::cli
 
       return resolve_effective_build_selection(
         recipe,
-        std::nullopt,
-        profile,
-        std::nullopt,
-        std::optional<std::string> { "github-package" },
-        current_target(),
-        std::nullopt,
-        "Debug",
-        ProfileResolution::automatic,
-        true,
-        false,
-        false,
+        {
+          .profile = profile,
+          .style = std::optional<std::string> { "github-package" },
+          .platform = current_target(),
+          .select_target = false,
+          .apply_build_profiles = false
+        },
         effective_selection,
         error
       );

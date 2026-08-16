@@ -1778,44 +1778,40 @@ namespace forge
 
   bool resolve_effective_build_selection(
     Recipe& recipe,
-    const std::optional<std::string>& target,
-    const std::optional<std::string>& profile,
-    const std::optional<std::string>& system_profile,
-    const std::optional<std::string>& style,
-    std::string platform,
-    const std::optional<std::string>& selector_configuration,
-    std::string configured_build_configuration,
-    ProfileResolution profile_resolution,
-    bool require_profile,
-    bool select_target,
-    bool apply_build_profiles,
+    const BuildSelectionRequest& request,
     EffectiveBuildSelection& effective,
     std::ostream& error
   )
   {
-    if (select_target && !select_recipe_target(recipe, target, error))
+    if (request.select_target && !select_recipe_target(recipe, request.target, error))
       return false;
 
     const auto uses_selector_rules = !recipe.build_rules.empty() || !recipe.dependency_rules.empty();
-    const auto named_legacy_profile = profile
-      && (recipe.dependency_profiles.contains(*profile) || recipe.build_profiles.contains(*profile));
-    const auto use_legacy_profile = profile_resolution == ProfileResolution::automatic
-      ? named_legacy_profile || (profile && !uses_selector_rules && !style)
-      : profile_resolution == ProfileResolution::inherited_legacy && named_legacy_profile;
+    const auto named_legacy_profile = request.profile
+      && (recipe.dependency_profiles.contains(*request.profile)
+          || recipe.build_profiles.contains(*request.profile));
+    const auto use_legacy_profile = request.profile_resolution == ProfileResolution::automatic
+      ? named_legacy_profile || (request.profile && !uses_selector_rules && !request.style)
+      : request.profile_resolution == ProfileResolution::inherited_legacy && named_legacy_profile;
 
-    effective.legacy_profile = use_legacy_profile ? profile : std::optional<std::string> {};
+    effective.legacy_profile = use_legacy_profile ? request.profile : std::optional<std::string> {};
 
-    if (!select_dependency_profile(recipe, effective.legacy_profile, require_profile, error)
-        || !select_system_dependency_profile(recipe, system_profile, require_profile, error))
+    if (!select_dependency_profile(recipe, effective.legacy_profile, request.require_profile, error)
+        || !select_system_dependency_profile(
+          recipe,
+          request.system_profile,
+          request.require_profile,
+          error
+        ))
     {
       return false;
     }
 
-    effective.configuration = std::move(configured_build_configuration);
+    effective.configuration = request.build_configuration;
 
-    if (selector_configuration)
+    if (request.selector_configuration)
     {
-      effective.configuration = *selector_configuration;
+      effective.configuration = *request.selector_configuration;
 
       if (!effective.configuration.empty())
       {
@@ -1827,34 +1823,34 @@ namespace forge
 
     effective.selectors = resolve_recipe_selection(
       recipe,
-      style,
-      std::move(platform),
-      selector_configuration,
-      effective.legacy_profile ? std::optional<std::string> {} : profile
+      request.style,
+      request.platform,
+      request.selector_configuration,
+      effective.legacy_profile ? std::optional<std::string> {} : request.profile
     );
 
     if (effective.legacy_profile)
       effective.selectors.profile.clear();
 
     if (!effective.legacy_profile
-        && (uses_selector_rules || style)
+        && (uses_selector_rules || request.style)
         && !apply_selector_rules(recipe, effective.selectors, effective.configuration, error))
     {
       return false;
     }
 
-    if (apply_build_profiles
+    if (request.apply_build_profiles
         && (!select_build_profile(
               recipe,
               effective.legacy_profile,
-              require_profile,
+              request.require_profile,
               effective.configuration,
               error
             )
             || !select_system_build_profile(
               recipe,
-              system_profile,
-              require_profile,
+              request.system_profile,
+              request.require_profile,
               effective.configuration,
               error
             )))

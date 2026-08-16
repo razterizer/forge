@@ -570,21 +570,17 @@ namespace
     );
     forge::EffectiveBuildSelection selector_selection;
     std::ostringstream selector_error;
+    const forge::BuildSelectionRequest selector_request {
+      .profile = "cinema",
+      .platform = "macos-arm64",
+      .selector_configuration = "release",
+      .select_target = false
+    };
 
     expect(
       forge::resolve_effective_build_selection(
         selector_recipe,
-        std::nullopt,
-        std::optional<std::string> { "cinema" },
-        std::nullopt,
-        std::nullopt,
-        "macos-arm64",
-        std::optional<std::string> { "release" },
-        "Debug",
-        forge::ProfileResolution::automatic,
-        true,
-        false,
-        true,
+        selector_request,
         selector_selection,
         selector_error
       ),
@@ -607,21 +603,16 @@ namespace
     );
     forge::EffectiveBuildSelection legacy_selection;
     std::ostringstream legacy_error;
+    const forge::BuildSelectionRequest legacy_request {
+      .profile = "workflow-release",
+      .platform = "macos-arm64",
+      .select_target = false
+    };
 
     expect(
       forge::resolve_effective_build_selection(
         legacy_recipe,
-        std::nullopt,
-        std::optional<std::string> { "workflow-release" },
-        std::nullopt,
-        std::nullopt,
-        "macos-arm64",
-        std::nullopt,
-        "Debug",
-        forge::ProfileResolution::automatic,
-        true,
-        false,
-        true,
+        legacy_request,
         legacy_selection,
         legacy_error
       ),

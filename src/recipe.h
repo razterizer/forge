@@ -136,6 +136,21 @@ namespace forge
     std::string configuration;
   };
 
+  struct BuildSelectionRequest
+  {
+    std::optional<std::string> target;
+    std::optional<std::string> profile;
+    std::optional<std::string> system_profile;
+    std::optional<std::string> style;
+    std::string platform;
+    std::optional<std::string> selector_configuration;
+    std::string build_configuration = "Debug";
+    ProfileResolution profile_resolution = ProfileResolution::automatic;
+    bool require_profile = true;
+    bool select_target = true;
+    bool apply_build_profiles = true;
+  };
+
   struct ReleaseVariant
   {
     std::string profile;
@@ -279,17 +294,7 @@ namespace forge
 
   bool resolve_effective_build_selection(
     Recipe& recipe,
-    const std::optional<std::string>& target,
-    const std::optional<std::string>& profile,
-    const std::optional<std::string>& system_profile,
-    const std::optional<std::string>& style,
-    std::string platform,
-    const std::optional<std::string>& selector_configuration,
-    std::string configured_build_configuration,
-    ProfileResolution profile_resolution,
-    bool require_profile,
-    bool select_target,
-    bool apply_build_profiles,
+    const BuildSelectionRequest& request,
     EffectiveBuildSelection& selection,
     std::ostream& error
   );

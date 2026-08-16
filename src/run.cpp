@@ -105,17 +105,13 @@ namespace forge
 
       if (!resolve_effective_build_selection(
         recipe,
-        std::nullopt,
-        profile,
-        system_profile,
-        std::nullopt,
-        current_target(),
-        std::nullopt,
-        launch_profile.configuration,
-        ProfileResolution::automatic,
-        true,
-        false,
-        true,
+        {
+          .profile = profile,
+          .system_profile = system_profile,
+          .platform = current_target(),
+          .build_configuration = launch_profile.configuration,
+          .select_target = false
+        },
         effective_selection,
         error
       ))

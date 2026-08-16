@@ -3010,19 +3010,19 @@ namespace forge
 
           if (!resolve_effective_build_selection(
             dependency_recipe,
-            std::nullopt,
-            dependency_session->options.profile,
-            dependency_session->options.system_profile,
-            dependency_session->options.style,
-            dependency_session->options.platform.value_or(current_target()),
-            dependency_session->options.config,
-            dependency_session->options.configuration,
-            dependency_session->profile_is_legacy
-              ? ProfileResolution::inherited_legacy
-              : ProfileResolution::selectors_only,
-            false,
-            false,
-            true,
+            {
+              .profile = dependency_session->options.profile,
+              .system_profile = dependency_session->options.system_profile,
+              .style = dependency_session->options.style,
+              .platform = dependency_session->options.platform.value_or(current_target()),
+              .selector_configuration = dependency_session->options.config,
+              .build_configuration = dependency_session->options.configuration,
+              .profile_resolution = dependency_session->profile_is_legacy
+                ? ProfileResolution::inherited_legacy
+                : ProfileResolution::selectors_only,
+              .require_profile = false,
+              .select_target = false
+            },
             effective_selection,
             error
           ))
@@ -3814,17 +3814,19 @@ namespace forge
 
     if (!resolve_effective_build_selection(
       recipe,
-      requested_target,
-      dependency_session->options.profile,
-      dependency_session->options.system_profile,
-      dependency_session->options.style,
-      dependency_session->options.platform.value_or(current_target()),
-      dependency_session->options.config,
-      dependency_session->options.configuration,
-      is_root_project ? ProfileResolution::automatic : ProfileResolution::inherited_legacy,
-      is_root_project,
-      true,
-      true,
+      {
+        .target = requested_target,
+        .profile = dependency_session->options.profile,
+        .system_profile = dependency_session->options.system_profile,
+        .style = dependency_session->options.style,
+        .platform = dependency_session->options.platform.value_or(current_target()),
+        .selector_configuration = dependency_session->options.config,
+        .build_configuration = dependency_session->options.configuration,
+        .profile_resolution = is_root_project
+          ? ProfileResolution::automatic
+          : ProfileResolution::inherited_legacy,
+        .require_profile = is_root_project
+      },
       effective_selection,
       error
     ))

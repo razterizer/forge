@@ -895,17 +895,15 @@ namespace forge
 
     if (!resolve_effective_build_selection(
       recipe,
-      target,
-      requested_options.profile,
-      requested_options.system_profile,
-      requested_options.style,
-      requested_options.platform.value_or(current_target()),
-      requested_options.config,
-      requested_options.configuration,
-      ProfileResolution::automatic,
-      true,
-      true,
-      true,
+      {
+        .target = target,
+        .profile = requested_options.profile,
+        .system_profile = requested_options.system_profile,
+        .style = requested_options.style,
+        .platform = requested_options.platform.value_or(current_target()),
+        .selector_configuration = requested_options.config,
+        .build_configuration = requested_options.configuration
+      },
       effective_selection,
       error
     ))
