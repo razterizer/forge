@@ -875,7 +875,7 @@ namespace
     expect(
       contains(
         generated,
-        (directory.path() / "vcpkg_installed" / triplet / "include").generic_string()
+        "vcpkg_installed/" + std::string { triplet } + "/include"
       ),
       "generated CMake exposes the vcpkg manifest include directory"
     );
