@@ -6729,6 +6729,10 @@ namespace
       "int main() { return calculate() == 84 ? 0 : 1; }\n"
     );
     constexpr std::array run_arguments { std::string_view { "build-and-run" } };
+    constexpr std::array release_run_arguments {
+      std::string_view { "build-and-run" },
+      std::string_view { "--config=release" }
+    };
     std::ostringstream output;
     std::ostringstream error;
 
@@ -6787,6 +6791,22 @@ namespace
       !contains(cached_output.str(), "Resolving dependency"),
       "second build does not rebuild compatible source dependencies"
     );
+
+    std::ostringstream release_output;
+    std::ostringstream release_error;
+    expect(
+      forge::cli::run(release_run_arguments, application, release_output, release_error) == 0,
+      "switching configuration rebuilds local binary dependencies"
+    );
+    expect(
+      contains(release_output.str(), "Resolving dependency answer"),
+      "switching configuration does not reuse a binary dependency from another configuration"
+    );
+    expect(
+      contains(release_output.str(), "Resolving dependency calculator"),
+      "switching configuration rebuilds transitive binary dependencies"
+    );
+    expect(release_error.str().empty(), "configuration switch does not report a toolchain error");
 
     write_file(
       answer / "src/answer.cpp",

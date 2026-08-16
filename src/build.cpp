@@ -73,6 +73,7 @@ namespace forge
       std::optional<std::string> target;
       std::optional<std::string> profile;
       std::optional<std::string> system_profile;
+      std::string configuration;
       std::filesystem::path box;
       std::optional<BoxMetadata> box_metadata;
     };
@@ -2543,6 +2544,9 @@ namespace forge
             && ((metadata.type == "header_only" && !has_platform_specific_requirements(node.recipe))
                 || (metadata.os == dependency_target_os()
                     && metadata.arch == dependency_target_arch()))
+            && (metadata.type == "header_only"
+                || (metadata.toolchain
+                    && metadata.toolchain->configuration == node.configuration))
             && dependency_graph_matches(node.recipe, metadata, error))
         {
           node.box = entry.path();
@@ -2984,6 +2988,19 @@ namespace forge
               || dependency_recipe.system_build_profiles.contains(*dependency_session->options.system_profile))
             ? dependency_session->options.system_profile
             : std::optional<std::string> {};
+        auto dependency_configuration = dependency_session->options.configuration;
+
+        if (dependency_session->options.config)
+        {
+          dependency_configuration = *dependency_session->options.config;
+
+          if (!dependency_configuration.empty())
+          {
+            dependency_configuration.front() = static_cast<char>(
+              std::toupper(dependency_configuration.front())
+            );
+          }
+        }
 
         if (!is_box
             && !select_dependency_profile(
@@ -3035,7 +3052,6 @@ namespace forge
 
         if (!is_box && !selected_dependency_profile)
         {
-          auto configuration = dependency_session->options.configuration;
           const auto selection = resolve_recipe_selection(
             dependency_recipe,
             dependency_session->options.style,
@@ -3050,7 +3066,7 @@ namespace forge
               && !apply_selector_rules(
                 dependency_recipe,
                 selection,
-                configuration,
+                dependency_configuration,
                 error
               ))
           {
@@ -3060,6 +3076,32 @@ namespace forge
           if (!selection.profile.empty())
             selected_dependency_profile = selection.profile;
         }
+
+        if (!is_box
+            && !select_build_profile(
+              dependency_recipe,
+              selected_dependency_profile,
+              false,
+              dependency_configuration,
+              error
+            ))
+        {
+          return false;
+        }
+        if (!is_box
+            && !select_system_build_profile(
+              dependency_recipe,
+              selected_dependency_system_profile,
+              false,
+              dependency_configuration,
+              error
+            ))
+        {
+          return false;
+        }
+
+        if (selected_dependency_profile == workflow_release_profile)
+          dependency_configuration = "Release";
 
         if (dependency_recipe.name != dependency.name)
         {
@@ -3089,6 +3131,7 @@ namespace forge
               dependency_target,
               selected_dependency_profile,
               selected_dependency_system_profile,
+              dependency_configuration,
               is_box ? directory : std::filesystem::path {},
               std::move(box_metadata)
             }
