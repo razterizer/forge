@@ -113,24 +113,24 @@ namespace forge::cli
                                      const std::optional<std::string>& profile,
                                      std::ostream& error)
     {
-      const auto uses_selector_rules =
-        !recipe.build_rules.empty() || !recipe.dependency_rules.empty();
-      const auto legacy_profile = profile
-        && (recipe.dependency_profiles.contains(*profile)
-            || recipe.build_profiles.contains(*profile));
+      EffectiveBuildSelection effective_selection;
 
-      if (legacy_profile || !uses_selector_rules)
-        return select_dependency_profile(recipe, profile, true, error);
-
-      auto configuration = std::string { "Debug" };
-      const auto selection = resolve_recipe_selection(
+      return resolve_effective_build_selection(
         recipe,
+        std::nullopt,
+        profile,
+        std::nullopt,
         std::optional<std::string> { "github-package" },
         current_target(),
         std::nullopt,
-        profile
+        "Debug",
+        ProfileResolution::automatic,
+        true,
+        false,
+        false,
+        effective_selection,
+        error
       );
-      return apply_selector_rules(recipe, selection, configuration, error);
     }
 
     bool selected_github_dependency_names(const std::filesystem::path& project_directory,

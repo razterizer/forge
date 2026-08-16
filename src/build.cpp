@@ -413,7 +413,10 @@ namespace forge
       }
     }
 
-    struct DependencySession
+    // Dependency graph, lockfile, and cache state are owned by one resolver
+    // for the duration of a root build.  Nested builds join that resolver so
+    // they cannot accidentally choose a different cached dependency variant.
+    struct DependencyResolver
     {
       std::map<std::filesystem::path, DependencyNode> nodes;
       std::map<std::string, std::filesystem::path> names;
@@ -427,12 +430,12 @@ namespace forge
       bool update_dependency_found = false;
     };
 
-    thread_local DependencySession* dependency_session = nullptr;
+    thread_local DependencyResolver* dependency_session = nullptr;
 
-    class DependencySessionScope
+    class DependencyResolverScope
     {
     public:
-      DependencySessionScope()
+      DependencyResolverScope()
       {
         if (dependency_session == nullptr)
         {
@@ -441,14 +444,14 @@ namespace forge
         }
       }
 
-      ~DependencySessionScope()
+      ~DependencyResolverScope()
       {
         if (owns_session_)
           dependency_session = nullptr;
       }
 
     private:
-      DependencySession owned_session_;
+      DependencyResolver owned_session_;
       bool owns_session_ = false;
     };
 
@@ -2970,58 +2973,9 @@ namespace forge
         else if (!read_recipe(directory / "forge.recipe.toml", dependency_recipe, error))
           return false;
 
-        const auto uses_selector_rules = !is_box
-          && (!dependency_recipe.build_rules.empty()
-              || !dependency_recipe.dependency_rules.empty());
-        auto selected_dependency_profile =
-          !is_box
-          && dependency_session->profile_is_legacy
-          && dependency_session->options.profile
-          && (dependency_recipe.dependency_profiles.contains(*dependency_session->options.profile)
-              || dependency_recipe.build_profiles.contains(*dependency_session->options.profile))
-            ? dependency_session->options.profile
-            : std::optional<std::string> {};
-        const auto selected_dependency_system_profile =
-          !is_box
-          && dependency_session->options.system_profile
-          && (dependency_recipe.system_dependency_profiles.contains(*dependency_session->options.system_profile)
-              || dependency_recipe.system_build_profiles.contains(*dependency_session->options.system_profile))
-            ? dependency_session->options.system_profile
-            : std::optional<std::string> {};
+        std::optional<std::string> selected_dependency_profile;
+        std::optional<std::string> selected_dependency_system_profile;
         auto dependency_configuration = dependency_session->options.configuration;
-
-        if (dependency_session->options.config)
-        {
-          dependency_configuration = *dependency_session->options.config;
-
-          if (!dependency_configuration.empty())
-          {
-            dependency_configuration.front() = static_cast<char>(
-              std::toupper(dependency_configuration.front())
-            );
-          }
-        }
-
-        if (!is_box
-            && !select_dependency_profile(
-              dependency_recipe,
-              selected_dependency_profile,
-              false,
-              error
-            ))
-        {
-          return false;
-        }
-        if (!is_box
-            && !select_system_dependency_profile(
-              dependency_recipe,
-              dependency_session->options.system_profile,
-              false,
-              error
-            ))
-        {
-          return false;
-        }
 
         if (!is_box && dependency_recipe.type.empty() && !dependency_recipe.targets.empty())
         {
@@ -3050,54 +3004,48 @@ namespace forge
           dependency_target = preferred->name;
         }
 
-        if (!is_box && !selected_dependency_profile)
+        if (!is_box)
         {
-          const auto selection = resolve_recipe_selection(
+          EffectiveBuildSelection effective_selection;
+
+          if (!resolve_effective_build_selection(
             dependency_recipe,
+            std::nullopt,
+            dependency_session->options.profile,
+            dependency_session->options.system_profile,
             dependency_session->options.style,
             dependency_session->options.platform.value_or(current_target()),
             dependency_session->options.config,
+            dependency_session->options.configuration,
             dependency_session->profile_is_legacy
-              ? std::optional<std::string> {}
-              : dependency_session->options.profile
-          );
-
-          if ((uses_selector_rules || dependency_session->options.style)
-              && !apply_selector_rules(
-                dependency_recipe,
-                selection,
-                dependency_configuration,
-                error
-              ))
+              ? ProfileResolution::inherited_legacy
+              : ProfileResolution::selectors_only,
+            false,
+            false,
+            true,
+            effective_selection,
+            error
+          ))
           {
             return false;
           }
 
-          if (!selection.profile.empty())
-            selected_dependency_profile = selection.profile;
-        }
+          selected_dependency_profile = effective_selection.legacy_profile;
 
-        if (!is_box
-            && !select_build_profile(
-              dependency_recipe,
-              selected_dependency_profile,
-              false,
-              dependency_configuration,
-              error
-            ))
-        {
-          return false;
-        }
-        if (!is_box
-            && !select_system_build_profile(
-              dependency_recipe,
-              selected_dependency_system_profile,
-              false,
-              dependency_configuration,
-              error
-            ))
-        {
-          return false;
+          if (!selected_dependency_profile && !effective_selection.selectors.profile.empty())
+            selected_dependency_profile = effective_selection.selectors.profile;
+
+          if (dependency_session->options.system_profile
+              && (dependency_recipe.system_dependency_profiles.contains(
+                    *dependency_session->options.system_profile
+                  )
+                  || dependency_recipe.system_build_profiles.contains(
+                    *dependency_session->options.system_profile
+                  )))
+          {
+            selected_dependency_system_profile = dependency_session->options.system_profile;
+          }
+          dependency_configuration = std::move(effective_selection.configuration);
         }
 
         if (selected_dependency_profile == workflow_release_profile)
@@ -3793,7 +3741,7 @@ namespace forge
                     std::ostream& output,
                     std::ostream& error)
   {
-    DependencySessionScope session_scope;
+    DependencyResolverScope session_scope;
     std::error_code canonical_error;
     const auto canonical_project =
       std::filesystem::weakly_canonical(project_directory, canonical_error);
@@ -3847,43 +3795,6 @@ namespace forge
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
       return 2;
 
-    const auto uses_selector_rules =
-      !recipe.build_rules.empty() || !recipe.dependency_rules.empty();
-    const auto requested_profile = dependency_session->options.profile;
-    const auto legacy_profile = is_root_project
-      ? requested_profile
-          && (recipe.dependency_profiles.contains(*requested_profile)
-              || recipe.build_profiles.contains(*requested_profile))
-        ? requested_profile
-        : uses_selector_rules || dependency_session->options.style
-          ? std::optional<std::string> {}
-          : requested_profile
-      : dependency_session->profile_is_legacy
-          && requested_profile
-          && (recipe.dependency_profiles.contains(*requested_profile)
-              || recipe.build_profiles.contains(*requested_profile))
-        ? requested_profile
-        : std::optional<std::string> {};
-
-    if (!select_dependency_profile(
-      recipe,
-      legacy_profile,
-      is_root_project,
-      error
-    ))
-    {
-      return 2;
-    }
-    if (!select_system_dependency_profile(
-      recipe,
-      dependency_session->options.system_profile,
-      is_root_project,
-      error
-    ))
-    {
-      return 2;
-    }
-
     auto requested_target = options.target
       ? options.target
       : is_root_project
@@ -3898,29 +3809,32 @@ namespace forge
       requested_target = recipe.targets.front().name;
     }
 
-    if (!select_recipe_target(recipe, requested_target, error))
-      return 2;
+    const auto selectable_dependencies = selector_dependency_names(recipe);
+    EffectiveBuildSelection effective_selection;
 
-    auto configuration = dependency_session->options.configuration;
-
-    if (dependency_session->options.config)
-    {
-      configuration = *dependency_session->options.config;
-
-      if (!configuration.empty())
-        configuration.front() = static_cast<char>(std::toupper(configuration.front()));
-    }
-
-    auto selection = resolve_recipe_selection(
+    if (!resolve_effective_build_selection(
       recipe,
+      requested_target,
+      dependency_session->options.profile,
+      dependency_session->options.system_profile,
       dependency_session->options.style,
       dependency_session->options.platform.value_or(current_target()),
       dependency_session->options.config,
-      legacy_profile ? std::optional<std::string> {} : dependency_session->options.profile
-    );
+      dependency_session->options.configuration,
+      is_root_project ? ProfileResolution::automatic : ProfileResolution::inherited_legacy,
+      is_root_project,
+      true,
+      true,
+      effective_selection,
+      error
+    ))
+    {
+      return 2;
+    }
 
-    if (legacy_profile)
-      selection.profile.clear();
+    const auto& legacy_profile = effective_selection.legacy_profile;
+    const auto& selection = effective_selection.selectors;
+    const auto& configuration = effective_selection.configuration;
 
     if (is_root_project)
     {
@@ -3937,13 +3851,6 @@ namespace forge
       }
     }
 
-    const auto selectable_dependencies = selector_dependency_names(recipe);
-
-    if (!legacy_profile
-        && (uses_selector_rules || dependency_session->options.style)
-        && !apply_selector_rules(recipe, selection, configuration, error))
-      return 2;
-
     if (!legacy_profile
         && !validate_selected_dependency_includes(
           project_directory,
@@ -3952,27 +3859,6 @@ namespace forge
           selectable_dependencies,
           error
         ))
-    {
-      return 2;
-    }
-
-    if (!select_build_profile(
-      recipe,
-      legacy_profile,
-      is_root_project,
-      configuration,
-      error
-    ))
-    {
-      return 2;
-    }
-    if (!select_system_build_profile(
-      recipe,
-      dependency_session->options.system_profile,
-      is_root_project,
-      configuration,
-      error
-    ))
     {
       return 2;
     }

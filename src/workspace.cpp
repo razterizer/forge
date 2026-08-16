@@ -623,46 +623,28 @@ namespace forge
       return 2;
 
     const auto project = requested_options.target;
-    const auto platform = requested_options.platform.value_or(current_target());
 
     for (auto& [path, recipe] : recipes)
     {
       static_cast<void>(path);
-      const auto legacy_profile = requested_options.profile
-          && (recipe.dependency_profiles.contains(*requested_options.profile)
-              || recipe.build_profiles.contains(*requested_options.profile))
-        ? requested_options.profile
-        : std::optional<std::string> {};
+      EffectiveBuildSelection effective_selection;
 
-      if (legacy_profile
-          && !select_dependency_profile(recipe, legacy_profile, false, error))
-      {
-        return 2;
-      }
-      if (requested_options.system_profile
-          && !select_system_dependency_profile(
-            recipe,
-            requested_options.system_profile,
-            false,
-            error
-          ))
-      {
-        return 2;
-      }
-
-      auto selection = resolve_recipe_selection(
+      if (!resolve_effective_build_selection(
         recipe,
+        std::nullopt,
+        requested_options.profile,
+        requested_options.system_profile,
         requested_options.style,
-        platform,
+        requested_options.platform.value_or(current_target()),
         requested_options.config,
-        legacy_profile ? std::optional<std::string> {} : requested_options.profile
-      );
-
-      if (legacy_profile)
-        selection.profile.clear();
-      auto configuration = requested_options.configuration;
-
-      if (!legacy_profile && !apply_selector_rules(recipe, selection, configuration, error))
+        requested_options.configuration,
+        ProfileResolution::automatic,
+        false,
+        false,
+        false,
+        effective_selection,
+        error
+      ))
         return 2;
     }
 

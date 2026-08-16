@@ -891,50 +891,28 @@ namespace forge
         error
       );
 
-    if (!select_recipe_target(recipe, target, error))
-      return 2;
+    EffectiveBuildSelection effective_selection;
 
-    const auto uses_selector_rules =
-      !recipe.build_rules.empty() || !recipe.dependency_rules.empty();
-    const auto requested_profile = requested_options.profile;
-    const auto legacy_profile = requested_profile
-        && (recipe.dependency_profiles.contains(*requested_profile)
-            || recipe.build_profiles.contains(*requested_profile))
-      ? requested_profile
-      : uses_selector_rules || requested_options.style
-        ? std::optional<std::string> {}
-        : requested_profile;
-
-    if (!select_dependency_profile(recipe, legacy_profile, true, error))
-      return 2;
-    if (!select_system_dependency_profile(
+    if (!resolve_effective_build_selection(
       recipe,
+      target,
+      requested_options.profile,
       requested_options.system_profile,
-      true,
-      error
-    ))
-    {
-      return 2;
-    }
-
-    auto configuration = requested_options.configuration;
-    auto selection = resolve_recipe_selection(
-      recipe,
       requested_options.style,
       requested_options.platform.value_or(current_target()),
       requested_options.config,
-      legacy_profile ? std::optional<std::string> {} : requested_options.profile
-    );
-
-    if (legacy_profile)
-      selection.profile.clear();
-
-    if (!legacy_profile
-        && (uses_selector_rules || requested_options.style)
-        && !apply_selector_rules(recipe, selection, configuration, error))
-    {
+      requested_options.configuration,
+      ProfileResolution::automatic,
+      true,
+      true,
+      true,
+      effective_selection,
+      error
+    ))
       return 2;
-    }
+
+    const auto& legacy_profile = effective_selection.legacy_profile;
+    const auto& selection = effective_selection.selectors;
 
     auto options = requested_options;
     options.target = target;

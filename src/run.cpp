@@ -2,6 +2,7 @@
 
 #include "build.h"
 #include "recipe.h"
+#include "target_support.h"
 
 #include <algorithm>
 #include <cctype>
@@ -100,21 +101,35 @@ namespace forge
                                 LaunchProfile& launch_profile,
                                 std::ostream& error)
     {
-      if (profile)
-        launch_profile.name = *profile;
-      else if (system_profile)
-        launch_profile.name = *system_profile;
+      EffectiveBuildSelection effective_selection;
 
-      return select_dependency_profile(recipe, profile, true, error)
-        && select_system_dependency_profile(recipe, system_profile, true, error)
-        && select_build_profile(recipe, profile, true, launch_profile.configuration, error)
-        && select_system_build_profile(
-          recipe,
-          system_profile,
-          true,
-          launch_profile.configuration,
-          error
-        );
+      if (!resolve_effective_build_selection(
+        recipe,
+        std::nullopt,
+        profile,
+        system_profile,
+        std::nullopt,
+        current_target(),
+        std::nullopt,
+        launch_profile.configuration,
+        ProfileResolution::automatic,
+        true,
+        false,
+        true,
+        effective_selection,
+        error
+      ))
+      {
+        return false;
+      }
+
+      launch_profile.configuration = std::move(effective_selection.configuration);
+      launch_profile.name = !effective_selection.selectors.profile.empty()
+        ? effective_selection.selectors.profile
+        : effective_selection.legacy_profile
+          ? *effective_selection.legacy_profile
+          : system_profile.value_or("default");
+      return true;
     }
 
     int launch_project(const std::filesystem::path& project_directory,

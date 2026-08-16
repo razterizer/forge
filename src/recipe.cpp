@@ -1776,4 +1776,93 @@ namespace forge
     return selection;
   }
 
+  bool resolve_effective_build_selection(
+    Recipe& recipe,
+    const std::optional<std::string>& target,
+    const std::optional<std::string>& profile,
+    const std::optional<std::string>& system_profile,
+    const std::optional<std::string>& style,
+    std::string platform,
+    const std::optional<std::string>& selector_configuration,
+    std::string configured_build_configuration,
+    ProfileResolution profile_resolution,
+    bool require_profile,
+    bool select_target,
+    bool apply_build_profiles,
+    EffectiveBuildSelection& effective,
+    std::ostream& error
+  )
+  {
+    if (select_target && !select_recipe_target(recipe, target, error))
+      return false;
+
+    const auto uses_selector_rules = !recipe.build_rules.empty() || !recipe.dependency_rules.empty();
+    const auto named_legacy_profile = profile
+      && (recipe.dependency_profiles.contains(*profile) || recipe.build_profiles.contains(*profile));
+    const auto use_legacy_profile = profile_resolution == ProfileResolution::automatic
+      ? named_legacy_profile || (profile && !uses_selector_rules && !style)
+      : profile_resolution == ProfileResolution::inherited_legacy && named_legacy_profile;
+
+    effective.legacy_profile = use_legacy_profile ? profile : std::optional<std::string> {};
+
+    if (!select_dependency_profile(recipe, effective.legacy_profile, require_profile, error)
+        || !select_system_dependency_profile(recipe, system_profile, require_profile, error))
+    {
+      return false;
+    }
+
+    effective.configuration = std::move(configured_build_configuration);
+
+    if (selector_configuration)
+    {
+      effective.configuration = *selector_configuration;
+
+      if (!effective.configuration.empty())
+      {
+        effective.configuration.front() = static_cast<char>(
+          std::toupper(static_cast<unsigned char>(effective.configuration.front()))
+        );
+      }
+    }
+
+    effective.selectors = resolve_recipe_selection(
+      recipe,
+      style,
+      std::move(platform),
+      selector_configuration,
+      effective.legacy_profile ? std::optional<std::string> {} : profile
+    );
+
+    if (effective.legacy_profile)
+      effective.selectors.profile.clear();
+
+    if (!effective.legacy_profile
+        && (uses_selector_rules || style)
+        && !apply_selector_rules(recipe, effective.selectors, effective.configuration, error))
+    {
+      return false;
+    }
+
+    if (apply_build_profiles
+        && (!select_build_profile(
+              recipe,
+              effective.legacy_profile,
+              require_profile,
+              effective.configuration,
+              error
+            )
+            || !select_system_build_profile(
+              recipe,
+              system_profile,
+              require_profile,
+              effective.configuration,
+              error
+            )))
+    {
+      return false;
+    }
+
+    return true;
+  }
+
 } // namespace forge

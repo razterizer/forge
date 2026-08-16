@@ -561,6 +561,83 @@ namespace
     expect(error.str().empty(), "successful selector build does not write an error");
   }
 
+  void test_effective_build_selection_centralizes_legacy_and_selector_resolution()
+  {
+    forge::Recipe selector_recipe;
+    selector_recipe.default_style = "github-package";
+    selector_recipe.build_rules.push_back(
+      { { { "config", "release" }, { "profile", "cinema" } }, { "Release", 23, {}, {}, {}, {}, {}, {}, {}, { "CINEMA" } } }
+    );
+    forge::EffectiveBuildSelection selector_selection;
+    std::ostringstream selector_error;
+
+    expect(
+      forge::resolve_effective_build_selection(
+        selector_recipe,
+        std::nullopt,
+        std::optional<std::string> { "cinema" },
+        std::nullopt,
+        std::nullopt,
+        "macos-arm64",
+        std::optional<std::string> { "release" },
+        "Debug",
+        forge::ProfileResolution::automatic,
+        true,
+        false,
+        true,
+        selector_selection,
+        selector_error
+      ),
+      "effective selection resolves selector profiles"
+    );
+    expect(!selector_selection.legacy_profile, "selector profile is not treated as a legacy profile");
+    expect(
+      selector_selection.selectors.style == "github-package"
+        && selector_selection.selectors.profile == "cinema"
+        && selector_selection.configuration == "Release"
+        && selector_recipe.cpp_standard == 23,
+      "effective selection applies one consistent selector configuration"
+    );
+    expect(selector_error.str().empty(), "effective selector resolution does not write an error");
+
+    forge::Recipe legacy_recipe;
+    legacy_recipe.build_profiles["workflow-release"].configuration = "Release";
+    legacy_recipe.build_rules.push_back(
+      { { { "config", "debug" } }, { "Debug", 0, {}, {}, {}, {}, {}, {}, {}, { "SHOULD_NOT_APPLY" } } }
+    );
+    forge::EffectiveBuildSelection legacy_selection;
+    std::ostringstream legacy_error;
+
+    expect(
+      forge::resolve_effective_build_selection(
+        legacy_recipe,
+        std::nullopt,
+        std::optional<std::string> { "workflow-release" },
+        std::nullopt,
+        std::nullopt,
+        "macos-arm64",
+        std::nullopt,
+        "Debug",
+        forge::ProfileResolution::automatic,
+        true,
+        false,
+        true,
+        legacy_selection,
+        legacy_error
+      ),
+      "effective selection resolves legacy profiles"
+    );
+    expect(
+      legacy_selection.legacy_profile
+        && *legacy_selection.legacy_profile == "workflow-release"
+        && legacy_selection.selectors.profile.empty()
+        && legacy_selection.configuration == "Release"
+        && legacy_recipe.compile_definitions.empty(),
+      "legacy profiles bypass selector rules in the central resolver"
+    );
+    expect(legacy_error.str().empty(), "effective legacy resolution does not write an error");
+  }
+
   void test_build_applies_default_selector_profile()
   {
     TemporaryDirectory directory;
@@ -2516,6 +2593,7 @@ int main()
   test_build_rejects_invalid_recipe_definition();
   test_build_applies_build_profile();
   test_build_applies_selector_rules();
+  test_effective_build_selection_centralizes_legacy_and_selector_resolution();
   test_build_applies_default_selector_profile();
   test_build_rejects_selector_that_omits_required_dependency();
   test_dependency_style_validates_rule_shape();

@@ -119,6 +119,23 @@ namespace forge
     std::string profile;
   };
 
+  enum class ProfileResolution
+  {
+    automatic,
+    inherited_legacy,
+    selectors_only
+  };
+
+  // The fully resolved inputs to a build.  Keeping this together prevents
+  // commands from choosing a different dependency graph or configuration for
+  // the same command-line selectors.
+  struct EffectiveBuildSelection
+  {
+    std::optional<std::string> legacy_profile;
+    RecipeSelection selectors;
+    std::string configuration;
+  };
+
   struct ReleaseVariant
   {
     std::string profile;
@@ -258,6 +275,23 @@ namespace forge
     std::string platform,
     const std::optional<std::string>& configuration,
     const std::optional<std::string>& profile
+  );
+
+  bool resolve_effective_build_selection(
+    Recipe& recipe,
+    const std::optional<std::string>& target,
+    const std::optional<std::string>& profile,
+    const std::optional<std::string>& system_profile,
+    const std::optional<std::string>& style,
+    std::string platform,
+    const std::optional<std::string>& selector_configuration,
+    std::string configured_build_configuration,
+    ProfileResolution profile_resolution,
+    bool require_profile,
+    bool select_target,
+    bool apply_build_profiles,
+    EffectiveBuildSelection& selection,
+    std::ostream& error
   );
 
   bool is_valid_compile_definition(std::string_view definition);
