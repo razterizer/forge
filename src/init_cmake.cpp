@@ -546,7 +546,7 @@ namespace forge
         else if (package == "spdlog")
         {
           add_requirement("spdlog", "spdlog", "spdlog", "libspdlog-dev", "spdlog");
-          add_requirement({}, "fmt", {}, "libfmt-dev", {});
+          add_requirement("fmt", "fmt", "fmt", "libfmt-dev", "fmt");
         }
         else if (package == "nativefiledialog-extended")
         {
@@ -733,7 +733,7 @@ namespace forge
 
         const auto extension = std::filesystem::path { *relative }.extension().string();
 
-        if (extension == ".cpp" || extension == ".cc" || extension == ".cxx")
+        if (extension == ".cpp" || extension == ".cc" || extension == ".cxx" || extension == ".mm")
           project.sources.push_back(*relative);
         else if (extension == ".h" || extension == ".hpp" || extension == ".hh")
           project.headers.push_back(*relative);

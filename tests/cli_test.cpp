@@ -2001,7 +2001,7 @@ namespace
       "set(CMAKE_CXX_STANDARD 20)\n"
       "if(APPLE)\n"
       "  set(EXCLUDED_SOURCE_DIRECTORY /excluded/)\n"
-      "  file(GLOB_RECURSE PLATFORM_SOURCES CONFIGURE_DEPENDS src/common/*.cpp src/macos/*.cpp src/excluded/*.cpp)\n"
+      "  file(GLOB_RECURSE PLATFORM_SOURCES CONFIGURE_DEPENDS src/common/*.cpp src/macos/*.cpp src/macos/*.mm src/excluded/*.cpp)\n"
       "elseif(WIN32)\n"
       "  file(GLOB_RECURSE PLATFORM_SOURCES src/common/*.cpp src/windows/*.cpp)\n"
       "else()\n"
@@ -2022,6 +2022,7 @@ namespace
     );
     write_file(directory.path() / "src/common/common.cpp", "int common() { return 1; }\n");
     write_file(directory.path() / "src/macos/platform.cpp", "int platform() { return 2; }\n");
+    write_file(directory.path() / "src/macos/platform.mm", "int objective_platform() { return 3; }\n");
     write_file(directory.path() / "src/windows/platform.cpp", "int platform() { return 3; }\n");
     write_file(directory.path() / "src/linux/platform.cpp", "int platform() { return 4; }\n");
     write_file(directory.path() / "src/excluded/platform.cpp", "int excluded() { return 5; }\n");
@@ -2037,16 +2038,21 @@ namespace
     const auto recipe = read_file(directory.path() / "forge.recipe.toml");
 #if defined(__APPLE__)
     constexpr std::string_view active_source { "src/macos/platform.cpp" };
+    constexpr std::string_view active_objective_cpp_source { "src/macos/platform.mm" };
     constexpr std::string_view inactive_source { "src/windows/platform.cpp" };
 #elif defined(_WIN32)
     constexpr std::string_view active_source { "src/windows/platform.cpp" };
+    constexpr std::string_view active_objective_cpp_source {};
     constexpr std::string_view inactive_source { "src/linux/platform.cpp" };
 #else
     constexpr std::string_view active_source { "src/linux/platform.cpp" };
+    constexpr std::string_view active_objective_cpp_source {};
     constexpr std::string_view inactive_source { "src/macos/platform.cpp" };
 #endif
     expect(
       contains(recipe, std::string { active_source })
+        && (active_objective_cpp_source.empty()
+            || contains(recipe, std::string { active_objective_cpp_source }))
         && contains(recipe, "src/common/common.cpp")
         && contains(recipe, "vendor/vendor.cpp")
         && !contains(recipe, std::string { inactive_source })
@@ -2124,7 +2130,7 @@ namespace
     );
     const auto recipe = read_file(directory.path() / "forge.recipe.toml");
     expect(
-      contains(recipe, "macos_libraries = [\"glfw\", \"nfd\", \"spdlog\", \"yaml-cpp\"]")
+      contains(recipe, "macos_libraries = [\"fmt\", \"glfw\", \"nfd\", \"spdlog\", \"yaml-cpp\"]")
         && contains(
           recipe,
           "macos_brew_packages = [\"entt\", \"fmt\", \"glfw\", \"glm\", "

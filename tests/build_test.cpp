@@ -830,7 +830,7 @@ namespace
     );
     const auto generated = read_file(application / ".forge/generated/CMakeLists.txt");
     expect(
-      !contains(generated, "find_library(FORGE_forge_project_MACOS_LIBRARY_0 spdlog)")
+      !contains(generated, "find_library(FORGE_forge_project_MACOS_LIBRARY_spdlog spdlog)")
         && !contains(generated, "brew --prefix \"spdlog\"")
         && !contains(generated, "brew --prefix \"fmt\""),
       "local spdlog provider suppresses its system libraries and provider packages"
@@ -1001,8 +1001,8 @@ namespace
       "selected target links its internal dependency"
     );
     expect(
-      contains(generated, "find_library(FORGE_forge_internal_0_FRAMEWORK_0 AudioToolbox)")
-        && contains(generated, "find_library(FORGE_forge_internal_0_LINUX_LIBRARY_0 asound)")
+      contains(generated, "find_library(FORGE_forge_internal_0_FRAMEWORK_AudioToolbox AudioToolbox)")
+        && contains(generated, "find_library(FORGE_forge_internal_0_LINUX_LIBRARY_asound asound)")
         && contains(generated, "target_link_libraries(forge_internal_0 INTERFACE ole32)"),
       "internal libraries propagate platform system-link requirements"
     );

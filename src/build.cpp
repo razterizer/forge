@@ -1663,6 +1663,16 @@ namespace forge
                             const std::vector<std::string>& linux_apt_packages,
                             const std::vector<std::string>& windows_libraries)
     {
+      const auto variable_component = [](std::string_view value)
+      {
+        std::string result;
+        result.reserve(value.size());
+
+        for (const unsigned char character : value)
+          result += std::isalnum(character) ? static_cast<char>(character) : '_';
+
+        return result;
+      };
       const auto write_missing_system_library =
         [&file](std::string_view variable,
                 std::string_view library,
@@ -1691,15 +1701,15 @@ namespace forge
       {
         file << "if(APPLE)\n";
 
-        for (std::size_t index = 0; index < macos_frameworks.size(); ++index)
+        for (const auto& framework : macos_frameworks)
         {
           const auto variable = "FORGE_" + std::string { target }
-            + "_FRAMEWORK_" + std::to_string(index);
+            + "_FRAMEWORK_" + variable_component(framework);
           file << "  find_library(" << variable << ' '
-               << escape_cmake(macos_frameworks[index]) << ")\n";
+               << escape_cmake(framework) << ")\n";
           write_missing_system_library(
             variable,
-            macos_frameworks[index],
+            framework,
             "brew",
             macos_brew_packages
           );
@@ -1708,15 +1718,15 @@ namespace forge
                << " \"${" << variable << "}\")\n";
         }
 
-        for (std::size_t index = 0; index < macos_libraries.size(); ++index)
+        for (const auto& library : macos_libraries)
         {
           const auto variable = "FORGE_" + std::string { target }
-            + "_MACOS_LIBRARY_" + std::to_string(index);
+            + "_MACOS_LIBRARY_" + variable_component(library);
           file << "  find_library(" << variable << ' '
-               << escape_cmake(macos_libraries[index]) << ")\n";
+               << escape_cmake(library) << ")\n";
           write_missing_system_library(
             variable,
-            macos_libraries[index],
+            library,
             "brew",
             macos_brew_packages
           );
@@ -1731,15 +1741,15 @@ namespace forge
       {
         file << "if(UNIX AND NOT APPLE)\n";
 
-        for (std::size_t index = 0; index < linux_libraries.size(); ++index)
+        for (const auto& library : linux_libraries)
         {
           const auto variable = "FORGE_" + std::string { target }
-            + "_LINUX_LIBRARY_" + std::to_string(index);
+            + "_LINUX_LIBRARY_" + variable_component(library);
           file << "  find_library(" << variable << ' '
-               << escape_cmake(linux_libraries[index]) << ")\n";
+               << escape_cmake(library) << ")\n";
           write_missing_system_library(
             variable,
-            linux_libraries[index],
+            library,
             "sudo apt",
             linux_apt_packages
           );
@@ -1901,9 +1911,26 @@ namespace forge
         return false;
       }
 
+      const auto uses_objective_cpp = [](const auto& sources)
+      {
+        return std::ranges::any_of(
+          sources,
+          [](const std::filesystem::path& source)
+          {
+            return source.extension() == ".mm";
+          }
+        );
+      };
+      auto has_objective_cpp_sources = uses_objective_cpp(recipe.sources);
+
+      for (const auto& target : recipe.internal_targets)
+        has_objective_cpp_sources = has_objective_cpp_sources || uses_objective_cpp(target.sources);
+
       file
         << "cmake_minimum_required(VERSION 3.25)\n"
-        << "project(forge_project LANGUAGES CXX)\n\n"
+        << "project(forge_project LANGUAGES CXX"
+        << (has_objective_cpp_sources ? " OBJCXX" : "")
+        << ")\n\n"
         << "if(WIN32)\n"
         << "  add_compile_definitions(NOMINMAX)\n"
         << "endif()\n\n"

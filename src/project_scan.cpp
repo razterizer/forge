@@ -31,7 +31,7 @@ namespace forge
   bool is_cpp_source(const std::filesystem::path& path)
   {
     const auto extension = path.extension().string();
-    return extension == ".cpp" || extension == ".cc" || extension == ".cxx";
+    return extension == ".cpp" || extension == ".cc" || extension == ".cxx" || extension == ".mm";
   }
 
   bool is_cpp_header(const std::filesystem::path& path)
