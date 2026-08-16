@@ -1,5 +1,26 @@
 # Release notes
 
+## 0.18.0
+
+- `forge adopt` now imports CMake `cmake -E copy_directory` rules as runtime
+  assets, including component projects that are normally configured through a
+  CMake superproject. Resource trees are staged beside the generated executable.
+- CMake adoption now follows active platform and option branches, source globs,
+  Objective-C++ sources, selected-target compile settings, and public include
+  contracts. Generated builds retain platform link requirements without
+  cross-dependency cache collisions.
+- Adopted CMake projects recognize common package providers (including GLFW,
+  EnTT, glm, yaml-cpp, spdlog, fmt, and nativefiledialog). Interactive macOS
+  builds can install missing Homebrew providers and provision a project-local
+  vcpkg checkout plus its manifest dependencies, safely resuming interrupted
+  installs.
+- Recipes can override an adopted system provider with a selected local, Git,
+  or Forge package dependency, allowing experiments with neighbouring clones
+  without editing generated platform-link settings.
+- `forge run` at a workspace root now lists runnable projects and shows the
+  exact command to launch one. `forge release-git` also refuses to tag a bump
+  whose release-notes entry still contains only the placeholder text.
+
 ## 0.17.4
 
 - CMake adoption resolves simple `set(...)` and `list(APPEND ...)` source lists
