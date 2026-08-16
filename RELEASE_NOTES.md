@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.18.1
+
+- Source dependencies now rebuild when switching build configuration, preventing
+  a cached Release library from being reused by a Debug consumer (and vice
+  versa).
+- `forge run <project> --config=<configuration>` now selects the matching
+  cached run variant from a workspace root.
+
 ## 0.18.0
 
 - `forge adopt` now imports CMake `cmake -E copy_directory` rules as runtime
