@@ -1789,6 +1789,55 @@ namespace
     expect(build_error.str().empty(), "imported CMake build does not write an error");
   }
 
+  void test_adopt_imports_cmake_copy_directory_runtime_assets()
+  {
+    TemporaryDirectory directory;
+    const auto application = directory.path() / "RuntimeApp";
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      application / "CMakeLists.txt",
+      "project(RuntimeApp LANGUAGES CXX)\n"
+      "add_executable(RuntimeApp src/main.cpp)\n"
+      "add_custom_target(copy_resources ALL\n"
+      "  COMMAND ${CMAKE_COMMAND} -E copy_directory\n"
+      "    ${CMAKE_SOURCE_DIR}/RuntimeApp/Resources\n"
+      "    ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/Resources)\n"
+      "add_dependencies(RuntimeApp copy_resources)\n"
+    );
+    write_file(application / "src/main.cpp", "int main() { return 0; }\n");
+    write_file(application / "Resources/Shader/shader.metal", "// shader\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, application, output, error) == 0,
+      "adopt imports a CMake copy_directory runtime rule"
+    );
+    const auto recipe = read_file(application / "forge.recipe.toml");
+    expect(
+      contains(recipe, "[runtime]\nfiles = [\"Resources\"]"),
+      "adopt maps a CMake resource directory into runtime assets"
+    );
+    expect(
+      contains(output.str(), "RuntimeApp: Resources"),
+      "adopt reports CMake-imported runtime assets"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, application, build_output, build_error) == 0,
+      "CMake-imported runtime assets build"
+    );
+    expect(
+      std::filesystem::is_regular_file(
+        application / ".forge/build/Resources/Shader/shader.metal"
+      ),
+      "CMake-imported resource directories are staged beside the executable"
+    );
+    expect(error.str().empty() && build_error.str().empty(), "CMake runtime asset adoption is clean");
+  }
+
   void test_adopt_cmake_library_exports_vendored_public_headers()
   {
     TemporaryDirectory directory;
@@ -8142,6 +8191,7 @@ int main()
   test_adopt_exports_vendored_public_header_closure();
   test_adopt_imports_visual_studio_project();
   test_adopt_imports_cmake_project();
+  test_adopt_imports_cmake_copy_directory_runtime_assets();
   test_adopt_cmake_library_exports_vendored_public_headers();
   test_adopt_selects_named_cmake_library_target();
   test_adopt_infers_component_version_macro();

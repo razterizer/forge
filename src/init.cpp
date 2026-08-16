@@ -788,6 +788,34 @@ namespace forge
       return formatted;
     }
 
+    void merge_runtime_files(std::vector<RuntimeFile>& runtime_files,
+                             const std::vector<RuntimeFile>& additional)
+    {
+      runtime_files.insert(runtime_files.end(), additional.begin(), additional.end());
+      std::ranges::sort(
+        runtime_files,
+        {},
+        [](const RuntimeFile& runtime_file)
+        {
+          return std::pair {
+            runtime_file.source.generic_string(),
+            runtime_file.destination.generic_string()
+          };
+        }
+      );
+      runtime_files.erase(
+        std::unique(
+          runtime_files.begin(),
+          runtime_files.end(),
+          [](const RuntimeFile& left, const RuntimeFile& right)
+          {
+            return left.source == right.source && left.destination == right.destination;
+          }
+        ),
+        runtime_files.end()
+      );
+    }
+
     std::string target_name(const std::filesystem::path& source, std::size_t index)
     {
       auto name = source.stem().string();
@@ -1623,8 +1651,11 @@ namespace forge
           ) + "\n"
           "sources = " + format_sources(inferred_target_sources[index]) + "\n";
 
-        const auto runtime_files =
+        auto runtime_files =
           infer_runtime_files(project_directory, inferred_target_sources[index], runtime_headers);
+
+        if (visual_studio_project)
+          merge_runtime_files(runtime_files, visual_studio_project->runtime_files);
 
         if (!runtime_files.empty())
         {
@@ -1717,7 +1748,10 @@ namespace forge
 
       if (type == "executable")
       {
-        const auto runtime_files = infer_runtime_files(project_directory, sources, runtime_headers);
+        auto runtime_files = infer_runtime_files(project_directory, sources, runtime_headers);
+
+        if (visual_studio_project)
+          merge_runtime_files(runtime_files, visual_studio_project->runtime_files);
 
         if (!runtime_files.empty())
         {

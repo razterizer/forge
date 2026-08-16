@@ -31,6 +31,7 @@ namespace forge
     std::vector<std::string> linux_libraries;
     std::vector<std::string> linux_apt_packages;
     std::vector<std::string> windows_libraries;
+    std::vector<RuntimeFile> runtime_files;
     std::vector<std::filesystem::path> references;
     std::map<std::string, BuildProfile> profiles;
     std::vector<std::string> unresolved_properties;

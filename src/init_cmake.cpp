@@ -3,6 +3,7 @@
 #include "recipe.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <charconv>
 #include <functional>
@@ -197,6 +198,96 @@ namespace forge
       }
 
       return value;
+    }
+
+    bool is_safe_runtime_destination(const std::filesystem::path& path)
+    {
+      if (path.empty() || path.is_absolute() || path.has_root_path())
+        return false;
+
+      for (const auto& component : path)
+      {
+        if (component.empty() || component == "." || component == "..")
+          return false;
+      }
+
+      return true;
+    }
+
+    std::optional<std::filesystem::path> cmake_copy_directory_source(
+      std::string_view value,
+      const std::filesystem::path& directory,
+      std::string_view project_name)
+    {
+      const auto expanded = replace_cmake_paths(std::string { value }, directory, project_name);
+
+      if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
+        return std::nullopt;
+
+      if (const auto relative = project_relative_path(directory, expanded))
+      {
+        std::error_code error;
+
+        if (std::filesystem::exists(directory / *relative, error) && !error)
+          return std::filesystem::path { *relative };
+      }
+
+      // A component CMakeLists.txt may use CMAKE_SOURCE_DIR as though it were
+      // configured by a superproject. During standalone adoption that variable
+      // is mapped to the component directory, so recover a matching component
+      // prefix when it names a file that actually belongs to this project.
+      constexpr std::string_view source_directory { "${CMAKE_SOURCE_DIR}/" };
+
+      if (!value.starts_with(source_directory))
+        return std::nullopt;
+
+      auto candidate = std::filesystem::path { value.substr(source_directory.size()) };
+
+      if (!candidate.empty() && *candidate.begin() == directory.filename())
+      {
+        auto component = candidate.begin();
+        ++component;
+        std::filesystem::path stripped;
+
+        for (; component != candidate.end(); ++component)
+          stripped /= *component;
+
+        candidate = std::move(stripped);
+      }
+
+      if (!is_safe_runtime_destination(candidate))
+        return std::nullopt;
+
+      std::error_code error;
+
+      if (std::filesystem::exists(directory / candidate, error) && !error)
+        return candidate;
+
+      return std::nullopt;
+    }
+
+    std::optional<std::filesystem::path> cmake_copy_directory_destination(std::string_view value)
+    {
+      constexpr std::array prefixes {
+        std::string_view { "$<CONFIG>/" },
+        std::string_view { "${CMAKE_CURRENT_BINARY_DIR}/" },
+        std::string_view { "${CMAKE_BINARY_DIR}/" }
+      };
+
+      for (const auto prefix : prefixes)
+      {
+        const auto position = value.find(prefix);
+
+        if (position == std::string_view::npos)
+          continue;
+
+        const auto destination = std::filesystem::path { value.substr(position + prefix.size()) };
+
+        if (is_safe_runtime_destination(destination))
+          return destination;
+      }
+
+      return std::nullopt;
     }
 
     bool is_cmake_scope(std::string_view value)
@@ -947,6 +1038,23 @@ namespace forge
         }
         else if (command.name == "add_subdirectory")
           project.has_cmake_subprojects = true;
+        else if ((command.name == "add_custom_target" || command.name == "add_custom_command")
+                 && active)
+        {
+          for (std::size_t index = 0; index + 2 < command.arguments.size(); ++index)
+          {
+            if (command.arguments[index] != "copy_directory")
+              continue;
+
+            const auto source = cmake_copy_directory_source(
+              command.arguments[index + 1], directory, project.name
+            );
+            const auto destination = cmake_copy_directory_destination(command.arguments[index + 2]);
+
+            if (source && destination)
+              project.runtime_files.push_back({ *source, *destination });
+          }
+        }
         else if (command.name == "find_library" && command.arguments.size() > 1)
           frameworks[command.arguments[0]] = command.arguments[1];
         else if (command.name == "find_package" && !command.arguments.empty())
@@ -1158,6 +1266,29 @@ namespace forge
         std::ranges::sort(*values);
         values->erase(std::unique(values->begin(), values->end()), values->end());
       }
+
+      std::ranges::sort(
+        project.runtime_files,
+        {},
+        [](const RuntimeFile& runtime_file)
+        {
+          return std::pair {
+            runtime_file.source.generic_string(),
+            runtime_file.destination.generic_string()
+          };
+        }
+      );
+      project.runtime_files.erase(
+        std::unique(
+          project.runtime_files.begin(),
+          project.runtime_files.end(),
+          [](const RuntimeFile& left, const RuntimeFile& right)
+          {
+            return left.source == right.source && left.destination == right.destination;
+          }
+        ),
+        project.runtime_files.end()
+      );
 
       return project;
     }
