@@ -283,6 +283,26 @@ namespace forge
       return &*project;
     }
 
+    struct ResolvedWorkspaceSelection
+    {
+      const WorkspaceProject* project = nullptr;
+      std::optional<std::string> target;
+    };
+
+    bool resolve_workspace_selection(const Workspace& workspace,
+                                     std::string_view selection,
+                                     ResolvedWorkspaceSelection& resolved,
+                                     std::ostream& error)
+    {
+      std::string project_name;
+
+      if (!parse_selection(selection, project_name, resolved.target, error))
+        return false;
+
+      resolved.project = find_project(workspace, project_name, error);
+      return resolved.project != nullptr;
+    }
+
     int list_runnable_workspace_projects(
       const Workspace& workspace,
       const std::map<std::filesystem::path, Recipe>& recipes,
@@ -743,20 +763,14 @@ namespace forge
     if (selection.empty())
       return list_runnable_workspace_projects(workspace, recipes, output, error);
 
-    std::string project_name;
-    std::optional<std::string> target;
+    ResolvedWorkspaceSelection resolved;
 
-    if (!parse_selection(selection, project_name, target, error))
-      return 2;
-
-    const auto* project = find_project(workspace, project_name, error);
-
-    if (!project)
+    if (!resolve_workspace_selection(workspace, selection, resolved, error))
       return 2;
 
     return run_project(
-      project->path,
-      target,
+      resolved.project->path,
+      resolved.target,
       profile,
       arguments,
       process_runner,
@@ -780,26 +794,20 @@ namespace forge
     if (!load_workspace(workspace_directory, workspace, recipes, error))
       return false;
 
-    std::string project_name;
-    std::optional<std::string> target;
+    ResolvedWorkspaceSelection resolved;
 
-    if (!parse_selection(selection, project_name, target, error))
+    if (!resolve_workspace_selection(workspace, selection, resolved, error))
       return false;
 
-    const auto* project = find_project(workspace, project_name, error);
-
-    if (!project)
-      return false;
-
-    const auto& recipe = recipes.at(project->path);
-    const auto selected_target = target
-      ? target
+    const auto& recipe = recipes.at(resolved.project->path);
+    const auto selected_target = resolved.target
+      ? resolved.target
       : recipe.targets.empty()
         ? std::optional<std::string> { recipe.name }
         : std::optional<std::string> {};
 
     return select_cached_run_variant(
-      project->path,
+      resolved.project->path,
       selected_target,
       configuration,
       style,
@@ -882,20 +890,14 @@ namespace forge
     if (!load_workspace(workspace_directory, workspace, recipes, error))
       return 2;
 
-    std::string project_name;
-    std::optional<std::string> target;
+    ResolvedWorkspaceSelection resolved;
 
-    if (!parse_selection(selection, project_name, target, error))
-      return 2;
-
-    const auto* project = find_project(workspace, project_name, error);
-
-    if (!project)
+    if (!resolve_workspace_selection(workspace, selection, resolved, error))
       return 2;
 
     return build_and_run_project(
-      project->path,
-      target,
+      resolved.project->path,
+      resolved.target,
       profile,
       system_profile,
       arguments,
@@ -918,20 +920,14 @@ namespace forge
     if (!load_workspace(workspace_directory, workspace, recipes, error))
       return 2;
 
-    std::string project_name;
-    std::optional<std::string> target;
+    ResolvedWorkspaceSelection resolved;
 
-    if (!parse_selection(selection, project_name, target, error))
-      return 2;
-
-    const auto* project = find_project(workspace, project_name, error);
-
-    if (!project)
+    if (!resolve_workspace_selection(workspace, selection, resolved, error))
       return 2;
 
     auto options = requested_options;
-    options.target = target;
-    return build_and_run_project(project->path, options, arguments, output, error);
+    options.target = resolved.target;
+    return build_and_run_project(resolved.project->path, options, arguments, output, error);
   }
 
   int test_workspace(const std::filesystem::path& workspace_directory,
@@ -1009,20 +1005,14 @@ namespace forge
 
     if (selection)
     {
-      std::string project_name;
-      std::optional<std::string> target;
+      ResolvedWorkspaceSelection resolved;
 
-      if (!parse_selection(*selection, project_name, target, error))
-        return 2;
-
-      const auto* project = find_project(workspace, project_name, error);
-
-      if (!project)
+      if (!resolve_workspace_selection(workspace, *selection, resolved, error))
         return 2;
 
       return test_project(
-        project->path,
-        target,
+        resolved.project->path,
+        resolved.target,
         profile,
         system_profile,
         arguments,
