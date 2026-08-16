@@ -283,6 +283,52 @@ namespace forge
       return &*project;
     }
 
+    int list_runnable_workspace_projects(
+      const Workspace& workspace,
+      const std::map<std::filesystem::path, Recipe>& recipes,
+      std::ostream& output,
+      std::ostream& error)
+    {
+      std::vector<std::string> selections;
+
+      for (const auto& project : workspace.projects)
+      {
+        const auto& recipe = recipes.at(project.path);
+
+        if (recipe.targets.empty())
+        {
+          if (recipe.type == "executable")
+            selections.push_back(project.name);
+
+          continue;
+        }
+
+        for (const auto& target : recipe.targets)
+        {
+          if (target.type == "executable")
+            selections.push_back(project.name + "/" + target.name);
+        }
+      }
+
+      if (selections.empty())
+      {
+        error << "forge: workspace has no runnable projects\n";
+        return 2;
+      }
+
+      output << "Runnable workspace projects:\n";
+
+      for (const auto& selection : selections)
+        output << "  " << selection << '\n';
+
+      output << "Run one with:\n";
+
+      for (const auto& selection : selections)
+        output << "  forge run " << selection << '\n';
+
+      return 0;
+    }
+
     bool has_tests(const Recipe& recipe)
     {
       return std::any_of(
@@ -711,6 +757,9 @@ namespace forge
 
     if (!load_workspace(workspace_directory, workspace, recipes, error))
       return 2;
+
+    if (selection.empty())
+      return list_runnable_workspace_projects(workspace, recipes, output, error);
 
     std::string project_name;
     std::optional<std::string> target;

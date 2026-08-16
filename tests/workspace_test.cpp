@@ -353,6 +353,39 @@ namespace
     expect(contains(output.str(), "Running app"), "workspace run reports the project");
   }
 
+  void test_workspace_lists_runnable_projects_without_a_selection()
+  {
+    TemporaryDirectory directory;
+    write_workspace(directory.path(), "\"app\", \"suite\", \"library\"");
+    write_project(directory.path() / "app", "app");
+    write_named_project(directory.path() / "suite", "suite");
+    std::filesystem::create_directories(directory.path() / "library");
+    std::ofstream library_recipe { directory.path() / "library/forge.recipe.toml" };
+    library_recipe
+      << "[project]\nname = \"library\"\nversion = \"0.1.0\"\n"
+      << "type = \"static_library\"\ncpp_std = 20\n\n[sources]\npaths = [\"library.cpp\"]\n";
+    library_recipe.close();
+    std::ofstream { directory.path() / "library/library.cpp" } << "int library() { return 42; }\n";
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::run_workspace(directory.path(), "", std::nullopt, {}, output, error) == 0,
+      "workspace run lists runnable projects when no selection is supplied"
+    );
+    expect(
+      contains(output.str(), "Runnable workspace projects:")
+        && contains(output.str(), "  app")
+        && contains(output.str(), "  suite/unit_tests")
+        && contains(output.str(), "  suite/examples")
+        && !contains(output.str(), "  library")
+        && contains(output.str(), "forge run app")
+        && contains(output.str(), "forge run suite/examples"),
+      "workspace run lists exact runnable selections and commands"
+    );
+    expect(error.str().empty(), "workspace runnable-project listing does not write an error");
+  }
+
   void test_workspace_runs_selected_named_target()
   {
     TemporaryDirectory directory;
@@ -479,6 +512,7 @@ int main()
   test_workspace_rejects_duplicate_project();
   test_workspace_rejects_dependency_cycle();
   test_workspace_runs_selected_project();
+  test_workspace_lists_runnable_projects_without_a_selection();
   test_workspace_runs_selected_named_target();
   test_workspace_tests_all_projects();
   test_workspace_tests_selected_named_target();

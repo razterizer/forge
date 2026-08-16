@@ -1998,11 +1998,23 @@ namespace forge::cli
           error << "forge: cached run selectors are only supported in a project directory\n";
           return 2;
         }
-        if (!target)
+        if (!target && build_first)
         {
           error << "forge: workspace " << arguments.front()
                 << " requires <project> or <project>/<target>\n";
           return 2;
+        }
+
+        if (!target)
+        {
+          return run_workspace(
+            working_directory,
+            {},
+            profile,
+            program_arguments,
+            output,
+            error
+          );
         }
 
         if (build_first)
