@@ -17,6 +17,9 @@
 - Recipes can override an adopted system provider with a selected local, Git,
   or Forge package dependency, allowing experiments with neighbouring clones
   without editing generated platform-link settings.
+- Compiled dependencies may use an older C++ standard than their consumer,
+  while Forge continues to reject consumers that do not meet a dependency's
+  required language standard.
 - `forge run` at a workspace root now lists runnable projects and shows the
   exact command to launch one. `forge release-git` also refuses to tag a bump
   whose release-notes entry still contains only the placeholder text.

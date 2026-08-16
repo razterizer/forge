@@ -6660,7 +6660,7 @@ namespace
       "name = \"answer\"\n"
       "version = \"1.0.0\"\n"
       "type = \"static_library\"\n"
-      "cpp_std = 20\n\n"
+      "cpp_std = 11\n\n"
       "[build]\n"
       "number = 8\n\n"
       "[sources]\n"

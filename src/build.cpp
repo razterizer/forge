@@ -365,7 +365,10 @@ namespace forge
                                         const ToolchainIdentity& project)
     {
       return dependency.compiler == project.compiler
-        && dependency.cpp_standard == project.cpp_standard
+        // A consumer may use a newer language mode than a compiled library.
+        // The inverse is unsafe because it can expose public headers requiring
+        // language features unavailable to the consumer.
+        && dependency.cpp_standard <= project.cpp_standard
         && dependency.configuration == project.configuration
         && dependency.runtime == project.runtime;
     }
