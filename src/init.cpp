@@ -676,6 +676,50 @@ namespace forge
       return target_sources;
     }
 
+    void expand_public_header_closure(const std::filesystem::path& project_directory,
+                                      std::vector<std::string>& public_headers,
+                                      const std::vector<std::string>& headers)
+    {
+      std::set<std::string> exported_headers { public_headers.begin(), public_headers.end() };
+
+      for (const auto& header : public_headers)
+      {
+        const auto reachable = reachable_local_headers(project_directory, header, headers);
+        exported_headers.insert(reachable.begin(), reachable.end());
+      }
+
+      public_headers.assign(exported_headers.begin(), exported_headers.end());
+    }
+
+    void export_headers_below_public_include_roots(
+      std::vector<std::string>& public_headers,
+      const std::vector<std::string>& headers,
+      const std::vector<std::string>& public_include_directories)
+    {
+      std::set<std::string> exported_headers { public_headers.begin(), public_headers.end() };
+
+      for (const auto& header : headers)
+      {
+        const auto path = std::filesystem::path { header };
+        const auto below_public_root = std::ranges::any_of(
+          public_include_directories,
+          [&path](const std::string& include_directory)
+          {
+            const auto relative = path.lexically_relative(include_directory);
+            return !relative.empty()
+              && relative != "."
+              && !relative.is_absolute()
+              && relative.begin()->string() != "..";
+          }
+        );
+
+        if (below_public_root)
+          exported_headers.insert(header);
+      }
+
+      public_headers.assign(exported_headers.begin(), exported_headers.end());
+    }
+
     std::string format_sources(const std::vector<std::string>& sources)
     {
       if (sources.empty())
@@ -1081,6 +1125,7 @@ namespace forge
     std::vector<std::string> sources;
     std::vector<std::string> public_headers;
     std::vector<std::string> headers;
+    std::vector<std::string> discovered_headers;
     std::vector<std::string> entry_points;
     std::optional<VisualStudioProject> visual_studio_project;
     std::vector<std::string> merged_project_formats;
@@ -1096,6 +1141,7 @@ namespace forge
     sources = scan.sources;
     public_headers = scan.public_headers;
     headers = scan.headers;
+    discovered_headers = scan.headers;
     entry_points = scan.entry_points;
 
     auto runtime_headers = headers;
@@ -1476,6 +1522,25 @@ namespace forge
 
       initialize_version_header = initialize_version_header || explicit_version.has_value();
     }
+
+    discovered_headers.insert(discovered_headers.end(), headers.begin(), headers.end());
+    std::ranges::sort(discovered_headers);
+    discovered_headers.erase(
+      std::unique(discovered_headers.begin(), discovered_headers.end()),
+      discovered_headers.end()
+    );
+
+    if (visual_studio_project && visual_studio_project->format == "CMake")
+    {
+      export_headers_below_public_include_roots(
+        public_headers,
+        discovered_headers,
+        visual_studio_project->public_include_directories
+      );
+    }
+
+    expand_public_header_closure(project_directory, public_headers, discovered_headers);
+
     const auto formatted_headers = format_sources(public_headers);
     const auto inferred_library_type =
       options.library_type

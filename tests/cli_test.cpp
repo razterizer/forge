@@ -1573,6 +1573,47 @@ namespace
     expect(build_error.str().empty(), "inferred include-root build does not write an error");
   }
 
+  void test_adopt_exports_vendored_public_header_closure()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array arguments { std::string_view { "adopt" } };
+    std::ostringstream output;
+    std::ostringstream error;
+    write_file(
+      directory.path() / "include/widget/api.h",
+      "#pragma once\n"
+      "#include <imgui.h>\n"
+      "inline int widget_api() { return imgui_value(); }\n"
+    );
+    write_file(
+      directory.path() / "vendor/imgui/imgui.h",
+      "#pragma once\n"
+      "#include \"imgui_detail.h\"\n"
+      "inline int imgui_value() { return imgui_detail(); }\n"
+    );
+    write_file(
+      directory.path() / "vendor/imgui/imgui_detail.h",
+      "#pragma once\n"
+      "inline int imgui_detail() { return 42; }\n"
+    );
+
+    expect(
+      forge::cli::run(arguments, directory.path(), output, error) == 0,
+      "adopt accepts a public header with vendored includes"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "\"vendor/imgui/imgui.h\"")
+        && contains(recipe, "\"vendor/imgui/imgui_detail.h\""),
+      "adopt exports transitive vendored headers required by its public interface"
+    );
+    expect(
+      contains(recipe, "include_dirs = [\"vendor/imgui\"]"),
+      "adopt retains the vendored public include root"
+    );
+    expect(error.str().empty(), "vendored public header adoption does not write an error");
+  }
+
   void test_adopt_imports_visual_studio_project()
   {
     TemporaryDirectory directory;
@@ -1746,6 +1787,91 @@ namespace
       "imported CMake project builds"
     );
     expect(build_error.str().empty(), "imported CMake build does not write an error");
+  }
+
+  void test_adopt_cmake_library_exports_vendored_public_headers()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array box_arguments {
+      std::string_view { "box" },
+      std::string_view { "create" }
+    };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "cmake_minimum_required(VERSION 3.25)\n"
+      "project(Widget LANGUAGES CXX)\n"
+      "add_library(Widget STATIC src/widget.cpp)\n"
+      "target_include_directories(Widget PUBLIC include vendor/imgui)\n"
+    );
+    write_file(
+      directory.path() / "include/widget/api.h",
+      "#pragma once\n"
+      "#include <imgui.h>\n"
+      "inline int widget_answer() { return imgui_answer(); }\n"
+    );
+    write_file(
+      directory.path() / "vendor/imgui/imgui.h",
+      "#pragma once\n"
+      "#include \"imgui_detail.h\"\n"
+      "inline int imgui_answer() { return imgui_detail(); }\n"
+    );
+    write_file(
+      directory.path() / "vendor/imgui/imgui_detail.h",
+      "#pragma once\n"
+      "inline int imgui_detail() { return 42; }\n"
+    );
+    write_file(directory.path() / "vendor/imgui/imgui_internal.h", "#pragma once\n");
+    write_file(
+      directory.path() / "src/widget.cpp",
+      "#include <widget/api.h>\n"
+      "int widget_anchor() { return widget_answer(); }\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt imports a CMake library with vendored public headers"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "\"vendor/imgui/imgui.h\"")
+        && contains(recipe, "\"vendor/imgui/imgui_detail.h\"")
+        && contains(recipe, "\"vendor/imgui/imgui_internal.h\""),
+      "CMake adoption exports all vendored headers beneath public include roots"
+    );
+    std::ostringstream box_output;
+    std::ostringstream box_error;
+    expect(
+      forge::cli::run(box_arguments, directory.path(), box_output, box_error) == 0,
+      "a CMake library with a public vendored include root creates a box"
+    );
+    std::filesystem::path box_path;
+
+    for (const auto& entry : std::filesystem::directory_iterator { directory.path() / ".forge/boxes" })
+    {
+      if (entry.path().extension() == ".cbox")
+        box_path = entry.path();
+    }
+
+    const auto box_path_string = box_path.string();
+    const std::array<std::string_view, 3> inspect_arguments {
+      std::string_view { "box" },
+      std::string_view { "inspect" },
+      box_path_string
+    };
+    std::ostringstream inspect_output;
+    std::ostringstream inspect_error;
+    expect(
+      !box_path.empty()
+        && forge::cli::run(inspect_arguments, directory.path(), inspect_output, inspect_error) == 0
+        && contains(inspect_output.str(), "path = \"include/imgui_internal.h\""),
+      "the box preserves directly consumable companion headers from public CMake roots"
+    );
+    expect(error.str().empty(), "CMake vendored-header adoption does not write an error");
+    expect(box_error.str().empty(), "CMake vendored-header box creation does not write an error");
+    expect(inspect_error.str().empty(), "CMake vendored-header box inspection does not write an error");
   }
 
   void test_adopt_selects_named_cmake_library_target()
@@ -8007,8 +8133,10 @@ int main()
   test_adopt_reports_ambiguous_version_headers();
   test_adopt_accepts_explicit_initial_version_and_version_header();
   test_init_infers_local_include_directories();
+  test_adopt_exports_vendored_public_header_closure();
   test_adopt_imports_visual_studio_project();
   test_adopt_imports_cmake_project();
+  test_adopt_cmake_library_exports_vendored_public_headers();
   test_adopt_selects_named_cmake_library_target();
   test_adopt_infers_component_version_macro();
   test_adopt_expands_active_cmake_source_globs();
