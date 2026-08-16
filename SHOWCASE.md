@@ -1,6 +1,6 @@
-# Showcase: package EnTT, then run EnTT-Pacman
+# Showcase
 
-This is an end-to-end, real-world Forge adoption walkthrough. It packages the
+These are end-to-end, real-world Forge adoption walkthroughs. The first packages the
 [EnTT](https://github.com/skypjack/entt) entity-component-system library as a
 header-only `.cbox`, then builds and runs the
 [EnTT-Pacman](https://github.com/indianakernick/EnTT-Pacman) game against that
@@ -13,7 +13,9 @@ It demonstrates three related Forge capabilities working together:
 3. recognizing SDL2 from CMake and offering the declared macOS system-package
    provider during an interactive build.
 
-The walkthrough was verified on macOS arm64 with AppleClang and Homebrew.
+The walkthroughs were verified on macOS arm64 with AppleClang and Homebrew.
+
+## Package EnTT, then run EnTT-Pacman
 
 ## Prepare the projects
 
@@ -154,3 +156,115 @@ SDL2 provider, for example:
 This division is intentional: Forge automates repeatable build mechanics while
 leaving version selection, system changes, and source compatibility decisions
 visible in the project recipe and source tree.
+
+## Build StellarEngine with system or local fmt and spdlog
+
+[StellarEngine](https://github.com/Gellert5225/StellarEngine) is a larger CMake
+superproject: its Metal editor depends on GLFW, EnTT, glm, nativefiledialog,
+yaml-cpp, fmt, and spdlog; it also carries a vcpkg manifest and copies a
+`Resources` tree next to the editor executable. It demonstrates that a project
+can switch one adopted provider between the host package manager and editable
+sibling source checkouts without rewriting its generated platform-link rules.
+
+Clone the engine and the two libraries side by side. StellarEngine needs its
+submodule, while spdlog's adopted recipe in this example depends on the
+neighbouring fmt checkout:
+
+```sh
+mkdir -p ~/source/github
+cd ~/source/github
+git clone --recurse-submodules https://github.com/Gellert5225/StellarEngine.git
+git clone https://github.com/fmtlib/fmt.git
+git clone https://github.com/gabime/spdlog.git
+```
+
+Adopt the library checkouts first. The generated fmt and spdlog recipes select
+their concrete CMake library target, so they do not pull their test and example
+targets into the build:
+
+```sh
+cd ~/source/github/fmt
+/path/to/forge/build/dev/forge adopt
+
+cd ~/source/github/spdlog
+/path/to/forge/build/dev/forge adopt
+```
+
+Then adopt the engine from its repository root:
+
+```sh
+cd ~/source/github/StellarEngine
+/path/to/forge/build/dev/forge adopt
+```
+
+Forge creates a workspace with `Stellar` and `StellarEditor`. The editor recipe
+also records the CMake `copy_directory` rule as `runtime.files = ["Resources"]`,
+so its Metal shader and textures are staged beside the executable.
+
+### System-provider flavour
+
+The freshly adopted `Stellar/forge.recipe.toml` uses the platform requirements
+in its generated `[build]` section. Leave it without a dependency-style
+override and build from the workspace root:
+
+```sh
+/path/to/forge/build/dev/forge build
+```
+
+On macOS, Forge uses the declared Homebrew provider hints for fmt and spdlog
+when they are needed, alongside the project's vcpkg manifest for dependencies
+declared there. The relevant generated metadata remains visible and portable:
+
+```toml
+[build]
+macos_libraries = ["fmt", "glfw", "nfd", "spdlog", "yaml-cpp"]
+macos_brew_packages = ["entt", "fmt", "glfw", "glm", "nativefiledialog-extended", "spdlog", "yaml-cpp"]
+```
+
+### Local-source fmt and spdlog flavour
+
+To replace the system fmt/spdlog pair with the neighbouring checkouts, add this
+to `Stellar/forge.recipe.toml` after `[project]`:
+
+```toml
+[defaults]
+style = "local-source"
+
+[dependencies.style.local-source]
+spdlog = { path = "../../spdlog", provides = ["spdlog"] }
+```
+
+Build again from the workspace root:
+
+```sh
+/path/to/forge/build/dev/forge build
+```
+
+`provides = ["spdlog"]` replaces the adopted `spdlog` provider and its
+associated `fmt` provider hint. Forge consequently builds or reuses the local
+spdlog box and its local fmt dependency, then extracts both into
+`Stellar/.forge/deps/`. Typical confirmation looks like:
+
+```text
+Using cached dependency FMT
+Using cached dependency spdlog
+Extracted .../Stellar/.forge/deps/spdlog-1.17.0-macos-arm64
+Extracted .../Stellar/.forge/deps/FMT-12.2.1-macos-arm64
+Built workspace StellarEngine
+```
+
+This works even though the adopted fmt and spdlog projects request C++11 while
+Stellar uses C++20: a consumer may use a newer language standard than a
+compiled dependency, but Forge rejects the unsafe reverse relationship.
+
+Finally run the editor with its workspace project selector:
+
+```sh
+/path/to/forge/build/dev/forge run StellarEditor
+```
+
+The application reaching its editor window verifies the generated workspace,
+local provider override, compiled dependency chain, Metal/Objective-C++ build,
+and runtime resource staging. StellarEngine's current resource drag-and-drop
+crash is an upstream editor issue: it attempts to parse every dropped resource
+as a YAML scene, rather than a Forge packaging or dependency-resolution issue.

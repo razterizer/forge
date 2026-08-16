@@ -31,10 +31,10 @@ Forge is currently in the design and prototyping phase.
 
 ## Showcase
 
-[Package EnTT and run EnTT-Pacman](SHOWCASE.md) is a verified end-to-end
-walkthrough: adopt an existing header-only CMake library, create a cbox,
-consume it from a game, install its declared SDL2 provider with confirmation,
-and run the result.
+[The showcase](SHOWCASE.md) contains verified end-to-end walkthroughs: package
+EnTT as a cbox and run EnTT-Pacman against it, then adopt StellarEngine and
+switch its fmt/spdlog dependencies between declared system providers and local
+source checkouts.
 
 ## Motivation
 
