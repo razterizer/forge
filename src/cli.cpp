@@ -1995,8 +1995,23 @@ namespace forge::cli
       {
         if (!build_first && (style || config || profile))
         {
-          error << "forge: cached run selectors are only supported in a project directory\n";
-          return 2;
+          if (!target)
+          {
+            error << "forge: cached run selectors in a workspace require <project> or <project>/<target>\n";
+            return 2;
+          }
+
+          if (!select_cached_workspace_run_variant(
+            working_directory,
+            *target,
+            config,
+            style,
+            profile,
+            error
+          ))
+          {
+            return 2;
+          }
         }
         if (!target && build_first)
         {

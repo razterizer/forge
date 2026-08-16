@@ -103,6 +103,15 @@ namespace forge
                     std::ostream& output,
                     std::ostream& error);
 
+  bool select_cached_workspace_run_variant(
+    const std::filesystem::path& workspace_directory,
+    std::string_view selection,
+    const std::optional<std::string>& configuration,
+    const std::optional<std::string>& style,
+    const std::optional<std::string>& profile,
+    std::ostream& error
+  );
+
   int build_and_run_workspace(const std::filesystem::path& workspace_directory,
                               std::string_view selection,
                               const std::optional<std::string>& profile,

@@ -783,6 +783,49 @@ namespace forge
     );
   }
 
+  bool select_cached_workspace_run_variant(
+    const std::filesystem::path& workspace_directory,
+    std::string_view selection,
+    const std::optional<std::string>& configuration,
+    const std::optional<std::string>& style,
+    const std::optional<std::string>& profile,
+    std::ostream& error
+  )
+  {
+    Workspace workspace;
+    std::map<std::filesystem::path, Recipe> recipes;
+
+    if (!load_workspace(workspace_directory, workspace, recipes, error))
+      return false;
+
+    std::string project_name;
+    std::optional<std::string> target;
+
+    if (!parse_selection(selection, project_name, target, error))
+      return false;
+
+    const auto* project = find_project(workspace, project_name, error);
+
+    if (!project)
+      return false;
+
+    const auto& recipe = recipes.at(project->path);
+    const auto selected_target = target
+      ? target
+      : recipe.targets.empty()
+        ? std::optional<std::string> { recipe.name }
+        : std::optional<std::string> {};
+
+    return select_cached_run_variant(
+      project->path,
+      selected_target,
+      configuration,
+      style,
+      profile,
+      error
+    );
+  }
+
   int build_and_run_workspace(const std::filesystem::path& workspace_directory,
                               std::string_view selection,
                               const std::optional<std::string>& profile,

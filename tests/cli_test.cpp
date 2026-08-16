@@ -388,6 +388,13 @@ namespace
       std::string_view { "--" },
       std::string_view { "ok" }
     };
+    constexpr std::array cached_run_arguments {
+      std::string_view { "run" },
+      std::string_view { "app" },
+      std::string_view { "--config=debug" },
+      std::string_view { "--" },
+      std::string_view { "ok" }
+    };
     constexpr std::array test_arguments { std::string_view { "test" } };
     constexpr std::array selected_test_arguments {
       std::string_view { "test" },
@@ -395,6 +402,8 @@ namespace
     };
     std::ostringstream run_output;
     std::ostringstream run_error;
+    std::ostringstream cached_run_output;
+    std::ostringstream cached_run_error;
     std::ostringstream test_output;
     std::ostringstream test_error;
     std::ostringstream selected_output;
@@ -406,6 +415,23 @@ namespace
     );
     expect(contains(run_output.str(), "Running app"), "CLI workspace run reports its project");
     expect(run_error.str().empty(), "successful CLI workspace run does not write an error");
+    expect(
+      forge::cli::run(
+        cached_run_arguments,
+        directory.path(),
+        cached_run_output,
+        cached_run_error
+      ) == 0,
+      "CLI selects a cached workspace project run by configuration"
+    );
+    expect(
+      contains(cached_run_output.str(), "Running app"),
+      "CLI cached workspace run reports its project"
+    );
+    expect(
+      cached_run_error.str().empty(),
+      "cached workspace run selection does not write an error"
+    );
     expect(
       forge::cli::run(test_arguments, directory.path(), test_output, test_error) == 0,
       "CLI tests every workspace project with marked tests"
