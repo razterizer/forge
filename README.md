@@ -29,6 +29,12 @@ Studio solution while keeping each `forge.recipe.toml` authoritative.
 
 Forge is currently in the design and prototyping phase.
 
+## Architecture
+
+[The design baseline](docs/design.md#execution-flows) includes Mermaid flowcharts
+for adoption, build, and box creation. They show where Forge selects native
+metadata, resolves dependencies, generates CMake, and packages internal targets.
+
 ## Showcase
 
 [The showcase](SHOWCASE.md) contains verified end-to-end walkthroughs: package

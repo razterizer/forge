@@ -63,6 +63,84 @@ compilers and build systems rather than replacing them.
   marked tests across projects, and workspace clean removes generated state
   from every project.
 
+## Execution flows
+
+These diagrams describe the current control flow, rather than a promise about
+every future backend or dependency provider. Error exits and lower-level path
+validation are collapsed to keep the decisions visible.
+
+### Adoption
+
+```mermaid
+flowchart TD
+  start([forge adopt]) --> validate{Valid options and safe paths?}
+  validate -- No --> error([Report error])
+  validate -- Yes --> discover[Discover CMake, Visual Studio, Xcode, solution, and existing recipe]
+
+  discover --> cmake_workspace{CMake root has subprojects but no target?}
+  cmake_workspace -- Yes --> workspace[Adopt subprojects and write forge.workspace.toml]
+  cmake_workspace -- No --> solution{Only one solution and no project metadata?}
+  solution -- Yes --> adopt_solution[Adopt solution projects]
+  solution -- No --> existing{Recipe already exists?}
+  existing -- Yes --> preserve[Validate and preserve recipe]
+  existing -- No --> scan[Scan C, C++, and Objective-C++ sources, headers, and main functions]
+
+  scan --> metadata{Select project metadata}
+  metadata --> native[Read Visual Studio or Xcode project]
+  metadata --> cmake[Read CMake project]
+  native --> merge{CMake also present?}
+  merge -- Yes --> cmake_import[Merge concrete CMake metadata]
+  merge -- No --> shape
+  cmake --> cmake_import
+
+  cmake_import --> linked{Selected CMake target links an add_subdirectory library?}
+  linked -- Yes --> internal[Import the vendored library as a named internal Forge target]
+  linked -- No --> shape[Select sources, headers, type, standards, and public interface]
+  internal --> shape
+
+  shape --> includes[Infer local include directories and merge explicit metadata]
+  includes --> dependencies[Resolve sibling references and report unresolved include candidates]
+  dependencies --> recipe[Write forge.recipe.toml]
+  recipe --> release[Create release support]
+  release --> done([Adoption complete])
+```
+
+### Build and boxing
+
+```mermaid
+flowchart TD
+  start([forge build]) --> read[Read forge.recipe.toml]
+  read --> target{Explicit target, default target, or single target?}
+  target --> select[Select target and resolve its internal target closure]
+  select --> profile[Resolve profile, style, platform, and configuration]
+  profile --> validate[Validate sources, headers, include directories, and target graph]
+  validate --> dependencies[Resolve source and box dependencies]
+  dependencies --> providers[Check system providers and dependency toolchains]
+  providers --> assets[Collect runtime assets]
+  assets --> generate[Generate private CMake project]
+
+  generate --> root[Emit root CMake target]
+  generate --> internal[Emit internal CMake targets and links]
+  generate --> external[Expose dependency headers, libraries, and system links]
+  root --> configure[Configure with CMake]
+  internal --> configure
+  external --> configure
+  configure --> compile[Build with CMake and Ninja]
+  compile --> stage[Stage runtime libraries and assets]
+  stage --> artifact([Build artifact])
+
+  artifact --> box{forge box create?}
+  box -- No --> done([Done])
+  box -- Yes --> internal_boxes[Build and box selected internal library targets]
+  internal_boxes --> package[Stage root artifact, headers, dependency boxes, and internal boxes]
+  package --> cbox([.cbox package])
+```
+
+For example, a static CMake library that links vendored `ds` and
+`libdeflate_static` through `add_subdirectory(...)` becomes a root Forge target
+with two internal dependencies. Building emits all three CMake targets; boxing
+embeds all three components so consumers receive the static-link closure.
+
 ## Project workspace
 
 Forge keeps generated and downloaded state under an ignored `.forge`
