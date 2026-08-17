@@ -1779,6 +1779,7 @@ namespace
       "add_executable(CMakeApp src/main.cpp)\n"
       "target_compile_features(CMakeApp PRIVATE cxx_std_23)\n"
       "target_include_directories(CMakeApp PRIVATE ${PROJECT_SOURCE_DIR}/include)\n"
+      "target_include_directories(CMakeApp PRIVATE deps/fetched/include)\n"
       "target_compile_definitions(CMakeApp PRIVATE CMAKE_FEATURE VALUE=42)\n"
       "# add_executable(Commented bad.cpp)\n"
     );
@@ -1801,11 +1802,16 @@ namespace
     expect(contains(recipe, "version = \"2.3.4\""), "adopt imports the CMake project version");
     expect(contains(recipe, "cpp_std = 23"), "adopt imports the CMake C++ standard");
     expect(contains(recipe, "include_dirs = [\"include\"]"), "adopt imports CMake include directories");
+    expect(!contains(recipe, "deps/fetched/include"), "adopt omits unavailable CMake include directories");
     expect(
       contains(recipe, "defines = [\"CMAKE_FEATURE\", \"VALUE=42\"]"),
       "adopt imports CMake compile definitions"
     );
     expect(contains(output.str(), "Imported CMake project CMakeLists.txt"), "adopt reports CMake import");
+    expect(
+      contains(output.str(), "deps/fetched/include"),
+      "adopt reports unavailable CMake include directories for review"
+    );
     expect(!contains(recipe, "bad.cpp"), "adopt ignores commented CMake commands");
     std::ostringstream build_output;
     std::ostringstream build_error;

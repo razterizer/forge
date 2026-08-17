@@ -1229,6 +1229,12 @@ namespace forge
                 project.unresolved_properties.push_back(original_argument);
               else if (const auto relative = project_relative_path(directory, expanded))
               {
+                if (!std::filesystem::is_directory(directory / *relative))
+                {
+                  project.unresolved_properties.push_back(*relative);
+                  continue;
+                }
+
                 project.include_directories.push_back(*relative);
 
                 if (public_include_directory)
