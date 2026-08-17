@@ -15,6 +15,98 @@ It demonstrates three related Forge capabilities working together:
 
 The walkthroughs were verified on macOS arm64 with AppleClang and Homebrew.
 
+## Package a native dependency chain for a Blender extension
+
+[meshoptimizer](https://github.com/zeux/meshoptimizer),
+[AssetKit](https://github.com/recp/AssetKit), and
+[assetkit-blender](https://github.com/recp/assetkit-blender) form a useful
+three-level validation chain:
+
+```text
+meshoptimizer (C++ static library)
+        ↓
+AssetKit (C/C++ static library with bundled CMake subprojects)
+        ↓
+assetkit-blender (C Python extension module)
+```
+
+It demonstrates sibling dependency discovery, component boxes with embedded
+dependencies, C and C++ compilation in one chain, private build-header
+propagation, Python development-header discovery, and preservation of a
+`Python3_add_library(... WITH_SOABI)` module's package location.
+
+### Prepare and adopt the producers
+
+Clone the repositories side by side, then initialise AssetKit's declared
+submodules before adoption:
+
+```sh
+mkdir -p ~/source/github
+cd ~/source/github
+git clone https://github.com/zeux/meshoptimizer.git
+git clone --recurse-submodules https://github.com/recp/AssetKit.git
+git clone https://github.com/recp/assetkit-blender.git
+
+cd AssetKit
+git submodule update --init --recursive
+```
+
+Adopt and box Meshoptimizer first:
+
+```sh
+cd ~/source/github/meshoptimizer
+/path/to/forge/build/dev/forge adopt
+/path/to/forge/build/dev/forge box create
+```
+
+Then adopt AssetKit. Its generated recipe recognises the neighbouring
+Meshoptimizer checkout as the `meshoptimizer` sibling dependency. Build and
+package the actual `assetkit` component, rather than the aggregate project
+box:
+
+```sh
+cd ~/source/github/AssetKit
+/path/to/forge/build/dev/forge adopt
+/path/to/forge/build/dev/forge box create assetkit
+```
+
+The selected box contains AssetKit and its CMake subproject dependencies, such
+as `ds` and `libdeflate_static`, as embedded boxes. This makes the package
+self-contained for a downstream project without flattening its dependency
+identity.
+
+### Adopt and build the Blender module
+
+Adopt the consumer from its repository root:
+
+```sh
+cd ~/source/github/assetkit-blender
+/path/to/forge/build/dev/forge adopt
+/path/to/forge/build/dev/forge build
+```
+
+Forge discovers the sibling `assetkit` project, resolves its component box and
+embedded dependencies, and finds the Python development-module headers through
+`find_package(Python3 COMPONENTS Development.Module)`. A successful macOS
+build ends with a Python importable native module in the original package
+directory, rather than a generic library under `.forge/build/`:
+
+```text
+Built .../assetkit-blender/src/assetkit_blender/_assetkit_blender.cpython-313-darwin.so
+```
+
+Finally, package the module itself:
+
+```sh
+/path/to/forge/build/dev/forge box create
+```
+
+This produces a target-qualified box such as
+`.forge/boxes/assetkit_blender_native-0.1.0-macos-arm64.cbox`. The box carries
+the compiled extension artifact and the resolved AssetKit dependency closure.
+The Python package's `.py` files remain source-managed by the Blender add-on;
+the cbox validates and distributes its native artifact graph.
+
 ## Package EnTT, then run EnTT-Pacman
 
 ## Prepare the projects
