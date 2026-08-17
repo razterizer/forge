@@ -62,6 +62,7 @@ namespace forge
     std::string name;
     std::string type;
     int cpp_standard = 0;
+    int c_standard = 0;
     std::vector<std::filesystem::path> sources;
     std::vector<std::filesystem::path> public_headers;
     std::vector<std::filesystem::path> include_directories;
@@ -87,6 +88,7 @@ namespace forge
   {
     std::string configuration;
     int cpp_standard = 0;
+    int c_standard = 0;
     std::vector<std::filesystem::path> include_directories;
     std::vector<std::filesystem::path> macos_system_include_directories;
     std::vector<std::filesystem::path> linux_system_include_directories;
@@ -170,6 +172,7 @@ namespace forge
     std::string version;
     std::string type;
     int cpp_standard = 0;
+    int c_standard = 0;
     std::optional<int> build_number;
     std::vector<std::filesystem::path> sources;
     std::vector<std::filesystem::path> public_headers;

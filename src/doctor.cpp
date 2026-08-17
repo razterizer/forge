@@ -822,8 +822,21 @@ namespace forge
 
       output << "Checking unadopted project " << project_directory.filename().string() << '\n';
       report_warning(output, state, "forge.recipe.toml is missing; run 'forge adopt' to create Forge metadata");
+      const auto c_source_count = std::ranges::count_if(
+        scan.sources,
+        [](const std::string& source)
+        {
+          return is_c_source(std::filesystem::path { source });
+        }
+      );
+      const auto source_language = c_source_count == 0
+        ? "C++"
+        : c_source_count == static_cast<decltype(c_source_count)>(scan.sources.size())
+        ? "C"
+        : "C/C++";
+
       output
-        << "Found " << scan.sources.size() << " C++ source file"
+        << "Found " << scan.sources.size() << ' ' << source_language << " source file"
         << (scan.sources.size() == 1 ? "" : "s") << '\n'
         << "Found " << scan.headers.size() << " C++ header file"
         << (scan.headers.size() == 1 ? "" : "s") << '\n'
@@ -833,7 +846,7 @@ namespace forge
         << (scan.entry_points.size() == 1 ? "" : "s") << '\n';
 
       if (scan.sources.empty() && scan.headers.empty())
-        report_error(output, state, "no C++ sources or headers were found to adopt");
+        report_error(output, state, "no C or C++ sources or headers were found to adopt");
 
       report_inferred_runtime_files(
         infer_runtime_files(project_directory, scan.sources, scan.headers),

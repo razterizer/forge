@@ -239,6 +239,7 @@ namespace forge
         project.type = additional.type;
 
       project.cpp_standard = std::max(project.cpp_standard, additional.cpp_standard);
+      project.c_standard = std::max(project.c_standard, additional.c_standard);
 
       project.include_directories.insert(
         project.include_directories.end(),
@@ -290,7 +291,10 @@ namespace forge
         project.profiles.try_emplace(name, profile);
 
       for (auto& [name, profile] : project.profiles)
+      {
         profile.cpp_standard = std::max(profile.cpp_standard, project.cpp_standard);
+        profile.c_standard = std::max(profile.c_standard, project.c_standard);
+      }
 
       for (auto* values : {
         &project.include_directories,
@@ -1513,6 +1517,19 @@ namespace forge
     }
 
     const auto formatted_header_validation_headers = format_sources(header_validation_headers);
+    const auto has_c_sources = std::ranges::any_of(
+      sources,
+      [](const std::string& source)
+      {
+        return is_c_source(std::filesystem::path { source });
+      }
+    );
+    const auto c_standard = visual_studio_project && visual_studio_project->c_standard != 0
+      ? visual_studio_project->c_standard
+      : 11;
+    const auto c_standard_property = has_c_sources
+      ? "c_std = " + std::to_string(c_standard) + "\n"
+      : std::string {};
     auto version_headers = infer_version_headers(project_directory, headers);
     bool initialize_version_header = explicit_version && version_headers.size() == 1;
 
@@ -1618,7 +1635,8 @@ namespace forge
           "cpp_std = " + std::to_string(
             visual_studio_project ? visual_studio_project->cpp_standard : 20
           ) + "\n"
-          "sources = " + format_sources(library_sources) + "\n";
+          + c_standard_property
+          + "sources = " + format_sources(library_sources) + "\n";
 
         if (!public_headers.empty())
           recipe += "public_headers = " + formatted_headers + "\n";
@@ -1649,7 +1667,8 @@ namespace forge
           "cpp_std = " + std::to_string(
             visual_studio_project ? visual_studio_project->cpp_standard : 20
           ) + "\n"
-          "sources = " + format_sources(inferred_target_sources[index]) + "\n";
+          + c_standard_property
+          + "sources = " + format_sources(inferred_target_sources[index]) + "\n";
 
         auto runtime_files =
           infer_runtime_files(project_directory, inferred_target_sources[index], runtime_headers);
@@ -1716,7 +1735,8 @@ namespace forge
         "cpp_std = " + std::to_string(
           visual_studio_project ? visual_studio_project->cpp_standard : 20
         ) + "\n"
-        "\n"
+        + c_standard_property
+        + "\n"
         "[sources]\n"
         "paths = " + formatted_sources + "\n";
 
@@ -1898,10 +1918,23 @@ namespace forge
       return 2;
     }
 
+    const auto c_source_count = std::ranges::count_if(
+      sources,
+      [](const std::string& source)
+      {
+        return is_c_source(std::filesystem::path { source });
+      }
+    );
+    const auto source_language = c_source_count == 0
+      ? "C++"
+      : c_source_count == static_cast<decltype(c_source_count)>(sources.size())
+      ? "C"
+      : "C/C++";
+
     output
       << "Adopted project '" << project_name << "'\n"
       << "Created " << recipe_path.string() << '\n'
-      << "Found " << sources.size() << " C++ source file";
+      << "Found " << sources.size() << ' ' << source_language << " source file";
 
     if (sources.size() != 1)
       output << 's';

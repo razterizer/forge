@@ -59,6 +59,22 @@ namespace
     source << "int main() {}\n";
   }
 
+  void write_c_project(const std::filesystem::path& directory)
+  {
+    std::ofstream recipe { directory / "forge.recipe.toml" };
+    recipe
+      << "[project]\n"
+      << "name = \"hello-c\"\n"
+      << "version = \"0.1.0\"\n"
+      << "type = \"executable\"\n"
+      << "c_std = 11\n\n"
+      << "[sources]\n"
+      << "paths = [\"main.c\"]\n";
+
+    std::ofstream source { directory / "main.c" };
+    source << "int main(void) { return 0; }\n";
+  }
+
   void write_library_project(const std::filesystem::path& directory)
   {
     std::filesystem::create_directories(directory / "src");
@@ -318,6 +334,31 @@ namespace
     expect(contains(generated, "main.cpp"), "build includes recipe sources");
     expect(contains(generated, "cxx_std_20"), "build includes the requested C++ standard");
     expect(error.str().empty(), "successful unit build does not write an error");
+  }
+
+  void test_build_generates_c_cmake()
+  {
+    TemporaryDirectory directory;
+    write_c_project(directory.path());
+    std::ostringstream output;
+    std::ostringstream error;
+
+    const forge::ProcessRunner runner =
+      [](const std::vector<std::string>&, const std::filesystem::path&, std::ostream&)
+      {
+        return 0;
+      };
+
+    expect(
+      forge::build_project(directory.path(), runner, output, error) == 0,
+      "build accepts a C-only recipe without a C++ standard"
+    );
+    const auto generated = read_file(directory.path() / ".forge/generated/CMakeLists.txt");
+    expect(contains(generated, "project(forge_project LANGUAGES CXX C)"), "build enables C for C sources");
+    expect(contains(generated, "main.c"), "build includes C sources");
+    expect(contains(generated, "c_std_11"), "build applies the requested C standard");
+    expect(!contains(generated, "target_compile_features(forge_project PUBLIC cxx_std_"), "C-only targets do not request a C++ standard");
+    expect(error.str().empty(), "C-only recipe does not write an error");
   }
 
   void test_build_stops_after_configuration_failure()
@@ -2574,6 +2615,7 @@ int main()
 {
   test_recipe_accepts_toml_comments_multiline_arrays_and_escapes();
   test_build_generates_cmake_and_commands();
+  test_build_generates_c_cmake();
   test_build_generates_static_library();
   test_build_generates_dynamic_library();
   test_build_accepts_legacy_shared_library_alias();

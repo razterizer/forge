@@ -1074,10 +1074,10 @@ namespace
 
     expect(
       forge::cli::run(arguments, directory.path(), output, error) == 2,
-      "doctor rejects an unadopted project with no C++ files"
+      "doctor rejects an unadopted project with no C or C++ files"
     );
     expect(
-      contains(output.str(), "error: no C++ sources or headers were found to adopt")
+      contains(output.str(), "error: no C or C++ sources or headers were found to adopt")
         && contains(output.str(), "Forge doctor found 1 errors and 1 warnings"),
       "doctor explains empty unadopted projects"
     );
@@ -1645,6 +1645,7 @@ namespace
     TemporaryDirectory directory;
     constexpr std::array adopt_arguments { std::string_view { "adopt" } };
     constexpr std::array build_arguments { std::string_view { "build" } };
+    constexpr std::array run_arguments { std::string_view { "run" } };
     constexpr std::array release_build_arguments {
       std::string_view { "build" },
       std::string_view { "--config=release" }
@@ -1813,6 +1814,93 @@ namespace
       "imported CMake project builds"
     );
     expect(build_error.str().empty(), "imported CMake build does not write an error");
+  }
+
+  void test_adopt_imports_c_project()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    constexpr std::array run_arguments { std::string_view { "run" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "cmake_minimum_required(VERSION 3.25)\n"
+      "project(CApp VERSION 1.2.3 LANGUAGES C)\n"
+      "add_executable(CApp src/main.c)\n"
+      "target_compile_features(CApp PRIVATE c_std_11)\n"
+    );
+    write_file(directory.path() / "src/main.c", "int main(void) { return 0; }\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt imports a CMake C project"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(contains(recipe, "paths = [\"src/main.c\"]"), "adopt includes C sources");
+    expect(contains(recipe, "c_std = 11"), "adopt imports the C language standard");
+    expect(contains(output.str(), "Found 1 C source file"), "adopt reports C sources accurately");
+
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "adopted C project builds"
+    );
+    expect(build_error.str().empty(), "adopted C build does not write an error");
+
+    std::ostringstream run_output;
+    std::ostringstream run_error;
+    expect(
+      forge::cli::run(run_arguments, directory.path(), run_output, run_error) == 0,
+      "adopted C executable runs"
+    );
+    expect(run_error.str().empty(), "adopted C run does not write an error");
+  }
+
+  void test_adopt_imports_mixed_cmake_project()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "cmake_minimum_required(VERSION 3.25)\n"
+      "project(MixedApp LANGUAGES C CXX)\n"
+      "add_executable(MixedApp src/main.cpp src/value.c)\n"
+      "target_compile_features(MixedApp PRIVATE c_std_11 cxx_std_20)\n"
+    );
+    write_file(
+      directory.path() / "src/main.cpp",
+      "extern \"C\" int value(void);\nint main() { return value() == 42 ? 0 : 1; }\n"
+    );
+    write_file(directory.path() / "src/value.c", "int value(void) { return 42; }\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt imports a mixed C/C++ CMake project"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "src/main.cpp") && contains(recipe, "src/value.c"),
+      "adopt includes both C and C++ sources"
+    );
+    expect(
+      contains(recipe, "cpp_std = 20") && contains(recipe, "c_std = 11"),
+      "adopt records both language standards"
+    );
+    expect(contains(output.str(), "Found 2 C/C++ source files"), "adopt reports mixed sources accurately");
+
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "adopted mixed C/C++ project builds"
+    );
+    expect(build_error.str().empty(), "adopted mixed build does not write an error");
   }
 
   void test_adopt_imports_cmake_copy_directory_runtime_assets()
@@ -8237,6 +8325,8 @@ int main()
   test_adopt_exports_vendored_public_header_closure();
   test_adopt_imports_visual_studio_project();
   test_adopt_imports_cmake_project();
+  test_adopt_imports_c_project();
+  test_adopt_imports_mixed_cmake_project();
   test_adopt_imports_cmake_copy_directory_runtime_assets();
   test_adopt_cmake_library_exports_vendored_public_headers();
   test_adopt_selects_named_cmake_library_target();

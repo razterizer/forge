@@ -56,6 +56,7 @@ namespace forge
   };
 
   bool is_ignored_project_scan_directory(const std::filesystem::path& path);
+  bool is_c_source(const std::filesystem::path& path);
   bool is_cpp_source(const std::filesystem::path& path);
   bool is_cpp_header(const std::filesystem::path& path);
   bool contains_main_function(const std::filesystem::path& path);

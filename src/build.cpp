@@ -1221,7 +1221,10 @@ namespace forge
           return false;
         }
 
-        std::ofstream source { directory / ("header-" + std::to_string(index) + ".cpp") };
+        const auto extension = recipe.cpp_standard == 0 && recipe.c_standard != 0
+          ? ".c"
+          : ".cpp";
+        std::ofstream source { directory / ("header-" + std::to_string(index) + extension) };
 
         if (!source)
         {
@@ -1785,14 +1788,41 @@ namespace forge
           }
         );
       };
+      const auto uses_c = [](const auto& sources)
+      {
+        return std::ranges::any_of(
+          sources,
+          [](const std::filesystem::path& source)
+          {
+            return source.extension() == ".c";
+          }
+        );
+      };
+      const auto uses_cpp = [](const auto& sources)
+      {
+        return std::ranges::any_of(
+          sources,
+          [](const std::filesystem::path& source)
+          {
+            const auto extension = source.extension();
+            return extension == ".cpp" || extension == ".cc"
+              || extension == ".cxx" || extension == ".mm";
+          }
+        );
+      };
       auto has_objective_cpp_sources = uses_objective_cpp(recipe.sources);
+      auto has_c_sources = uses_c(recipe.sources) || recipe.c_standard != 0;
 
       for (const auto& target : recipe.internal_targets)
+      {
         has_objective_cpp_sources = has_objective_cpp_sources || uses_objective_cpp(target.sources);
+        has_c_sources = has_c_sources || uses_c(target.sources) || target.c_standard != 0;
+      }
 
       file
         << "cmake_minimum_required(VERSION 3.25)\n"
         << "project(forge_project LANGUAGES CXX"
+        << (has_c_sources ? " C" : "")
         << (has_objective_cpp_sources ? " OBJCXX" : "")
         << ")\n\n"
         << "if(WIN32)\n"
@@ -1858,9 +1888,20 @@ namespace forge
         }
 
         const auto visibility = target.type == "header_only" ? "INTERFACE" : "PUBLIC";
+        if (uses_cpp(target.sources))
+        {
+          file << "target_compile_features(" << target_name << ' ' << visibility
+               << " cxx_std_" << target.cpp_standard << ")\n";
+        }
+
+        if (uses_c(target.sources)
+            || (target.sources.empty() && target.c_standard != 0))
+        {
+          file << "target_compile_features(" << target_name << ' ' << visibility
+               << " c_std_" << (target.c_standard == 0 ? 11 : target.c_standard) << ")\n";
+        }
+
         file
-          << "target_compile_features(" << target_name << ' ' << visibility
-          << " cxx_std_" << target.cpp_standard << ")\n"
           << "target_include_directories(" << target_name << ' ' << visibility
           << " \"${FORGE_PROJECT_ROOT}/include\")\n";
 
@@ -1962,7 +2003,8 @@ namespace forge
         for (std::size_t index = 0; index < headers.size(); ++index)
         {
           file << "  \"${CMAKE_CURRENT_SOURCE_DIR}/header-validation/header-"
-               << index << ".cpp\"\n";
+               << index << (recipe.cpp_standard == 0 && recipe.c_standard != 0 ? ".c" : ".cpp")
+               << "\"\n";
         }
       }
       else
@@ -1978,9 +2020,19 @@ namespace forge
         file << "  \"${FORGE_PROJECT_ROOT}/" << escape_cmake(header.generic_string()) << "\"\n";
       }
 
-      file
-        << ")\n"
-        << "target_compile_features(forge_project PUBLIC cxx_std_" << recipe.cpp_standard << ")\n";
+      file << ")\n";
+
+      if (uses_cpp(recipe.sources) || (recipe.sources.empty() && recipe.cpp_standard != 0))
+      {
+        file << "target_compile_features(forge_project PUBLIC cxx_std_"
+             << recipe.cpp_standard << ")\n";
+      }
+
+      if (uses_c(recipe.sources) || (recipe.sources.empty() && recipe.c_standard != 0))
+      {
+        file << "target_compile_features(forge_project PUBLIC c_std_"
+             << (recipe.c_standard == 0 ? 11 : recipe.c_standard) << ")\n";
+      }
 
       if (!recipe.public_headers.empty())
       {

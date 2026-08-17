@@ -130,6 +130,8 @@ namespace forge
         return parse_string(value, build.configuration);
       if (key == "cpp_std")
         return parse_integer(value, build.cpp_standard);
+      if (key == "c_std")
+        return parse_integer(value, build.c_standard);
       if (key == "include_dirs")
         return parse_sources(value, build.include_directories);
       if (key == "macos_system_include_dirs")
@@ -865,6 +867,8 @@ namespace forge
       }
       else if (section == "project" && key == "cpp_std")
         valid = parse_integer(value, recipe.cpp_standard);
+      else if (section == "project" && key == "c_std")
+        valid = parse_integer(value, recipe.c_standard);
       else if (section == "defaults" && key == "style")
       {
         std::string style;
@@ -955,6 +959,8 @@ namespace forge
         }
         else if (key == "cpp_std")
           valid = parse_integer(value, target->cpp_standard);
+        else if (key == "c_std")
+          valid = parse_integer(value, target->c_standard);
         else if (key == "sources")
           valid = parse_sources(value, target->sources);
         else if (key == "public_headers")
@@ -1282,14 +1288,16 @@ namespace forge
       return false;
     }
 
-    const auto legacy_target = !recipe.type.empty() || recipe.cpp_standard != 0
+    const auto legacy_target = !recipe.type.empty() || recipe.cpp_standard != 0 || recipe.c_standard != 0
       || !recipe.sources.empty() || !recipe.public_headers.empty()
       || !recipe.include_directories.empty() || !recipe.runtime_files.empty();
 
     if ((legacy_target && !recipe.targets.empty())
         || (recipe.targets.empty()
             && (recipe.type.empty()
-                || (recipe.type != "imported_library" && recipe.cpp_standard == 0))))
+                || (recipe.type != "imported_library"
+                    && recipe.cpp_standard == 0
+                    && recipe.c_standard == 0))))
     {
       error << "forge: recipe must declare either one legacy project target or named targets\n";
       return false;
@@ -1299,7 +1307,9 @@ namespace forge
     {
       if (!is_safe_name(target.name)
           || target.type.empty()
-          || (target.type != "imported_library" && target.cpp_standard == 0))
+          || (target.type != "imported_library"
+              && target.cpp_standard == 0
+              && target.c_standard == 0))
       {
         error << "forge: named target is missing required fields\n";
         return false;
@@ -1434,6 +1444,7 @@ namespace forge
     recipe.name = selected->name;
     recipe.type = selected->type;
     recipe.cpp_standard = selected->cpp_standard;
+    recipe.c_standard = selected->c_standard;
     recipe.sources = selected->sources;
     recipe.public_headers = selected->public_headers;
     recipe.header_validation_headers.clear();
@@ -1570,6 +1581,9 @@ namespace forge
 
     if (build.cpp_standard != 0)
       recipe.cpp_standard = build.cpp_standard;
+
+    if (build.c_standard != 0)
+      recipe.c_standard = build.c_standard;
 
     if (!build.configuration.empty())
       configuration = build.configuration;

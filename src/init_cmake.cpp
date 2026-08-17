@@ -824,7 +824,7 @@ namespace forge
 
         const auto extension = std::filesystem::path { *relative }.extension().string();
 
-        if (extension == ".cpp" || extension == ".cc" || extension == ".cxx" || extension == ".mm")
+        if (extension == ".c" || extension == ".cpp" || extension == ".cc" || extension == ".cxx" || extension == ".mm")
           project.sources.push_back(*relative);
         else if (extension == ".h" || extension == ".hpp" || extension == ".hh")
           project.headers.push_back(*relative);
@@ -910,18 +910,30 @@ namespace forge
 
           variables[command.arguments.front()] = std::move(values);
 
-          if (command.arguments.front() == "CMAKE_CXX_STANDARD"
-              && !variables[command.arguments.front()].empty())
+          const auto read_standard = [&variables, &command](int& destination)
           {
             const auto& standard = variables[command.arguments.front()].front();
             const auto [end, error] = std::from_chars(
               standard.data(),
               standard.data() + standard.size(),
-              project.cpp_standard
+              destination
             );
 
             if (error != std::errc {} || end != standard.data() + standard.size())
+              destination = 0;
+          };
+
+          if (command.arguments.front() == "CMAKE_CXX_STANDARD"
+              && !variables[command.arguments.front()].empty())
+          {
+            read_standard(project.cpp_standard);
+            if (project.cpp_standard == 0)
               project.cpp_standard = 20;
+          }
+          else if (command.arguments.front() == "CMAKE_C_STANDARD"
+                   && !variables[command.arguments.front()].empty())
+          {
+            read_standard(project.c_standard);
           }
         }
         else if (command.name == "foreach" && command.arguments.size() > 1 && active)
@@ -1180,6 +1192,8 @@ namespace forge
           {
             if (argument.starts_with("cxx_std_"))
               project.cpp_standard = std::stoi(argument.substr(8));
+            else if (argument.starts_with("c_std_"))
+              project.c_standard = std::stoi(argument.substr(6));
           }
         }
         else if (command.name == "target_include_directories"

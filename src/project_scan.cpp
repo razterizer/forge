@@ -34,6 +34,11 @@ namespace forge
     return extension == ".cpp" || extension == ".cc" || extension == ".cxx" || extension == ".mm";
   }
 
+  bool is_c_source(const std::filesystem::path& path)
+  {
+    return path.extension() == ".c";
+  }
+
   bool is_cpp_header(const std::filesystem::path& path)
   {
     const auto extension = path.extension().string();
@@ -160,7 +165,7 @@ namespace forge
       }
       else if (!filesystem_error
                && entry.is_regular_file(filesystem_error)
-               && is_cpp_source(entry.path()))
+               && (is_c_source(entry.path()) || is_cpp_source(entry.path())))
       {
         const auto relative = entry.path().lexically_relative(project_directory).generic_string();
         scan.sources.push_back(relative);
@@ -501,6 +506,7 @@ namespace forge
       }
       else if (!filesystem_error
                && entry.is_regular_file(filesystem_error)
+               && !is_c_source(entry.path())
                && !is_cpp_source(entry.path())
                && !is_cpp_header(entry.path()))
       {

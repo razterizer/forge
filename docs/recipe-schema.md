@@ -41,6 +41,9 @@ rules:
   provider hints for satisfying platform system requirements. The field name is
   the Forge keyword; the strings inside the array are package names such as
   `openal-soft` or `libopenal-dev`.
+- `[project].c_std` and named-target `c_std` select the C language standard
+  for C sources. Supported values are `90`, `99`, `11`, `17`, and `23`.
+  Recipes with both C and C++ sources may also declare `cpp_std`.
 - `[build].defines` and named-target `defines` declare persistent preprocessor
   definitions. Definitions use `NAME` or `NAME=value` syntax. Repeatable
   `forge build --define=<symbol>` options temporarily add private definitions

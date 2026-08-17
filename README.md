@@ -145,7 +145,7 @@ cd path/to/project
 /path/to/forge/build/dev/forge adopt
 ```
 
-`forge adopt` creates only `forge.recipe.toml`. It discovers existing `.cpp`,
+`forge adopt` creates only `forge.recipe.toml`. It discovers existing `.c`, `.cpp`,
 `.cc`, and `.cxx` files and public headers under `include/` without moving or
 modifying project sources. It inspects source files for `main()` entry points
 and reports stable line-based progress suitable for terminals and CI logs:

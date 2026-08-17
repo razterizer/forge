@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/razterizer/forge/main/schemas/forge.recipe.schema.json",
   "title": "Forge recipe",
-  "description": "Describes a C++ project built, imported, and packaged by Forge.",
+  "description": "Describes a C, C++, or mixed-language project built, imported, and packaged by Forge.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -51,6 +51,11 @@
             26
           ],
           "description": "C++ language standard Forge uses to build this project. Compiled boxes record it separately as toolchain metadata for compatibility checks."
+        },
+        "c_std": {
+          "type": "integer",
+          "enum": [90, 99, 11, 17, 23],
+          "description": "C language standard Forge uses to compile C sources."
         }
       }
     },
@@ -186,10 +191,10 @@
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "type",
-          "cpp_std",
-          "sources"
+        "required": ["type", "sources"],
+        "anyOf": [
+          { "required": ["cpp_std"] },
+          { "required": ["c_std"] }
         ],
         "properties": {
           "type": {
@@ -208,9 +213,14 @@
             "enum": [11, 14, 17, 20, 23, 26],
             "description": "C++ language standard Forge uses to build this target."
           },
+          "c_std": {
+            "type": "integer",
+            "enum": [90, 99, 11, 17, 23],
+            "description": "C language standard Forge uses to compile this target's C sources."
+          },
           "sources": {
             "$ref": "#/$defs/projectPaths",
-            "description": "C++ compilation units belonging to this target."
+            "description": "C or C++ compilation units belonging to this target."
           },
           "public_headers": {
             "$ref": "#/$defs/publicHeaders"
@@ -522,6 +532,10 @@
               "cpp_std": {
                 "type": "integer",
                 "enum": [11, 14, 17, 20, 23, 26]
+              },
+              "c_std": {
+                "type": "integer",
+                "enum": [90, 99, 11, 17, 23]
               },
               "include_dirs": {
                 "$ref": "#/$defs/projectPaths"
@@ -1044,6 +1058,7 @@
       "properties": {
         "configuration": { "type": "string", "minLength": 1 },
         "cpp_std": { "type": "integer", "enum": [11, 14, 17, 20, 23, 26] },
+        "c_std": { "type": "integer", "enum": [90, 99, 11, 17, 23] },
         "include_dirs": { "$ref": "#/$defs/projectPaths" },
         "macos_system_include_dirs": { "$ref": "#/$defs/paths" },
         "linux_system_include_dirs": { "$ref": "#/$defs/paths" },
