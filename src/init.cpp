@@ -1372,7 +1372,14 @@ namespace forge
       ? headers
       : reachable_cmake_headers;
     auto include_directories =
-      infer_include_directories(project_directory, sources, include_inference_headers);
+      infer_include_directories(
+        project_directory,
+        sources,
+        include_inference_headers,
+        visual_studio_project && visual_studio_project->format == "CMake"
+          ? &discovered_headers
+          : nullptr
+      );
 
     auto dependency_headers = headers;
 

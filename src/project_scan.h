@@ -78,7 +78,8 @@ namespace forge
   std::vector<std::string> infer_include_directories(
     const std::filesystem::path& project_directory,
     const std::vector<std::string>& sources,
-    const std::vector<std::string>& headers);
+    const std::vector<std::string>& headers,
+    const std::vector<std::string>* available_headers = nullptr);
 
   std::vector<RuntimeFile> infer_runtime_files(
     const std::filesystem::path& project_directory,

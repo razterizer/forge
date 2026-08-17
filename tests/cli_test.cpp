@@ -1952,9 +1952,15 @@ namespace
     );
     write_file(
       directory.path() / "src/answer.cpp",
-      "#include <Nested/answer.h>\nint answer() { return nested_answer(); }\n"
+      "#include <Nested/answer.h>\n"
+      "#include <vendor.h>\n"
+      "int answer() { return nested_answer() + vendor_answer(); }\n"
     );
     write_file(directory.path() / "src/private.h", "#pragma once\n");
+    write_file(
+      directory.path() / "deps/vendor/vendor.h",
+      "#pragma once\ninline int vendor_answer() { return 1; }\n"
+    );
     write_file(
       directory.path() / "include/Nested/answer.h",
       "#pragma once\ninline int nested_answer() { return 42; }\n"
@@ -1971,6 +1977,7 @@ namespace
     expect(
       contains(recipe, "type = \"static_library\"")
         && contains(recipe, "paths = [\"src/answer.cpp\"]")
+        && contains(recipe, "include_dirs = [\"deps/vendor\", \"include\"]")
         && !contains(recipe, "optional.cpp"),
       "adopt selects the variable-expanded primary CMake target"
     );

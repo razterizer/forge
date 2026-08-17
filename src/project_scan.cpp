@@ -377,11 +377,13 @@ namespace forge
   std::vector<std::string> infer_include_directories(
     const std::filesystem::path& project_directory,
     const std::vector<std::string>& sources,
-    const std::vector<std::string>& headers)
+    const std::vector<std::string>& headers,
+    const std::vector<std::string>* available_headers)
   {
     std::set<std::string> include_directories;
     std::vector<std::string> scanned_files = sources;
     scanned_files.insert(scanned_files.end(), headers.begin(), headers.end());
+    const auto& candidate_headers = available_headers ? *available_headers : headers;
 
     for (const auto& scanned_file : scanned_files)
     {
@@ -411,7 +413,7 @@ namespace forge
 
         std::set<std::string> matching_roots;
 
-        for (const auto& header : headers)
+        for (const auto& header : candidate_headers)
         {
           if (header == include)
           {
