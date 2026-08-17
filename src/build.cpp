@@ -97,6 +97,9 @@ namespace forge
       std::map<std::string, LockedDependency> entries;
       bool loaded = false;
       bool dirty = false;
+
+      bool load(const std::filesystem::path& project_directory, std::ostream& error);
+      bool write(const std::filesystem::path& project_directory, std::ostream& error);
     };
 
     std::set<std::string> selector_dependency_names(const Recipe& recipe)
@@ -868,13 +871,13 @@ namespace forge
       return true;
     }
 
-    bool load_lockfile(const std::filesystem::path& project_directory,
-                       std::ostream& error)
+    bool DependencyLock::load(const std::filesystem::path& project_directory,
+                              std::ostream& error)
     {
-      if (dependency_session->lock.loaded)
+      if (loaded)
         return true;
 
-      dependency_session->lock.loaded = true;
+      loaded = true;
       const auto path = project_directory / "forge.lock.toml";
 
       if (!std::filesystem::is_regular_file(path))
@@ -887,7 +890,7 @@ namespace forge
       int format = 0;
 
       const auto store_dependency =
-        [&dependency, &error]() -> bool
+        [this, &dependency, &error]() -> bool
         {
           if (!dependency)
             return true;
@@ -911,7 +914,7 @@ namespace forge
 
           const auto key = lock_key(dependency->name, dependency->variant, dependency->target);
 
-          if (!dependency_session->lock.entries.emplace(key, *dependency).second)
+          if (!entries.emplace(key, *dependency).second)
           {
             error << "forge: forge.lock.toml contains a duplicate dependency target\n";
             return false;
@@ -1004,13 +1007,14 @@ namespace forge
       return true;
     }
 
-    bool write_lockfile(std::ostream& error)
+    bool DependencyLock::write(const std::filesystem::path& project_directory,
+                               std::ostream& error)
     {
-      if (!dependency_session->lock.dirty)
+      if (!dirty)
         return true;
 
-      const auto lock_path = dependency_session->root_project / "forge.lock.toml";
-      const auto temporary_path = dependency_session->root_project / "forge.lock.toml.tmp";
+      const auto lock_path = project_directory / "forge.lock.toml";
+      const auto temporary_path = project_directory / "forge.lock.toml.tmp";
       std::ofstream lock { temporary_path };
 
       if (!lock)
@@ -1021,7 +1025,7 @@ namespace forge
 
       lock << "format = 2\n";
 
-      for (const auto& entry : dependency_session->lock.entries)
+      for (const auto& entry : entries)
       {
         const auto& dependency = entry.second;
         lock
@@ -1050,7 +1054,7 @@ namespace forge
       }
 
       lock.close();
-      const auto backup_path = dependency_session->root_project / "forge.lock.toml.bak";
+      const auto backup_path = project_directory / "forge.lock.toml.bak";
       std::error_code filesystem_error;
       std::filesystem::remove(backup_path, filesystem_error);
       filesystem_error.clear();
@@ -1078,6 +1082,17 @@ namespace forge
 
       std::filesystem::remove(backup_path, filesystem_error);
       return true;
+    }
+
+    bool load_lockfile(const std::filesystem::path& project_directory,
+                       std::ostream& error)
+    {
+      return dependency_session->lock.load(project_directory, error);
+    }
+
+    bool write_lockfile(std::ostream& error)
+    {
+      return dependency_session->lock.write(dependency_session->root_project, error);
     }
 
     bool use_locked_github_dependency(Dependency& dependency,
