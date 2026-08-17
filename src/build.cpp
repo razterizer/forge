@@ -3966,7 +3966,7 @@ namespace forge
         return 2;
       }
 
-      if (target.public_headers.empty())
+      if (target.public_headers.empty() && target.type != "dynamic_library")
       {
         error << "forge: internal library target '" << target.name << "' requires public headers\n";
         return 2;
@@ -4057,9 +4057,7 @@ namespace forge
       }
     }
 
-    if ((recipe.type == "static_library"
-         || recipe.type == "dynamic_library"
-         || recipe.type == "header_only")
+    if ((recipe.type == "static_library" || recipe.type == "header_only")
         && recipe.public_headers.empty())
     {
       error << "forge: library projects require public headers\n";

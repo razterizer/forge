@@ -891,8 +891,15 @@
         "properties": {
           "sources": {
             "type": "object",
+            "required": [
+              "public_headers"
+            ],
             "properties": {
               "paths": {
+                "type": "array",
+                "minItems": 1
+              },
+              "public_headers": {
                 "type": "array",
                 "minItems": 1
               }
@@ -967,15 +974,8 @@
         "properties": {
           "sources": {
             "type": "object",
-            "required": [
-              "public_headers"
-            ],
             "properties": {
               "paths": {
-                "type": "array",
-                "minItems": 1
-              },
-              "public_headers": {
                 "type": "array",
                 "minItems": 1
               }

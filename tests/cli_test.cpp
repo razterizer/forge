@@ -2140,6 +2140,15 @@ namespace
       "recognized Python module does not fall back to executable inference"
     );
     expect(error.str().empty(), "Python module adoption does not write an error");
+
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "a headerless Python extension target builds as a dynamic library"
+    );
+    expect(build_error.str().empty(), "headerless dynamic library build does not write an error");
   }
 
   void test_adopt_imports_mixed_cmake_project()
