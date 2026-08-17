@@ -108,6 +108,20 @@
           "type": "boolean",
           "description": "Build this dynamic library against CMake's Python3 Development.Module target."
         },
+        "python_extension_name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$",
+          "description": "Original Python extension module name used for the built artifact."
+        },
+        "python_extension_output_dir": {
+          "$ref": "#/$defs/projectPath",
+          "description": "Project-relative directory where the built Python extension module is placed."
+        },
+        "python_extension_with_soabi": {
+          "type": "boolean",
+          "description": "Append Python's SOABI suffix to the extension module filename."
+        },
         "defines": {
           "$ref": "#/$defs/compileDefinitions",
           "description": "Private preprocessor definitions applied when compiling the project."

@@ -2124,8 +2124,16 @@ namespace
       "project(PythonBridge VERSION 1.2.3 LANGUAGES C)\n"
       "find_package(Python3 REQUIRED COMPONENTS Development.Module)\n"
       "Python3_add_library(_python_bridge MODULE src/module.c WITH_SOABI)\n"
+      "set_target_properties(_python_bridge PROPERTIES\n"
+      "  LIBRARY_OUTPUT_DIRECTORY \"${CMAKE_CURRENT_SOURCE_DIR}/python\"\n"
+      "  RUNTIME_OUTPUT_DIRECTORY \"${CMAKE_CURRENT_SOURCE_DIR}/python\")\n"
     );
-    write_file(directory.path() / "src/module.c", "int bridge(void) { return 42; }\n");
+    write_file(
+      directory.path() / "src/module.c",
+      "#include <Python.h>\n"
+      "static struct PyModuleDef bridge_module = { PyModuleDef_HEAD_INIT, \"_python_bridge\" };\n"
+      "PyMODINIT_FUNC PyInit__python_bridge(void) { return PyModule_Create(&bridge_module); }\n"
+    );
     std::ostringstream output;
     std::ostringstream error;
 
@@ -2137,8 +2145,11 @@ namespace
     expect(
       contains(recipe, "type = \"dynamic_library\"")
         && contains(recipe, "paths = [\"src/module.c\"]")
-        && contains(recipe, "python_extension = true"),
-      "adopt represents a Python CMake module as a dynamic library"
+        && contains(recipe, "python_extension = true")
+        && contains(recipe, "python_extension_name = \"_python_bridge\"")
+        && contains(recipe, "python_extension_output_dir = \"python\"")
+        && contains(recipe, "python_extension_with_soabi = true"),
+      "adopt preserves Python extension module settings"
     );
     expect(
       !contains(output.str(), "Could not infer a library interface"),
@@ -2154,6 +2165,32 @@ namespace
       "a headerless Python extension target builds as a dynamic library"
     );
     expect(build_error.str().empty(), "headerless dynamic library build does not write an error");
+    const auto artifact = std::filesystem::path { read_file(
+      directory.path() / ".forge/build/forge-artifact-path.txt"
+    ) };
+    expect(
+      artifact.parent_path() == directory.path() / "python"
+        && artifact.filename().string().starts_with("_python_bridge")
+        && std::filesystem::is_regular_file(artifact),
+      "Python module build preserves its output directory and artifact name"
+    );
+
+    constexpr std::array box_arguments {
+      std::string_view { "box" }, std::string_view { "create" }
+    };
+    std::ostringstream box_output;
+    std::ostringstream box_error;
+    expect(
+      forge::cli::run(box_arguments, directory.path(), box_output, box_error) == 0,
+      "a Python extension module can be boxed"
+    );
+    expect(
+      std::filesystem::is_regular_file(
+        directory.path() / ".forge/boxes" / ("PythonBridge-1.2.3-" + current_target() + ".cbox")
+      ),
+      "Python extension box is created from its actual module artifact"
+    );
+    expect(box_error.str().empty(), "Python extension boxing does not write an error");
   }
 
   void test_adopt_imports_mixed_cmake_project()

@@ -936,8 +936,21 @@ namespace forge
     auto built_artifact = build_directory / recipe.name;
     std::optional<std::filesystem::path> built_import_library;
 
+    if (recipe.python_extension)
+    {
+      std::ifstream artifact_file { build_directory / "forge-artifact-path.txt" };
+      std::string artifact_path;
+
+      if (!artifact_file || !std::getline(artifact_file, artifact_path) || artifact_path.empty())
+      {
+        error << "forge: Python extension artifact path was not generated\n";
+        return 2;
+      }
+
+      built_artifact = artifact_path;
+    }
 #ifdef _WIN32
-    if (recipe.type == "static_library")
+    else if (recipe.type == "static_library")
       built_artifact += ".lib";
     else if (recipe.type == "dynamic_library")
     {
@@ -947,9 +960,9 @@ namespace forge
     else
       built_artifact += ".exe";
 #else
-    if (recipe.type == "static_library")
+    if (!recipe.python_extension && recipe.type == "static_library")
       built_artifact = build_directory / ("lib" + recipe.name + ".a");
-    else if (recipe.type == "dynamic_library")
+    else if (!recipe.python_extension && recipe.type == "dynamic_library")
       built_artifact = build_directory / dynamic_library_filename(recipe.name);
 #endif
 
@@ -1104,6 +1117,9 @@ namespace forge
             ? std::filesystem::path { "include" }
             : std::filesystem::path { "include" } / ".forge-build" / std::to_string(index);
           std::vector<std::filesystem::path> headers;
+
+          if (!std::filesystem::is_directory(root))
+            continue;
 
           for (const auto& entry : std::filesystem::recursive_directory_iterator { root })
           {
@@ -1463,13 +1479,18 @@ namespace forge
       archive_arguments.push_back("bin");
     else if (recipe.type == "static_library")
     {
-      archive_arguments.push_back("include");
-      archive_arguments.push_back("lib");
+      if (std::filesystem::is_directory(staging_directory / "include"))
+        archive_arguments.push_back("include");
+
+      if (std::filesystem::is_directory(staging_directory / "lib"))
+        archive_arguments.push_back("lib");
     }
     else if (recipe.type == "dynamic_library")
     {
-      archive_arguments.push_back("include");
-      if (built_import_library)
+      if (std::filesystem::is_directory(staging_directory / "include"))
+        archive_arguments.push_back("include");
+
+      if (built_import_library && std::filesystem::is_directory(staging_directory / "lib"))
         archive_arguments.push_back("lib");
       archive_arguments.push_back("runtime");
     }

@@ -2004,7 +2004,10 @@ namespace forge
         file << '\n';
       }
 
-      if (recipe.type == "static_library")
+      if (recipe.python_extension)
+        file << "Python3_add_library(forge_project MODULE"
+             << (recipe.python_extension_with_soabi ? " WITH_SOABI" : "") << "\n";
+      else if (recipe.type == "static_library")
         file << "add_library(forge_project STATIC\n";
       else if (recipe.type == "dynamic_library")
         file << "add_library(forge_project SHARED\n";
@@ -2037,6 +2040,28 @@ namespace forge
       }
 
       file << ")\n";
+
+      if (recipe.python_extension)
+      {
+        if (!recipe.python_extension_name.empty())
+        {
+          file << "set_target_properties(forge_project PROPERTIES OUTPUT_NAME \""
+               << escape_cmake(recipe.python_extension_name) << "\")\n";
+        }
+
+        if (!recipe.python_extension_output_directory.empty())
+        {
+          const auto directory = "${FORGE_PROJECT_ROOT}/"
+            + escape_cmake(recipe.python_extension_output_directory.generic_string());
+          file
+            << "set_target_properties(forge_project PROPERTIES "
+            << "LIBRARY_OUTPUT_DIRECTORY \"" << directory << "\" "
+            << "RUNTIME_OUTPUT_DIRECTORY \"" << directory << "\")\n";
+        }
+
+        file << "file(GENERATE OUTPUT \"${CMAKE_BINARY_DIR}/forge-artifact-path.txt\" "
+             << "CONTENT \"$<TARGET_FILE:forge_project>\")\n";
+      }
 
       if (uses_cpp(recipe.sources) || (recipe.sources.empty() && recipe.cpp_standard != 0))
       {
@@ -2099,9 +2124,6 @@ namespace forge
           << "target_compile_definitions(forge_project PRIVATE \""
           << escape_cmake(definition) << "\")\n";
       }
-
-      if (recipe.python_extension)
-        file << "target_link_libraries(forge_project PRIVATE Python3::Module)\n";
 
       for (const auto& dependency : recipe.selected_internal_dependencies)
       {
@@ -2205,18 +2227,21 @@ namespace forge
 #endif
       }
 
-      file
-        << "set_target_properties(forge_project PROPERTIES OUTPUT_NAME \""
-        << escape_cmake(recipe.name) << "\")\n";
+      if (!recipe.python_extension)
+      {
+        file
+          << "set_target_properties(forge_project PROPERTIES OUTPUT_NAME \""
+          << escape_cmake(recipe.name) << "\")\n";
+      }
 
 #ifdef _WIN32
-      if (recipe.type == "static_library")
+      if (!recipe.python_extension && recipe.type == "static_library")
       {
         file
           << "set_target_properties(forge_project PROPERTIES "
           << "PREFIX \"\" SUFFIX \".lib\")\n";
       }
-      else if (recipe.type == "dynamic_library")
+      else if (!recipe.python_extension && recipe.type == "dynamic_library")
       {
         file
           << "set_target_properties(forge_project PROPERTIES "
@@ -4320,7 +4345,20 @@ namespace forge
 
     auto artifact = build_directory / recipe.name;
 
-    if (recipe.type == "static_library")
+    if (recipe.python_extension)
+    {
+      std::ifstream artifact_file { build_directory / "forge-artifact-path.txt" };
+      std::string artifact_path;
+
+      if (!artifact_file || !std::getline(artifact_file, artifact_path) || artifact_path.empty())
+      {
+        error << "forge: Python extension artifact path was not generated\n";
+        return 2;
+      }
+
+      artifact = artifact_path;
+    }
+    else if (recipe.type == "static_library")
     {
 #ifdef _WIN32
       artifact += ".lib";

@@ -1,4 +1,5 @@
 #include "recipe.h"
+#include "file_support.h"
 #include "toml_support.h"
 #include <algorithm>
 #include <cctype>
@@ -906,6 +907,19 @@ namespace forge
       }
       else if (section == "build" && key == "python_extension")
         valid = parse_boolean(value, recipe.python_extension);
+      else if (section == "build" && key == "python_extension_name")
+        valid = parse_string(value, recipe.python_extension_name) && is_safe_name(recipe.python_extension_name);
+      else if (section == "build" && key == "python_extension_output_dir")
+      {
+        std::string output_directory;
+        valid = parse_string(value, output_directory)
+          && is_safe_project_path(output_directory);
+
+        if (valid)
+          recipe.python_extension_output_directory = output_directory;
+      }
+      else if (section == "build" && key == "python_extension_with_soabi")
+        valid = parse_boolean(value, recipe.python_extension_with_soabi);
       else if (section == "build" && key == "defines")
         valid = parse_definitions(value, recipe.compile_definitions);
       else if (section == "build" && key == "macos_system_include_dirs")

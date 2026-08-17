@@ -240,6 +240,15 @@ namespace forge
 
       project.python_extension = project.python_extension || additional.python_extension;
 
+      if (project.python_extension_name.empty())
+        project.python_extension_name = additional.python_extension_name;
+
+      if (project.python_extension_output_directory.empty())
+        project.python_extension_output_directory = additional.python_extension_output_directory;
+
+      project.python_extension_with_soabi =
+        project.python_extension_with_soabi || additional.python_extension_with_soabi;
+
       project.cpp_standard = std::max(project.cpp_standard, additional.cpp_standard);
       project.c_standard = std::max(project.c_standard, additional.c_standard);
 
@@ -1978,7 +1987,22 @@ namespace forge
             recipe += "number = " + std::to_string(*initial_build_number) + "\n";
 
           if (visual_studio_project && visual_studio_project->python_extension)
+          {
             recipe += "python_extension = true\n";
+
+            if (!visual_studio_project->python_extension_name.empty())
+              recipe += "python_extension_name = \""
+                + escape_toml_string(visual_studio_project->python_extension_name) + "\"\n";
+
+            if (!visual_studio_project->python_extension_output_directory.empty())
+              recipe += "python_extension_output_dir = \""
+                + escape_toml_string(
+                  visual_studio_project->python_extension_output_directory.generic_string()
+                ) + "\"\n";
+
+            if (visual_studio_project->python_extension_with_soabi)
+              recipe += "python_extension_with_soabi = true\n";
+          }
 
           if (visual_studio_project && !visual_studio_project->definitions.empty())
             recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";

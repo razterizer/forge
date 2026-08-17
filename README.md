@@ -255,6 +255,13 @@ solution, Visual Studio project, or Xcode project files are present. A
 top-level CMake project that defines only concrete `add_subdirectory(...)`
 projects becomes a Forge workspace.
 
+`Python3_add_library(... MODULE ... WITH_SOABI)` targets are adopted as Python
+extension modules. Forge retains the module name, ABI suffix, and a concrete
+`LIBRARY_OUTPUT_DIRECTORY` or `RUNTIME_OUTPUT_DIRECTORY`, so `forge build`
+places the extension where the original Python package expects it. The
+generated recipe records these settings in `[build]`; re-adopt the project
+after changing its native CMake module configuration.
+
 When a project directory contains one `.xcodeproj`, `forge adopt` imports its
 native target name and output type, C++ standard, header search paths,
 preprocessor definitions, and Debug/Release-style build configurations.

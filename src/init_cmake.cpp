@@ -712,6 +712,9 @@ namespace forge
         );
         project.type = target_type(*selected);
         project.python_extension = selected->name == "python3_add_library";
+        project.python_extension_name = project.python_extension ? selected->arguments.front() : "";
+        project.python_extension_with_soabi = project.python_extension
+          && std::ranges::find(selected->arguments, "WITH_SOABI") != selected->arguments.end();
       }
 
       std::map<std::string, std::string> frameworks;
@@ -1462,6 +1465,43 @@ namespace forge
               project.definitions.push_back(argument);
             else if (argument.find('$') != std::string::npos)
               project.unresolved_properties.push_back(argument);
+          }
+        }
+        else if (command.name == "set_target_properties"
+                 && command.arguments.size() > 3
+                 && target_is_selected(command)
+                 && active
+                 && project.python_extension)
+        {
+          for (std::size_t index = 2; index + 1 < command.arguments.size(); index += 2)
+          {
+            const auto& property = command.arguments[index];
+
+            if (property != "LIBRARY_OUTPUT_DIRECTORY"
+                && property != "RUNTIME_OUTPUT_DIRECTORY")
+            {
+              continue;
+            }
+
+            for (const auto& value : expand_argument(command.arguments[index + 1]))
+            {
+              const auto expanded = replace_cmake_paths(
+                value, directory, command.directory, project.name
+              );
+
+              if (expanded.find('$') != std::string::npos)
+                continue;
+
+              const auto output_path = std::filesystem::path { expanded }.is_absolute()
+                ? std::filesystem::path { expanded }
+                : command.directory / expanded;
+
+              if (const auto relative = project_relative_path(directory, output_path))
+              {
+                project.python_extension_output_directory = *relative;
+                break;
+              }
+            }
           }
         }
       }

@@ -22,6 +22,9 @@ namespace forge
     std::string version;
     std::string type;
     bool python_extension = false;
+    std::string python_extension_name;
+    std::filesystem::path python_extension_output_directory;
+    bool python_extension_with_soabi = false;
     bool has_cmake_subprojects = false;
     std::vector<std::filesystem::path> cmake_subproject_directories;
     std::vector<std::string> cmake_link_dependencies;
