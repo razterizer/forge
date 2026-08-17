@@ -2000,6 +2000,7 @@ namespace
       "project(Host VERSION 1.2.3 LANGUAGES C)\n"
       "add_library(Host STATIC src/host.c)\n"
       "target_include_directories(Host PUBLIC include)\n"
+      "target_include_directories(Host PRIVATE private)\n"
       "add_subdirectory(deps/vendor)\n"
       "target_link_libraries(Host PRIVATE Vendor::vendor)\n"
     );
@@ -2012,10 +2013,12 @@ namespace
     );
     write_file(
       directory.path() / "src/host.c",
-      "#include <host.h>\n#include <vendor.h>\nint host(void) { return vendor(); }\n"
+      "#include <host.h>\n#include <host_private.inc>\n#include <vendor.h>\n"
+      "int host(void) { return vendor() + HOST_BONUS; }\n"
     );
     write_file(directory.path() / "include/host.h", "int host(void);\n");
-    write_file(directory.path() / "deps/vendor/vendor.c", "int vendor(void) { return 42; }\n");
+    write_file(directory.path() / "private/host_private.inc", "#define HOST_BONUS 1\n");
+    write_file(directory.path() / "deps/vendor/vendor.c", "int vendor(void) { return 41; }\n");
     write_file(directory.path() / "deps/vendor/include/vendor.h", "int vendor(void);\n");
     std::ostringstream output;
     std::ostringstream error;
@@ -2051,7 +2054,8 @@ namespace
     );
     write_file(
       consumer / "main.c",
-      "#include <host.h>\nint main(void) { return host() == 42 ? 0 : 1; }\n"
+      "#include <host.h>\n#include <host_private.inc>\n"
+      "int main(void) { return host() == 41 + HOST_BONUS ? 0 : 1; }\n"
     );
     constexpr std::array build_arguments { std::string_view { "build" } };
     std::ostringstream build_output;
@@ -2062,7 +2066,7 @@ namespace
     );
     expect(
       std::filesystem::is_regular_file(consumer / ".forge/build/consumer"),
-      "consumer links embedded component libraries from its source dependency"
+      "consumer links embedded components and sees packaged build headers"
     );
     expect(build_error.str().empty(), "component-bearing source dependency build is clean");
   }

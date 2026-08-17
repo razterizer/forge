@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <charconv>
 #include <fstream>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -1001,6 +1002,7 @@ namespace forge
 
     std::vector<BoxArtifact> artifacts;
     std::vector<RuntimeAsset> runtime_assets;
+    std::map<std::filesystem::path, std::filesystem::path> staged_headers;
 
     if (!recipe.runtime_files.empty()
         && !collect_runtime_assets(project_directory, recipe.runtime_files, runtime_assets, error))
@@ -1029,8 +1031,40 @@ namespace forge
         return true;
       };
 
+    const auto stage_header =
+      [&staging_directory, &artifacts, &staged_headers, &error](
+        const std::filesystem::path& source,
+        const std::filesystem::path& artifact_path)
+      {
+        const auto existing = staged_headers.find(artifact_path);
+
+        if (existing != staged_headers.end())
+        {
+          if (existing->second == source)
+            return true;
+
+          error << "forge: build headers collide at '" << artifact_path.generic_string() << "'\n";
+          return false;
+        }
+
+        if (!stage_artifact(
+              source,
+              artifact_path,
+              "public_header",
+              staging_directory,
+              artifacts,
+              error
+            ))
+        {
+          return false;
+        }
+
+        staged_headers.emplace(artifact_path, source);
+        return true;
+      };
+
     const auto stage_public_header =
-      [&project_directory, &recipe, &staging_directory, &artifacts, &error](
+      [&project_directory, &recipe, &stage_header, &error](
         const std::filesystem::path& header)
       {
         const auto include_path = public_header_include_path(
@@ -1045,14 +1079,58 @@ namespace forge
           return false;
         }
 
-        return stage_artifact(
+        return stage_header(
           project_directory / header,
-          std::filesystem::path { "include" } / *include_path,
-          "public_header",
-          staging_directory,
-          artifacts,
-          error
+          std::filesystem::path { "include" } / *include_path
         );
+      };
+
+    const auto stage_build_headers =
+      [&project_directory, &recipe, &stage_header, &error]()
+      {
+        const auto is_header = [](const std::filesystem::path& path)
+        {
+          const auto extension = path.extension().string();
+          return extension == ".h" || extension == ".hpp" || extension == ".hh"
+            || extension == ".hxx" || extension == ".inc" || extension == ".inl"
+            || extension == ".ipp" || extension == ".tpp";
+        };
+
+        for (std::size_t index = 0; index < recipe.include_directories.size(); ++index)
+        {
+          const auto& include_directory = recipe.include_directories[index];
+          const auto root = project_directory / include_directory;
+          const auto destination_root = include_directory.filename() == "include"
+            ? std::filesystem::path { "include" }
+            : std::filesystem::path { "include" } / ".forge-build" / std::to_string(index);
+          std::vector<std::filesystem::path> headers;
+
+          for (const auto& entry : std::filesystem::recursive_directory_iterator { root })
+          {
+            if (entry.is_symlink())
+            {
+              error << "forge: build include directory contains a symbolic link\n";
+              return false;
+            }
+
+            if (!entry.is_regular_file() || !is_header(entry.path()))
+              continue;
+
+            headers.push_back(entry.path());
+          }
+
+          std::ranges::sort(headers);
+
+          for (const auto& header : headers)
+          {
+            const auto relative = header.lexically_relative(root);
+
+            if (!stage_header(header, destination_root / relative))
+              return false;
+          }
+        }
+
+        return true;
       };
 
     if (recipe.type == "executable")
@@ -1094,6 +1172,9 @@ namespace forge
         }
       }
 
+      if (!stage_build_headers())
+        return 2;
+
       if (!stage_runtime_asset_artifacts())
         return 2;
     }
@@ -1131,6 +1212,9 @@ namespace forge
           return 2;
         }
       }
+
+      if (!stage_build_headers())
+        return 2;
 
       if (!stage_runtime_asset_artifacts())
         return 2;

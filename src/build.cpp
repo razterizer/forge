@@ -255,6 +255,7 @@ namespace forge
 
         std::filesystem::path prefix;
         bool first = true;
+        bool build_include_root = false;
 
         for (const auto& component : artifact.path)
         {
@@ -263,6 +264,18 @@ namespace forge
           if (first)
           {
             first = false;
+            continue;
+          }
+
+          if (build_include_root)
+          {
+            add_unique_path(dependency.include_directories, dependency.root / prefix);
+            break;
+          }
+
+          if (component == std::filesystem::path { ".forge-build" })
+          {
+            build_include_root = true;
             continue;
           }
 
@@ -2287,10 +2300,14 @@ namespace forge
             {
               const auto extension = entry.path().extension().string();
 
-              if (extension == ".h"
-                  || extension == ".hpp"
-                  || extension == ".hh"
-                  || extension == ".hxx")
+            if (extension == ".h"
+                || extension == ".hpp"
+                || extension == ".hh"
+                || extension == ".hxx"
+                || extension == ".inc"
+                || extension == ".inl"
+                || extension == ".ipp"
+                || extension == ".tpp")
               {
                 files.push_back(entry.path());
               }

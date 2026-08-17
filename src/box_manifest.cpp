@@ -763,7 +763,6 @@ namespace forge
           || (manifest.type == "dynamic_library"
               && (dynamic_library_count != 1
                   || import_library_count != (manifest.os == "windows" ? 1 : 0)
-                  || header_count == 0
                   || dynamic_library_count + import_library_count + header_count
                      + runtime_asset_count
                      != manifest.artifacts.size()))
