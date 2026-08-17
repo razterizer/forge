@@ -1999,6 +1999,7 @@ namespace
       "cmake_minimum_required(VERSION 3.25)\n"
       "project(Host VERSION 1.2.3 LANGUAGES C)\n"
       "add_library(Host STATIC src/host.c)\n"
+      "target_include_directories(Host PUBLIC include)\n"
       "add_subdirectory(deps/vendor)\n"
       "target_link_libraries(Host PRIVATE Vendor::vendor)\n"
     );
@@ -2011,8 +2012,9 @@ namespace
     );
     write_file(
       directory.path() / "src/host.c",
-      "#include <vendor.h>\nint host(void) { return vendor(); }\n"
+      "#include <host.h>\n#include <vendor.h>\nint host(void) { return vendor(); }\n"
     );
+    write_file(directory.path() / "include/host.h", "int host(void);\n");
     write_file(directory.path() / "deps/vendor/vendor.c", "int vendor(void) { return 42; }\n");
     write_file(directory.path() / "deps/vendor/include/vendor.h", "int vendor(void);\n");
     std::ostringstream output;
@@ -2032,6 +2034,37 @@ namespace
         && contains(recipe, "deps/vendor/vendor.c"),
       "adopt preserves a vendored CMake target as a default-selected internal dependency"
     );
+
+    const auto consumer = directory.path() / "consumer";
+    write_file(
+      consumer / "forge.recipe.toml",
+      "[project]\n"
+      "name = \"consumer\"\n"
+      "version = \"0.1.0\"\n"
+      "type = \"executable\"\n"
+      "cpp_std = 20\n"
+      "c_std = 11\n\n"
+      "[sources]\n"
+      "paths = [\"main.c\"]\n\n"
+      "[dependencies.style.local-source]\n"
+      "Host = { path = \"..\" }\n"
+    );
+    write_file(
+      consumer / "main.c",
+      "#include <host.h>\nint main(void) { return host() == 42 ? 0 : 1; }\n"
+    );
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, consumer, build_output, build_error) == 0,
+      "source dependency builds through a component-bearing CMake library: " + build_error.str()
+    );
+    expect(
+      std::filesystem::is_regular_file(consumer / ".forge/build/consumer"),
+      "consumer links embedded component libraries from its source dependency"
+    );
+    expect(build_error.str().empty(), "component-bearing source dependency build is clean");
   }
 
   void test_adopt_imports_c_project()
@@ -2075,6 +2108,38 @@ namespace
       "adopted C executable runs"
     );
     expect(run_error.str().empty(), "adopted C run does not write an error");
+  }
+
+  void test_adopt_recognizes_python_cmake_module()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "cmake_minimum_required(VERSION 3.25)\n"
+      "project(PythonBridge VERSION 1.2.3 LANGUAGES C)\n"
+      "find_package(Python3 REQUIRED COMPONENTS Development.Module)\n"
+      "Python3_add_library(_python_bridge MODULE src/module.c WITH_SOABI)\n"
+    );
+    write_file(directory.path() / "src/module.c", "int bridge(void) { return 42; }\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt recognizes a Python CMake extension target"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "type = \"dynamic_library\"")
+        && contains(recipe, "paths = [\"src/module.c\"]"),
+      "adopt represents a Python CMake module as a dynamic library"
+    );
+    expect(
+      !contains(output.str(), "Could not infer a library interface"),
+      "recognized Python module does not fall back to executable inference"
+    );
+    expect(error.str().empty(), "Python module adoption does not write an error");
   }
 
   void test_adopt_imports_mixed_cmake_project()
@@ -8549,6 +8614,7 @@ int main()
   test_adopt_imports_nested_cmake_target_sources();
   test_adopt_packages_cmake_subproject_link_targets();
   test_adopt_imports_c_project();
+  test_adopt_recognizes_python_cmake_module();
   test_adopt_imports_mixed_cmake_project();
   test_adopt_imports_cmake_copy_directory_runtime_assets();
   test_adopt_cmake_library_exports_vendored_public_headers();

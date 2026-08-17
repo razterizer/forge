@@ -599,6 +599,15 @@ namespace forge
 
       std::map<std::string, bool> options;
       std::vector<CMakeCommand> declared_targets;
+      const auto is_target_declaration = [](const CMakeCommand& command)
+      {
+        return command.name == "add_executable"
+          || command.name == "add_library"
+          // Python3_add_library creates a CMake library target, commonly a
+          // MODULE used as an extension.  Treat it as a declaration rather
+          // than falling back to source-only executable inference.
+          || command.name == "python3_add_library";
+      };
       const auto expanded_target_name = [&project](std::string_view value)
       {
         return value == "${PROJECT_NAME}" ? project.name : std::string { value };
@@ -624,7 +633,7 @@ namespace forge
 
         if (command.name == "option" && command.arguments.size() > 2)
           options[command.arguments.front()] = cmake_option_value(command.arguments.back());
-        else if (command.name == "add_executable" || command.name == "add_library")
+        else if (is_target_declaration(command))
         {
           const auto name = command.arguments.empty()
             ? std::string {}
@@ -677,6 +686,9 @@ namespace forge
       {
         if (command.name == "add_executable")
           return std::string { "executable" };
+
+        if (command.name == "python3_add_library")
+          return std::string { "dynamic_library" };
 
         if (command.arguments.size() > 1
             && (command.arguments[1] == "SHARED" || command.arguments[1] == "MODULE"))
@@ -1321,7 +1333,7 @@ namespace forge
             }
           }
         }
-        else if ((command.name == "add_executable" || command.name == "add_library")
+        else if (is_target_declaration(command)
                  && !command.arguments.empty())
         {
           if (command.name == "add_library"
@@ -1344,6 +1356,7 @@ namespace forge
                 || argument == "STATIC"
                 || argument == "SHARED"
                 || argument == "MODULE"
+                || argument == "WITH_SOABI"
                 || argument == "INTERFACE"
                 || argument == "EXCLUDE_FROM_ALL"
                 || argument == "WIN32"
@@ -1546,7 +1559,9 @@ namespace forge
 
       return std::ranges::any_of(cmake_commands(contents), [](const CMakeCommand& command)
       {
-        return command.name == "add_executable" || command.name == "add_library";
+        return command.name == "add_executable"
+          || command.name == "add_library"
+          || command.name == "python3_add_library";
       });
     }
 

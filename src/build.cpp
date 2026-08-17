@@ -2245,52 +2245,87 @@ namespace forge
       std::error_code filesystem_error;
       std::vector<std::filesystem::path> files { dependency_directory / "forge.recipe.toml" };
 
-      for (const auto& source : recipe.sources)
-        files.push_back(dependency_directory / source);
-
-      for (const auto& header : recipe.public_headers)
-        files.push_back(dependency_directory / header);
-
-      for (const auto& include_directory : recipe.include_directories)
+      const auto add_target_inputs = [&](const auto& target)
       {
-        std::error_code traversal_error;
-        std::filesystem::recursive_directory_iterator iterator {
-          dependency_directory / include_directory,
-          std::filesystem::directory_options::skip_permission_denied,
-          traversal_error
-        };
-        const std::filesystem::recursive_directory_iterator end;
+        for (const auto& source : target.sources)
+          files.push_back(dependency_directory / source);
 
-        while (!traversal_error && iterator != end)
+        for (const auto& header : target.public_headers)
+          files.push_back(dependency_directory / header);
+
+        for (const auto& include_directory : target.include_directories)
         {
-          const auto& entry = *iterator;
-          const auto name = entry.path().filename().string();
+          std::error_code traversal_error;
+          std::filesystem::recursive_directory_iterator iterator {
+            dependency_directory / include_directory,
+            std::filesystem::directory_options::skip_permission_denied,
+            traversal_error
+          };
+          const std::filesystem::recursive_directory_iterator end;
 
-          if (entry.is_directory(traversal_error)
-              && (name == ".git"
-                  || name == ".forge"
-                  || name == "build"
-                  || name == "out"
-                  || name.starts_with("cmake-build-")))
+          while (!traversal_error && iterator != end)
           {
-            iterator.disable_recursion_pending();
-          }
-          else if (!traversal_error && entry.is_regular_file(traversal_error))
-          {
-            const auto extension = entry.path().extension().string();
+            const auto& entry = *iterator;
+            const auto name = entry.path().filename().string();
 
-            if (extension == ".h"
-                || extension == ".hpp"
-                || extension == ".hh"
-                || extension == ".hxx")
+            if (entry.is_directory(traversal_error)
+                && (name == ".git"
+                    || name == ".forge"
+                    || name == "build"
+                    || name == "out"
+                    || name.starts_with("cmake-build-")))
             {
-              files.push_back(entry.path());
+              iterator.disable_recursion_pending();
             }
-          }
+            else if (!traversal_error && entry.is_regular_file(traversal_error))
+            {
+              const auto extension = entry.path().extension().string();
 
-          iterator.increment(traversal_error);
+              if (extension == ".h"
+                  || extension == ".hpp"
+                  || extension == ".hh"
+                  || extension == ".hxx")
+              {
+                files.push_back(entry.path());
+              }
+            }
+
+            iterator.increment(traversal_error);
+          }
         }
-      }
+      };
+
+      add_target_inputs(recipe);
+
+      // A selected target packages its named internal dependencies as nested
+      // cboxes.  They are part of the package input too: otherwise a changed
+      // vendored implementation could leave a stale parent cbox reusable.
+      std::set<std::string> visited_internal_targets;
+      const auto add_internal_inputs = [&](const auto& self, std::string_view name) -> void
+      {
+        if (!visited_internal_targets.insert(std::string { name }).second)
+          return;
+
+        const auto target = std::find_if(
+          recipe.internal_targets.begin(),
+          recipe.internal_targets.end(),
+          [name](const RecipeTarget& candidate)
+          {
+            return candidate.name == name;
+          }
+        );
+
+        if (target == recipe.internal_targets.end())
+          return;
+
+        add_target_inputs(*target);
+
+        for (const auto& dependency : target->dependencies)
+          self(self, dependency);
+      };
+
+      for (const auto& dependency : recipe.selected_internal_dependencies)
+        add_internal_inputs(add_internal_inputs, dependency);
 
       for (const auto& runtime : recipe.runtime_files)
       {
@@ -2360,7 +2395,8 @@ namespace forge
           active_dependencies.emplace_back(dependency);
       }
 
-      if (active_dependencies.size() != metadata.dependencies.size())
+      if (active_dependencies.size() + recipe.selected_internal_dependencies.size()
+          != metadata.dependencies.size())
         return false;
 
       for (const auto& dependency : active_dependencies)
@@ -2393,6 +2429,34 @@ namespace forge
             || declared->version != package_version(child->second.recipe)
             || declared->type != child->second.recipe.type
             || declared->sha256 != checksum)
+        {
+          return false;
+        }
+      }
+
+      for (const auto& dependency_name : recipe.selected_internal_dependencies)
+      {
+        const auto internal = std::find_if(
+          recipe.internal_targets.begin(),
+          recipe.internal_targets.end(),
+          [&dependency_name](const RecipeTarget& candidate)
+          {
+            return candidate.name == dependency_name;
+          }
+        );
+        const auto declared = std::find_if(
+          metadata.dependencies.begin(),
+          metadata.dependencies.end(),
+          [&dependency_name](const BoxDependencyMetadata& candidate)
+          {
+            return candidate.name == dependency_name;
+          }
+        );
+
+        if (internal == recipe.internal_targets.end()
+            || declared == metadata.dependencies.end()
+            || declared->version != package_version(recipe)
+            || declared->type != internal->type)
         {
           return false;
         }
@@ -3342,6 +3406,84 @@ namespace forge
             library.runtime = *runtime;
         }
 #endif
+      }
+
+      if (node.box_metadata)
+      {
+        // A component library is stored as an embedded cbox so a package can
+        // be moved as one file.  A static archive still needs its component
+        // archives on a consuming link line, however.  Extract and flatten
+        // that link closure into this resolved dependency.
+        const auto embedded_directory = destination / ".forge-embedded";
+        std::set<std::filesystem::path> extracted_embedded_boxes;
+        const auto add_embedded_dependencies =
+          [&](const auto& self,
+              const BoxMetadata& parent,
+              const std::filesystem::path& parent_root) -> bool
+        {
+          for (const auto& dependency : parent.dependencies)
+          {
+            const auto child_box = parent_root / "dependencies" / dependency.path.filename();
+            const auto child_root = embedded_directory / child_box.stem();
+            BoxMetadata child_metadata;
+
+            if (!read_box_metadata(
+                  child_box,
+                  parent_root,
+                  process_runner,
+                  child_metadata,
+                  error
+                )
+                || (extracted_embedded_boxes.insert(child_root).second
+                    && extract_box(child_box, embedded_directory, process_runner, output, error) != 0))
+            {
+              return false;
+            }
+
+            ResolvedDependency child_resolved;
+            child_resolved.root = child_root;
+            add_dependency_include_directories(
+              child_resolved,
+              std::optional<BoxMetadata> { child_metadata }
+            );
+
+            for (const auto& include_directory : child_resolved.include_directories)
+              add_unique_path(resolved.include_directories, include_directory);
+
+            for (const auto& artifact : child_metadata.artifacts)
+            {
+              const auto artifact_path = child_root / artifact.path;
+
+              if (artifact.kind == "static_library" || artifact.kind == "import_library")
+              {
+                resolved.libraries.push_back({ artifact_path, std::nullopt });
+
+                if (artifact.kind == "static_library")
+                  resolved.has_static_library = true;
+              }
+              else if (artifact.kind == "dynamic_library")
+              {
+                resolved.runtimes.push_back(artifact_path);
+#ifndef _WIN32
+                resolved.libraries.push_back({ artifact_path, artifact_path });
+#endif
+              }
+              else if (artifact.kind == "runtime_asset")
+              {
+                auto destination_path = artifact.path.lexically_relative("runtime-assets");
+                resolved.runtime_assets.push_back({ artifact_path, destination_path });
+              }
+            }
+
+            if (!self(self, child_metadata, child_root))
+              return false;
+          }
+
+          return true;
+        };
+
+        if (!add_embedded_dependencies(add_embedded_dependencies, *node.box_metadata, destination))
+          return false;
       }
 
       if ((node.recipe.type == "static_library"

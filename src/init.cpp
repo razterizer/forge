@@ -2332,7 +2332,10 @@ namespace forge
       output << "Add the matching dependency manually or rerun with an explicit dependency style after choosing one\n";
     }
 
-    if (entry_points.empty() && !sources.empty() && public_headers.empty())
+    if (entry_points.empty()
+        && !sources.empty()
+        && public_headers.empty()
+        && (!visual_studio_project || visual_studio_project->type.empty()))
       output << "Could not infer a library interface; generated an executable recipe\n";
 
     return 0;
