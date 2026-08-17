@@ -201,6 +201,7 @@ namespace forge
     std::vector<DependencyRule> dependency_rules;
     std::optional<std::string> default_style;
     std::optional<std::string> default_profile;
+    std::optional<std::string> default_target;
     std::vector<RuntimeFile> runtime_files;
     std::vector<std::filesystem::path> release_files;
     std::optional<std::string> release_bundle_name;

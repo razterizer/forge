@@ -554,7 +554,8 @@ namespace forge
 
   std::optional<VisualStudioProject> read_cmake_project(
       const std::filesystem::path& path,
-      std::ostream& error)
+      std::ostream& error,
+      const std::optional<std::string>& requested_target)
     {
       std::ifstream file { path };
 
@@ -651,11 +652,27 @@ namespace forge
           return lowercase(command.arguments.front()) == lowercase(project.name);
         }
       );
-      const auto selected_target = project_target != declared_targets.end()
+      const auto requested = requested_target
+        ? std::ranges::find_if(
+            declared_targets,
+            [&requested_target](const CMakeCommand& command)
+            {
+              return command.arguments.front() == *requested_target;
+            }
+          )
+        : declared_targets.end();
+      const auto selected_target = requested_target
+        ? requested != declared_targets.end()
+          ? std::optional<std::string> { requested->arguments.front() }
+          : std::optional<std::string> {}
+        : project_target != declared_targets.end()
         ? std::optional<std::string> { project_target->arguments.front() }
         : declared_targets.size() == 1
         ? std::optional<std::string> { declared_targets.front().arguments.front() }
         : std::optional<std::string> {};
+
+      if (selected_target)
+        project.cmake_target = *selected_target;
       const auto target_type = [](const CMakeCommand& command)
       {
         if (command.name == "add_executable")
@@ -1200,7 +1217,22 @@ namespace forge
           }
         }
         else if (command.name == "add_subdirectory" && active)
+        {
           project.has_cmake_subprojects = true;
+
+          if (command.directory == directory
+              && !command.arguments.empty()
+              && command.arguments.front().find('$') == std::string::npos)
+          {
+            const auto subdirectory = (directory / command.arguments.front()).lexically_normal();
+
+            if (std::filesystem::is_regular_file(subdirectory / "CMakeLists.txt"))
+            {
+              if (const auto relative = project_relative_path(directory, subdirectory))
+                project.cmake_subproject_directories.emplace_back(*relative);
+            }
+          }
+        }
         else if ((command.name == "add_custom_target" || command.name == "add_custom_command")
                  && active)
         {
@@ -1257,6 +1289,7 @@ namespace forge
             else if (argument.find('$') == std::string::npos
                      && argument.find("::") == std::string::npos)
             {
+              project.cmake_link_dependencies.push_back(argument);
               add_known_system_link(argument);
 
               auto* libraries =
@@ -1268,6 +1301,8 @@ namespace forge
               if (libraries)
                 libraries->push_back(argument);
             }
+            else if (argument.find('$') == std::string::npos)
+              project.cmake_link_dependencies.push_back(argument);
           }
         }
         else if (command.name == "project"
@@ -1371,13 +1406,12 @@ namespace forge
               continue;
             }
 
-            const auto build_interface = cmake_build_interface_value(original_argument);
-            const auto& argument = build_interface ? *build_interface : original_argument;
-
-            for (const auto& resolved : expand_argument(argument))
+            for (const auto& resolved : expand_argument(original_argument))
             {
+              const auto build_interface = cmake_build_interface_value(resolved);
+              const auto& argument = build_interface ? *build_interface : resolved;
               const auto expanded = replace_cmake_paths(
-                resolved, directory, command.directory, project.name
+                argument, directory, command.directory, project.name
               );
               const auto include_path = std::filesystem::path { expanded }.is_absolute()
                 ? std::filesystem::path { expanded }

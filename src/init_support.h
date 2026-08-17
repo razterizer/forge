@@ -16,9 +16,14 @@ namespace forge
     std::filesystem::path path;
     std::string format = "Visual Studio";
     std::string name;
+    // The CMake target selected from this project.  This differs from name
+    // for projects that expose a target such as libdeflate_static.
+    std::string cmake_target;
     std::string version;
     std::string type;
     bool has_cmake_subprojects = false;
+    std::vector<std::filesystem::path> cmake_subproject_directories;
+    std::vector<std::string> cmake_link_dependencies;
     int cpp_standard = 20;
     int c_standard = 0;
     std::vector<std::string> sources;

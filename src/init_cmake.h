@@ -12,7 +12,8 @@ namespace forge
 
   std::optional<VisualStudioProject> read_cmake_project(
     const std::filesystem::path& path,
-    std::ostream& error);
+    std::ostream& error,
+    const std::optional<std::string>& requested_target = std::nullopt);
 
   std::vector<std::filesystem::path> read_cmake_subdirectories(
     const std::filesystem::path& cmake_path);

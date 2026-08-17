@@ -1990,6 +1990,50 @@ namespace
     expect(build_error.str().empty(), "nested CMake target build does not write an error");
   }
 
+  void test_adopt_packages_cmake_subproject_link_targets()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "cmake_minimum_required(VERSION 3.25)\n"
+      "project(Host VERSION 1.2.3 LANGUAGES C)\n"
+      "add_library(Host STATIC src/host.c)\n"
+      "add_subdirectory(deps/vendor)\n"
+      "target_link_libraries(Host PRIVATE Vendor::vendor)\n"
+    );
+    write_file(
+      directory.path() / "deps/vendor/CMakeLists.txt",
+      "project(Vendor LANGUAGES C)\n"
+      "add_library(vendor STATIC vendor.c)\n"
+      "add_library(Vendor::vendor ALIAS vendor)\n"
+      "target_include_directories(vendor PUBLIC include)\n"
+    );
+    write_file(
+      directory.path() / "src/host.c",
+      "#include <vendor.h>\nint host(void) { return vendor(); }\n"
+    );
+    write_file(directory.path() / "deps/vendor/vendor.c", "int vendor(void) { return 42; }\n");
+    write_file(directory.path() / "deps/vendor/include/vendor.h", "int vendor(void);\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt imports CMake subproject link targets"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "[defaults]\n")
+        && contains(recipe, "target = \"Host\"")
+        && contains(recipe, "[target.Host]")
+        && contains(recipe, "dependencies = [\"vendor\"]")
+        && contains(recipe, "[target.vendor]")
+        && contains(recipe, "deps/vendor/vendor.c"),
+      "adopt preserves a vendored CMake target as a default-selected internal dependency"
+    );
+  }
+
   void test_adopt_imports_c_project()
   {
     TemporaryDirectory directory;
@@ -8503,6 +8547,7 @@ int main()
   test_adopt_imports_cmake_project();
   test_adopt_scopes_cmake_include_inference_to_target_sources();
   test_adopt_imports_nested_cmake_target_sources();
+  test_adopt_packages_cmake_subproject_link_targets();
   test_adopt_imports_c_project();
   test_adopt_imports_mixed_cmake_project();
   test_adopt_imports_cmake_copy_directory_runtime_assets();

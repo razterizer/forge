@@ -1160,6 +1160,7 @@ namespace forge
     std::vector<std::string> discovered_headers;
     std::vector<std::string> entry_points;
     std::optional<VisualStudioProject> visual_studio_project;
+    std::vector<VisualStudioProject> cmake_internal_targets;
     std::vector<std::string> merged_project_formats;
 
     if (show_progress)
@@ -1220,6 +1221,88 @@ namespace forge
 
       merge_project_metadata(*visual_studio_project, *cmake_project);
       merged_project_formats.push_back("CMake");
+    }
+
+    // A static CMake target can privately link a library provided by one of
+    // its add_subdirectory() children.  Keep that library as a named Forge
+    // target, so build and box can carry the link closure instead of emitting
+    // an archive with unresolved vendor symbols.
+    if (visual_studio_project && visual_studio_project->format == "CMake")
+    {
+      const auto rebase_paths = [&](auto& paths, const std::filesystem::path& prefix)
+      {
+        for (auto& path : paths)
+          path = (prefix / path).lexically_normal();
+      };
+      const auto under_directory = [](const std::filesystem::path& path,
+                                      const std::filesystem::path& directory)
+      {
+        const auto relative = path.lexically_relative(directory);
+        return !relative.empty() && relative != "." && !relative.is_absolute()
+          && relative.begin()->string() != "..";
+      };
+
+      for (const auto& subdirectory : visual_studio_project->cmake_subproject_directories)
+      {
+        for (const auto& linked : visual_studio_project->cmake_link_dependencies)
+        {
+          const auto separator = linked.rfind("::");
+          const auto target_name = separator == std::string::npos
+            ? linked
+            : linked.substr(separator + 2);
+
+          if (target_name.empty())
+            continue;
+
+          auto target = read_cmake_project(
+            project_directory / subdirectory / "CMakeLists.txt",
+            error,
+            target_name
+          );
+
+          if (!target || target->cmake_target.empty()
+              || (target->type != "static_library" && target->type != "dynamic_library"
+                  && target->type != "header_only"))
+          {
+            continue;
+          }
+
+          if (std::ranges::any_of(
+                cmake_internal_targets,
+                [&target](const VisualStudioProject& existing)
+                {
+                  return existing.cmake_target == target->cmake_target;
+                }
+              ))
+          {
+            continue;
+          }
+
+          rebase_paths(target->sources, subdirectory);
+          rebase_paths(target->headers, subdirectory);
+          rebase_paths(target->include_directories, subdirectory);
+          rebase_paths(target->public_include_directories, subdirectory);
+
+          for (const auto& header : discovered_headers)
+          {
+            const auto header_path = std::filesystem::path { header };
+            const auto is_public = std::ranges::any_of(
+              target->public_include_directories,
+              [&header_path, &under_directory](const std::filesystem::path& include_directory)
+              {
+                return under_directory(header_path, include_directory);
+              }
+            );
+
+            if (is_public)
+              target->headers.push_back(header_path.generic_string());
+          }
+
+          std::ranges::sort(target->headers);
+          target->headers.erase(std::unique(target->headers.begin(), target->headers.end()), target->headers.end());
+          cmake_internal_targets.push_back(std::move(*target));
+        }
+      }
     }
 
     if (visual_studio_project)
@@ -1789,40 +1872,114 @@ namespace forge
           : entry_points.empty() && !sources.empty() && !public_headers.empty()
           ? "static_library"
           : "executable";
-      recipe
-        += "type = \"" + std::string { type } + "\"\n"
-        "cpp_std = " + std::to_string(
-          visual_studio_project ? visual_studio_project->cpp_standard : 20
-        ) + "\n"
-        + c_standard_property
-        + "\n"
-        "[sources]\n"
-        "paths = " + formatted_sources + "\n";
-
-      if (!public_headers.empty())
-        recipe += "public_headers = " + formatted_headers + "\n";
-
-      if (!header_validation_headers.empty())
-        recipe += "validation_headers = " + formatted_header_validation_headers + "\n";
-
-      if (!include_directories.empty())
-        recipe += "include_dirs = " + formatted_include_directories + "\n";
-
-      if (initial_build_number
-          || (visual_studio_project
-              && (!visual_studio_project->definitions.empty()
-                  || !format_system_links(*visual_studio_project).empty())))
+      if (!cmake_internal_targets.empty())
       {
-        recipe += "\n[build]\n";
+        recipe
+          += "\n[defaults]\n"
+          "target = \"" + escape_toml_string(project_name) + "\"\n"
+          "\n[target." + project_name + "]\n"
+          "type = \"" + std::string { type } + "\"\n"
+          "cpp_std = " + std::to_string(
+            visual_studio_project ? visual_studio_project->cpp_standard : 20
+          ) + "\n"
+          + c_standard_property
+          + "sources = " + formatted_sources + "\n";
 
-        if (initial_build_number)
-          recipe += "number = " + std::to_string(*initial_build_number) + "\n";
+        if (!public_headers.empty())
+          recipe += "public_headers = " + formatted_headers + "\n";
+
+        if (!include_directories.empty())
+          recipe += "include_dirs = " + formatted_include_directories + "\n";
 
         if (visual_studio_project && !visual_studio_project->definitions.empty())
           recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
 
         if (visual_studio_project)
           recipe += format_system_links(*visual_studio_project);
+
+        recipe += "dependencies = [";
+
+        for (std::size_t index = 0; index < cmake_internal_targets.size(); ++index)
+        {
+          if (index != 0)
+            recipe += ", ";
+
+          recipe += "\"" + escape_toml_string(cmake_internal_targets[index].cmake_target) + "\"";
+        }
+
+        recipe += "]\n";
+
+        for (const auto& target : cmake_internal_targets)
+        {
+          const auto target_has_c_sources = std::ranges::any_of(
+            target.sources,
+            [](const std::string& source)
+            {
+              return is_c_source(std::filesystem::path { source });
+            }
+          );
+          recipe
+            += "\n[target." + target.cmake_target + "]\n"
+            "type = \"" + target.type + "\"\n"
+            "cpp_std = " + std::to_string(target.cpp_standard) + "\n";
+
+          if (target_has_c_sources)
+            recipe += "c_std = " + std::to_string(target.c_standard == 0 ? 11 : target.c_standard) + "\n";
+
+          recipe += "sources = " + format_sources(target.sources) + "\n";
+
+          if (!target.headers.empty())
+            recipe += "public_headers = " + format_sources(target.headers) + "\n";
+
+          if (!target.include_directories.empty())
+            recipe += "include_dirs = " + format_sources(target.include_directories) + "\n";
+
+          if (!target.definitions.empty())
+            recipe += "defines = " + format_sources(target.definitions) + "\n";
+
+          recipe += format_system_links(target);
+        }
+
+        if (initial_build_number)
+          recipe += "\n[build]\nnumber = " + std::to_string(*initial_build_number) + "\n";
+      }
+      else
+      {
+        recipe
+          += "type = \"" + std::string { type } + "\"\n"
+          "cpp_std = " + std::to_string(
+            visual_studio_project ? visual_studio_project->cpp_standard : 20
+          ) + "\n"
+          + c_standard_property
+          + "\n"
+          "[sources]\n"
+          "paths = " + formatted_sources + "\n";
+
+        if (!public_headers.empty())
+          recipe += "public_headers = " + formatted_headers + "\n";
+
+        if (!header_validation_headers.empty())
+          recipe += "validation_headers = " + formatted_header_validation_headers + "\n";
+
+        if (!include_directories.empty())
+          recipe += "include_dirs = " + formatted_include_directories + "\n";
+
+        if (initial_build_number
+            || (visual_studio_project
+                && (!visual_studio_project->definitions.empty()
+                    || !format_system_links(*visual_studio_project).empty())))
+        {
+          recipe += "\n[build]\n";
+
+          if (initial_build_number)
+            recipe += "number = " + std::to_string(*initial_build_number) + "\n";
+
+          if (visual_studio_project && !visual_studio_project->definitions.empty())
+            recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
+
+          if (visual_studio_project)
+            recipe += format_system_links(*visual_studio_project);
+        }
       }
 
       if (type == "executable")

@@ -888,6 +888,14 @@ namespace forge
         if (valid)
           recipe.default_profile = std::move(profile);
       }
+      else if (section == "defaults" && key == "target")
+      {
+        std::string target;
+        valid = parse_string(value, target) && is_safe_name(target);
+
+        if (valid)
+          recipe.default_target = std::move(target);
+      }
       else if (section == "build" && key == "number")
       {
         int build_number = 0;
@@ -1334,7 +1342,9 @@ namespace forge
       return true;
     }
 
-    if (!requested && recipe.targets.size() != 1)
+    const auto requested_target = requested ? requested : recipe.default_target;
+
+    if (!requested_target && recipe.targets.size() != 1)
     {
       error << "forge: recipe contains multiple targets; specify one of:";
 
@@ -1345,20 +1355,20 @@ namespace forge
       return false;
     }
 
-    const auto selected = requested
+    const auto selected = requested_target
       ? std::find_if(
           recipe.targets.begin(),
           recipe.targets.end(),
-          [&requested](const RecipeTarget& candidate)
+          [&requested_target](const RecipeTarget& candidate)
           {
-            return candidate.name == *requested;
+            return candidate.name == *requested_target;
           }
         )
       : recipe.targets.begin();
 
     if (selected == recipe.targets.end())
     {
-      error << "forge: recipe has no target named '" << *requested << "'\n";
+      error << "forge: recipe has no target named '" << *requested_target << "'\n";
       return false;
     }
 
