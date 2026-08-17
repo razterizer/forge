@@ -2132,7 +2132,8 @@ namespace
     const auto recipe = read_file(directory.path() / "forge.recipe.toml");
     expect(
       contains(recipe, "type = \"dynamic_library\"")
-        && contains(recipe, "paths = [\"src/module.c\"]"),
+        && contains(recipe, "paths = [\"src/module.c\"]")
+        && contains(recipe, "python_extension = true"),
       "adopt represents a Python CMake module as a dynamic library"
     );
     expect(

@@ -904,6 +904,8 @@ namespace forge
         if (valid)
           recipe.build_number = build_number;
       }
+      else if (section == "build" && key == "python_extension")
+        valid = parse_boolean(value, recipe.python_extension);
       else if (section == "build" && key == "defines")
         valid = parse_definitions(value, recipe.compile_definitions);
       else if (section == "build" && key == "macos_system_include_dirs")

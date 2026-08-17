@@ -21,6 +21,7 @@ namespace forge
     std::string cmake_target;
     std::string version;
     std::string type;
+    bool python_extension = false;
     bool has_cmake_subprojects = false;
     std::vector<std::filesystem::path> cmake_subproject_directories;
     std::vector<std::string> cmake_link_dependencies;

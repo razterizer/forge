@@ -711,6 +711,7 @@ namespace forge
           }
         );
         project.type = target_type(*selected);
+        project.python_extension = selected->name == "python3_add_library";
       }
 
       std::map<std::string, std::string> frameworks;

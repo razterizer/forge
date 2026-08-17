@@ -63,6 +63,7 @@ namespace forge
     std::string type;
     int cpp_standard = 0;
     int c_standard = 0;
+    bool python_extension = false;
     std::vector<std::filesystem::path> sources;
     std::vector<std::filesystem::path> public_headers;
     std::vector<std::filesystem::path> include_directories;
@@ -173,6 +174,7 @@ namespace forge
     std::string type;
     int cpp_standard = 0;
     int c_standard = 0;
+    bool python_extension = false;
     std::optional<int> build_number;
     std::vector<std::filesystem::path> sources;
     std::vector<std::filesystem::path> public_headers;

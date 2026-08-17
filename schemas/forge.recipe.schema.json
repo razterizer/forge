@@ -104,6 +104,10 @@
           "minimum": 0,
           "description": "Optional artifact build number, represented as SemVer build metadata."
         },
+        "python_extension": {
+          "type": "boolean",
+          "description": "Build this dynamic library against CMake's Python3 Development.Module target."
+        },
         "defines": {
           "$ref": "#/$defs/compileDefinitions",
           "description": "Private preprocessor definitions applied when compiling the project."

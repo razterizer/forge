@@ -1851,6 +1851,9 @@ namespace forge
         << "\"configuration = \\\"${CMAKE_BUILD_TYPE}\\\"\\n\" "
         << "\"runtime = \\\"${FORGE_RUNTIME}\\\"\\n\")\n\n";
 
+      if (recipe.python_extension)
+        file << "find_package(Python3 REQUIRED COMPONENTS Development.Module)\n\n";
+
       std::map<std::string, std::string> internal_target_names;
       const auto vcpkg_manifest = find_vcpkg_manifest(project_directory);
 
@@ -2083,6 +2086,9 @@ namespace forge
           << "target_compile_definitions(forge_project PRIVATE \""
           << escape_cmake(definition) << "\")\n";
       }
+
+      if (recipe.python_extension)
+        file << "target_link_libraries(forge_project PRIVATE Python3::Module)\n";
 
       for (const auto& dependency : recipe.selected_internal_dependencies)
       {
