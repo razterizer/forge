@@ -92,6 +92,13 @@ namespace forge
       std::string sha256;
     };
 
+    struct DependencyLock
+    {
+      std::map<std::string, LockedDependency> entries;
+      bool loaded = false;
+      bool dirty = false;
+    };
+
     std::set<std::string> selector_dependency_names(const Recipe& recipe)
     {
       std::set<std::string> names;
@@ -273,12 +280,10 @@ namespace forge
       std::map<std::filesystem::path, DependencyNode> nodes;
       std::map<std::string, std::filesystem::path> names;
       std::set<std::filesystem::path> active_projects;
-      std::map<std::string, LockedDependency> locked_dependencies;
+      DependencyLock lock;
       std::filesystem::path root_project;
       BuildOptions options;
       bool profile_is_legacy = false;
-      bool lock_loaded = false;
-      bool lock_dirty = false;
       bool update_dependency_found = false;
     };
 
@@ -853,10 +858,10 @@ namespace forge
     bool load_lockfile(const std::filesystem::path& project_directory,
                        std::ostream& error)
     {
-      if (dependency_session->lock_loaded)
+      if (dependency_session->lock.loaded)
         return true;
 
-      dependency_session->lock_loaded = true;
+      dependency_session->lock.loaded = true;
       const auto path = project_directory / "forge.lock.toml";
 
       if (!std::filesystem::is_regular_file(path))
@@ -893,7 +898,7 @@ namespace forge
 
           const auto key = lock_key(dependency->name, dependency->variant, dependency->target);
 
-          if (!dependency_session->locked_dependencies.emplace(key, *dependency).second)
+          if (!dependency_session->lock.entries.emplace(key, *dependency).second)
           {
             error << "forge: forge.lock.toml contains a duplicate dependency target\n";
             return false;
@@ -988,7 +993,7 @@ namespace forge
 
     bool write_lockfile(std::ostream& error)
     {
-      if (!dependency_session->lock_dirty)
+      if (!dependency_session->lock.dirty)
         return true;
 
       const auto lock_path = dependency_session->root_project / "forge.lock.toml";
@@ -1003,7 +1008,7 @@ namespace forge
 
       lock << "format = 2\n";
 
-      for (const auto& entry : dependency_session->locked_dependencies)
+      for (const auto& entry : dependency_session->lock.entries)
       {
         const auto& dependency = entry.second;
         lock
@@ -1092,21 +1097,21 @@ namespace forge
           ? target
           : dependency.resolved_target;
 
-        for (auto entry = dependency_session->locked_dependencies.begin();
-             entry != dependency_session->locked_dependencies.end();)
+        for (auto entry = dependency_session->lock.entries.begin();
+             entry != dependency_session->lock.entries.end();)
         {
           if (entry->second.name == dependency.name
               && entry->second.variant == dependency.variant
               && (resolved_target == "any" || entry->second.target == "any"
                   || entry->second.target == resolved_target))
           {
-            entry = dependency_session->locked_dependencies.erase(entry);
+            entry = dependency_session->lock.entries.erase(entry);
           }
           else
             ++entry;
         }
 
-        dependency_session->locked_dependencies[
+        dependency_session->lock.entries[
           lock_key(dependency.name, dependency.variant, resolved_target)
         ] =
           {
@@ -1120,22 +1125,22 @@ namespace forge
             dependency.url,
             dependency.sha256
           };
-        dependency_session->lock_dirty = true;
+        dependency_session->lock.dirty = true;
         return true;
       }
 
-      auto locked = dependency_session->locked_dependencies.find(
+      auto locked = dependency_session->lock.entries.find(
         lock_key(dependency.name, dependency.variant, target)
       );
 
-      if (locked == dependency_session->locked_dependencies.end())
+      if (locked == dependency_session->lock.entries.end())
       {
-        locked = dependency_session->locked_dependencies.find(
+        locked = dependency_session->lock.entries.find(
           lock_key(dependency.name, dependency.variant, "any")
         );
       }
 
-      if (locked == dependency_session->locked_dependencies.end())
+      if (locked == dependency_session->lock.entries.end())
       {
         error << "forge: dependency '" << dependency.name << "' is not locked for "
               << target << "; run forge update " << dependency.name;
