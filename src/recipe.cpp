@@ -1506,29 +1506,62 @@ namespace forge
     return true;
   }
 
+  namespace
+  {
+    template <typename SelectedProfiles, typename OtherProfiles, typename Apply>
+    bool select_profile(const std::optional<std::string>& requested,
+                        const SelectedProfiles& selected_profiles,
+                        const OtherProfiles& other_profiles,
+                        bool required,
+                        bool system_profile,
+                        Apply&& apply,
+                        std::ostream& error)
+    {
+      if (!requested)
+        return true;
+
+      if (system_profile && !is_reserved_system_profile(*requested))
+      {
+        error << "forge: unknown system profile '" << *requested << "'\n";
+        return false;
+      }
+
+      const auto profile = selected_profiles.find(*requested);
+
+      if (profile == selected_profiles.end())
+      {
+        if (required && !other_profiles.contains(*requested))
+        {
+          error << "forge: recipe has no " << (system_profile ? "system " : "")
+                << "profile named '" << *requested << "'\n";
+          return false;
+        }
+
+        return true;
+      }
+
+      apply(profile->second);
+      return true;
+    }
+  }
+
   bool select_dependency_profile(Recipe& recipe,
                                  const std::optional<std::string>& requested,
                                  bool required,
                                  std::ostream& error)
   {
-    if (!requested)
-      return true;
-
-    const auto profile = recipe.dependency_profiles.find(*requested);
-
-    if (profile == recipe.dependency_profiles.end())
-    {
-      if (required && !recipe.build_profiles.contains(*requested))
+    return select_profile(
+      requested,
+      recipe.dependency_profiles,
+      recipe.build_profiles,
+      required,
+      false,
+      [&recipe](const auto& dependencies)
       {
-        error << "forge: recipe has no profile named '" << *requested << "'\n";
-        return false;
-      }
-
-      return true;
-    }
-
-    recipe.dependencies = profile->second;
-    return true;
+        recipe.dependencies = dependencies;
+      },
+      error
+    );
   }
 
   bool select_system_dependency_profile(Recipe& recipe,
@@ -1536,30 +1569,18 @@ namespace forge
                                         bool required,
                                         std::ostream& error)
   {
-    if (!requested)
-      return true;
-
-    if (!is_reserved_system_profile(*requested))
-    {
-      error << "forge: unknown system profile '" << *requested << "'\n";
-      return false;
-    }
-
-    const auto profile = recipe.system_dependency_profiles.find(*requested);
-
-    if (profile == recipe.system_dependency_profiles.end())
-    {
-      if (required && !recipe.system_build_profiles.contains(*requested))
+    return select_profile(
+      requested,
+      recipe.system_dependency_profiles,
+      recipe.system_build_profiles,
+      required,
+      true,
+      [&recipe](const auto& dependencies)
       {
-        error << "forge: recipe has no system profile named '" << *requested << "'\n";
-        return false;
-      }
-
-      return true;
-    }
-
-    recipe.dependencies = profile->second;
-    return true;
+        recipe.dependencies = dependencies;
+      },
+      error
+    );
   }
 
   void apply_build_profile(Recipe& recipe, const BuildProfile& build, std::string& configuration)
@@ -1621,24 +1642,18 @@ namespace forge
                             std::string& configuration,
                             std::ostream& error)
   {
-    if (!requested)
-      return true;
-
-    const auto profile = recipe.build_profiles.find(*requested);
-
-    if (profile == recipe.build_profiles.end())
-    {
-      if (required && !recipe.dependency_profiles.contains(*requested))
+    return select_profile(
+      requested,
+      recipe.build_profiles,
+      recipe.dependency_profiles,
+      required,
+      false,
+      [&recipe, &configuration](const BuildProfile& build)
       {
-        error << "forge: recipe has no profile named '" << *requested << "'\n";
-        return false;
-      }
-
-      return true;
-    }
-
-    apply_build_profile(recipe, profile->second, configuration);
-    return true;
+        apply_build_profile(recipe, build, configuration);
+      },
+      error
+    );
   }
 
   bool select_system_build_profile(Recipe& recipe,
@@ -1647,30 +1662,18 @@ namespace forge
                                    std::string& configuration,
                                    std::ostream& error)
   {
-    if (!requested)
-      return true;
-
-    if (!is_reserved_system_profile(*requested))
-    {
-      error << "forge: unknown system profile '" << *requested << "'\n";
-      return false;
-    }
-
-    const auto profile = recipe.system_build_profiles.find(*requested);
-
-    if (profile == recipe.system_build_profiles.end())
-    {
-      if (required && !recipe.system_dependency_profiles.contains(*requested))
+    return select_profile(
+      requested,
+      recipe.system_build_profiles,
+      recipe.system_dependency_profiles,
+      required,
+      true,
+      [&recipe, &configuration](const BuildProfile& build)
       {
-        error << "forge: recipe has no system profile named '" << *requested << "'\n";
-        return false;
-      }
-
-      return true;
-    }
-
-    apply_build_profile(recipe, profile->second, configuration);
-    return true;
+        apply_build_profile(recipe, build, configuration);
+      },
+      error
+    );
   }
 
   bool apply_selector_rules(Recipe& recipe,
