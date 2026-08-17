@@ -1599,6 +1599,64 @@ namespace
     expect(build_error.str().empty(), "inferred include-root build does not write an error");
   }
 
+  void test_adopt_preserves_standard_header_precedence()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "main.cpp",
+      "#include <string.h>\nint main() { return strcmp(\"ok\", \"ok\"); }\n"
+    );
+    write_file(directory.path() / "include/ak/string.h", "#pragma once\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt succeeds with a project header named like a standard header"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      !contains(recipe, "include_dirs = [\"include/ak\"]"),
+      "adopt does not infer a local include root that shadows a standard header"
+    );
+    const auto include_directories = forge::infer_include_directories(
+      directory.path(),
+      { "main.cpp" },
+      { "include/ak/string.h" }
+    );
+    expect(
+      std::ranges::find(include_directories, "include/ak") == include_directories.end(),
+      "standard includes do not infer a conflicting include root"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "standard header remains available when the adopted project builds"
+    );
+    expect(build_error.str().empty(), "standard-header precedence build does not write an error");
+  }
+
+  void test_include_inference_honors_quoted_sibling_headers()
+  {
+    TemporaryDirectory directory;
+    write_file(directory.path() / "src/component.c", "#include \"string.h\"\n");
+    write_file(directory.path() / "src/string.h", "#pragma once\n");
+    write_file(directory.path() / "include/ak/string.h", "#pragma once\n");
+
+    const auto include_directories = forge::infer_include_directories(
+      directory.path(),
+      { "src/component.c" },
+      { "include/ak/string.h" }
+    );
+    expect(
+      std::ranges::find(include_directories, "include/ak") == include_directories.end(),
+      "quoted sibling headers do not infer a conflicting include root"
+    );
+  }
+
   void test_adopt_exports_vendored_public_header_closure()
   {
     TemporaryDirectory directory;
@@ -8328,6 +8386,8 @@ int main()
   test_adopt_reports_ambiguous_version_headers();
   test_adopt_accepts_explicit_initial_version_and_version_header();
   test_init_infers_local_include_directories();
+  test_adopt_preserves_standard_header_precedence();
+  test_include_inference_honors_quoted_sibling_headers();
   test_adopt_exports_vendored_public_header_closure();
   test_adopt_imports_visual_studio_project();
   test_adopt_imports_cmake_project();

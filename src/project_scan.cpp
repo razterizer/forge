@@ -15,6 +15,11 @@
 
 namespace forge
 {
+  namespace
+  {
+    bool looks_like_dependency_include(std::string_view include);
+  }
+
 
   bool is_ignored_project_scan_directory(const std::filesystem::path& path)
   {
@@ -384,14 +389,23 @@ namespace forge
       {
         const auto& include = included.path;
 
+        // System headers take precedence over same-named project headers.  In
+        // particular, inferring include/ak from <string.h> would shadow the
+        // C library header with include/ak/string.h on the compiler command
+        // line.
+        if (!included.quoted && !looks_like_dependency_include(include))
+          continue;
+
         if (included.quoted)
         {
-          const auto relative =
-            (std::filesystem::path { scanned_file }.parent_path() / include)
-              .lexically_normal()
-              .generic_string();
+          const auto relative = (std::filesystem::path { scanned_file }.parent_path() / include)
+                                  .lexically_normal();
+          std::error_code filesystem_error;
 
-          if (std::binary_search(headers.begin(), headers.end(), relative))
+          // Quoted includes search the including file's directory first.
+          // CMake metadata commonly omits private headers, so use the
+          // filesystem rather than only the selected header list here.
+          if (std::filesystem::is_regular_file(project_directory / relative, filesystem_error))
             continue;
         }
 
