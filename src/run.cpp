@@ -2,12 +2,9 @@
 
 #include "build.h"
 #include "recipe.h"
+#include "run_cache.h"
 #include "target_support.h"
 
-#include <algorithm>
-#include <cctype>
-#include <fstream>
-#include <map>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -23,110 +20,19 @@ namespace forge
       std::string configuration = "Debug";
     };
 
-    using RunMetadata = std::map<std::string, std::string>;
-
-    RunMetadata read_run_metadata(const std::filesystem::path& path)
-    {
-      std::ifstream file { path };
-      RunMetadata metadata;
-      std::string line;
-
-      while (std::getline(file, line))
-      {
-        const auto equals = line.find(" = \"");
-
-        if (equals != std::string::npos && line.size() > equals + 4 && line.back() == '"')
-          metadata[line.substr(0, equals)] = line.substr(equals + 4, line.size() - equals - 5);
-      }
-
-      return metadata;
-    }
-
-    std::optional<std::string> metadata_value(const RunMetadata& metadata, std::string_view key)
-    {
-      const auto value = metadata.find(std::string { key });
-      return value == metadata.end() ? std::nullopt : std::optional<std::string> { value->second };
-    }
-
     std::optional<std::string> read_build_configuration(
       const std::filesystem::path& build_directory)
     {
       for (const auto& filename : { "forge-toolchain.toml", "forge-run.toml" })
       {
-        if (const auto configuration = metadata_value(
-          read_run_metadata(build_directory / filename),
-          "configuration"
-        ))
+        if (const auto configuration =
+              read_run_cache_metadata(build_directory / filename).configuration)
         {
           return configuration;
         }
       }
 
       return std::nullopt;
-    }
-
-    std::optional<std::filesystem::path> current_run_directory(
-      const std::filesystem::path& project_directory)
-    {
-      const auto run_root = project_directory / ".forge" / "run";
-      std::ifstream current { run_root / "current.txt" };
-      std::string relative;
-
-      if (!std::getline(current, relative) || relative.empty())
-        return std::nullopt;
-
-      const auto path = std::filesystem::path { relative };
-
-      if (path.is_absolute()
-          || std::ranges::any_of(path, [](const auto& component)
-          {
-            return component == "..";
-          }))
-        return std::nullopt;
-
-      std::error_code filesystem_error;
-      const auto directory = run_root / path;
-      return std::filesystem::is_directory(directory, filesystem_error)
-        ? std::optional<std::filesystem::path> { directory }
-        : std::nullopt;
-    }
-
-    std::optional<std::string> read_run_profile(
-      const std::filesystem::path& run_directory)
-    {
-      return metadata_value(read_run_metadata(run_directory / "forge-run.toml"), "profile");
-    }
-
-    bool matches_run_metadata(const RunMetadata& metadata,
-                              const std::optional<std::string>& expected,
-                              std::string_view key)
-    {
-      return !expected || metadata_value(metadata, key) == expected;
-    }
-
-    bool matches_configuration(const RunMetadata& metadata,
-                               const std::optional<std::string>& expected)
-    {
-      if (matches_run_metadata(metadata, expected, "configuration"))
-        return true;
-
-      const auto configuration = metadata_value(metadata, "configuration");
-
-      if (!expected || !configuration)
-        return false;
-
-      auto left = *configuration;
-      auto right = *expected;
-      const auto lower = [](std::string& value)
-      {
-        std::ranges::transform(value, value.begin(), [](unsigned char byte)
-        {
-          return static_cast<char>(std::tolower(byte));
-        });
-      };
-      lower(left);
-      lower(right);
-      return left == right;
     }
 
     bool resolve_launch_profile(Recipe recipe,
@@ -186,7 +92,7 @@ namespace forge
         return 2;
       }
 
-      auto cached_run = current_run_directory(project_directory);
+      auto cached_run = current_cached_run_directory(project_directory);
 
       if (cached_run)
       {
@@ -202,11 +108,13 @@ namespace forge
 
       if (cached_run)
       {
-        if (const auto cached_profile = read_run_profile(*cached_run); cached_profile && !cached_profile->empty())
-          launch_profile.name = *cached_profile;
+        const auto metadata = read_run_cache_metadata(*cached_run / "forge-run.toml");
 
-        if (const auto cached_configuration = read_build_configuration(*cached_run))
-          launch_profile.configuration = *cached_configuration;
+        if (metadata.profile && !metadata.profile->empty())
+          launch_profile.name = *metadata.profile;
+
+        if (metadata.configuration)
+          launch_profile.configuration = *metadata.configuration;
       }
       else if (!resolve_launch_profile(recipe, profile, system_profile, launch_profile, error))
         return 2;
@@ -263,65 +171,6 @@ namespace forge
     }
 
   } // namespace
-
-  bool select_cached_run_variant(
-    const std::filesystem::path& project_directory,
-    const std::optional<std::string>& target,
-    const std::optional<std::string>& configuration,
-    const std::optional<std::string>& style,
-    const std::optional<std::string>& profile,
-    std::ostream& error
-  )
-  {
-    const auto run_root = project_directory / ".forge" / "run";
-    std::optional<std::filesystem::path> selected;
-    std::filesystem::file_time_type selected_time;
-    std::error_code filesystem_error;
-
-    for (const auto& entry : std::filesystem::recursive_directory_iterator { run_root, filesystem_error })
-    {
-      if (filesystem_error)
-        break;
-
-      if (entry.path().filename() != "forge-run.toml")
-        continue;
-
-      const auto metadata = read_run_metadata(entry.path());
-
-      if (!matches_configuration(metadata, configuration)
-          || !matches_run_metadata(metadata, target, "target")
-          || !matches_run_metadata(metadata, style, "style")
-          || !matches_run_metadata(metadata, profile, "profile"))
-        continue;
-
-      const auto modified = std::filesystem::last_write_time(entry.path(), filesystem_error);
-
-      if (!filesystem_error && (!selected || modified > selected_time))
-      {
-        selected = entry.path().parent_path();
-        selected_time = modified;
-      }
-    }
-
-    if (!selected)
-    {
-      error << "forge: no cached run variant matches the requested selectors\n";
-      return false;
-    }
-
-    const auto relative = selected->lexically_relative(run_root);
-    std::ofstream current { run_root / "current.txt" };
-    current << relative.generic_string() << '\n';
-
-    if (!current)
-    {
-      error << "forge: could not select cached run variant\n";
-      return false;
-    }
-
-    return true;
-  }
-
 
   int run_project(const std::filesystem::path& project_directory,
                   std::span<const std::string_view> arguments,

@@ -2,6 +2,7 @@
 
 #include "fprocess.h"
 #include "build.h"
+#include "run_cache.h"
 
 #include <filesystem>
 #include <iosfwd>
@@ -12,15 +13,6 @@
 
 namespace forge
 {
-
-  bool select_cached_run_variant(
-    const std::filesystem::path& project_directory,
-    const std::optional<std::string>& target,
-    const std::optional<std::string>& configuration,
-    const std::optional<std::string>& style,
-    const std::optional<std::string>& profile,
-    std::ostream& error
-  );
 
   int run_project(const std::filesystem::path& project_directory,
                   std::span<const std::string_view> arguments,

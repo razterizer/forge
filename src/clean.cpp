@@ -1,48 +1,12 @@
 #include "clean.h"
+#include "run_cache.h"
 
-#include <algorithm>
-#include <cctype>
 #include <fstream>
-#include <map>
 #include <system_error>
 #include <vector>
 
 namespace forge
 {
-
-  namespace
-  {
-    std::map<std::string, std::string> read_run_metadata(const std::filesystem::path& path)
-    {
-      std::map<std::string, std::string> values;
-      std::ifstream file { path };
-      std::string line;
-
-      while (std::getline(file, line))
-      {
-        const auto equals = line.find(" = \"");
-
-        if (equals != std::string::npos && line.size() > equals + 4 && line.back() == '"')
-          values[line.substr(0, equals)] = line.substr(equals + 4, line.size() - equals - 5);
-      }
-
-      return values;
-    }
-
-    bool equal_configuration(std::string left, std::string right)
-    {
-      const auto lower = [](std::string& value)
-      {
-        std::ranges::transform(value, value.begin(), [](unsigned char byte)
-        {
-          return static_cast<char>(std::tolower(byte));
-        });
-      };
-      lower(left);
-      lower(right);
-      return left == right;
-    }
-  }
 
   int clean_project(const std::filesystem::path& project_directory,
                     std::ostream& output,
@@ -93,6 +57,12 @@ namespace forge
 
     const auto run_root = project_directory / ".forge" / "run";
     std::vector<std::filesystem::path> variants;
+    const RunCacheSelectors selectors {
+      options.target,
+      options.configuration,
+      options.style,
+      options.profile
+    };
 
     for (const auto& entry : std::filesystem::recursive_directory_iterator { run_root, filesystem_error })
     {
@@ -102,19 +72,7 @@ namespace forge
       if (entry.path().filename() != "forge-run.toml")
         continue;
 
-      const auto metadata = read_run_metadata(entry.path());
-      const auto matches = [&](const std::optional<std::string>& expected, const char* key)
-      {
-        return !expected || (metadata.contains(key) && metadata.at(key) == *expected);
-      };
-      const auto configuration_matches = !options.configuration
-        || (metadata.contains("configuration")
-            && equal_configuration(metadata.at("configuration"), *options.configuration));
-
-      if (configuration_matches
-          && matches(options.target, "target")
-          && matches(options.style, "style")
-          && matches(options.profile, "profile"))
+      if (matches_run_cache_metadata(read_run_cache_metadata(entry.path()), selectors))
         variants.push_back(entry.path().parent_path());
     }
 
