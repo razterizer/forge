@@ -24,6 +24,7 @@ namespace forge
     {
       std::string name;
       std::vector<std::string> arguments;
+      std::filesystem::path directory;
     };
 
     std::vector<std::string> cmake_arguments(std::string_view value)
@@ -73,7 +74,9 @@ namespace forge
       return arguments;
     }
 
-    std::vector<CMakeCommand> cmake_commands(std::string_view contents)
+    std::vector<CMakeCommand> cmake_commands(
+      std::string_view contents,
+      const std::filesystem::path& directory = {})
     {
       std::vector<CMakeCommand> commands;
       std::size_t position = 0;
@@ -155,7 +158,8 @@ namespace forge
           });
           commands.push_back({
             std::move(command_name),
-            cmake_arguments(contents.substr(arguments_begin, position - arguments_begin - 1))
+            cmake_arguments(contents.substr(arguments_begin, position - arguments_begin - 1)),
+            directory
           });
         }
       }
@@ -165,11 +169,25 @@ namespace forge
 
     std::string replace_cmake_paths(std::string value,
                                     const std::filesystem::path& project_directory,
+                                    const std::filesystem::path& current_directory,
                                     std::string_view project_name)
     {
       for (const auto variable : {
         std::string_view { "${CMAKE_CURRENT_SOURCE_DIR}" },
-        std::string_view { "${CMAKE_CURRENT_LIST_DIR}" },
+        std::string_view { "${CMAKE_CURRENT_LIST_DIR}" }
+      })
+      {
+        std::size_t position = 0;
+        const auto replacement = current_directory.generic_string();
+
+        while ((position = value.find(variable, position)) != std::string::npos)
+        {
+          value.replace(position, variable.size(), replacement);
+          position += replacement.size();
+        }
+      }
+
+      for (const auto variable : {
         std::string_view { "${CMAKE_SOURCE_DIR}" },
         std::string_view { "${PROJECT_SOURCE_DIR}" }
       })
@@ -219,7 +237,7 @@ namespace forge
       const std::filesystem::path& directory,
       std::string_view project_name)
     {
-      const auto expanded = replace_cmake_paths(std::string { value }, directory, project_name);
+      const auto expanded = replace_cmake_paths(std::string { value }, directory, directory, project_name);
 
       if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
         return std::nullopt;
@@ -400,27 +418,31 @@ namespace forge
       return std::regex_match(value.begin(), value.end(), std::regex { expression });
     }
 
-    std::vector<std::string> cmake_glob_paths(const std::filesystem::path& directory,
+    std::vector<std::string> cmake_glob_paths(const std::filesystem::path& project_directory,
+                                              const std::filesystem::path& current_directory,
                                               std::string pattern,
                                               bool recursive,
                                               std::string_view project_name)
     {
-      pattern = replace_cmake_paths(std::move(pattern), directory, project_name);
+      pattern = replace_cmake_paths(
+        std::move(pattern), project_directory, current_directory, project_name
+      );
       const auto path = std::filesystem::path { pattern };
-      const auto root = path.is_absolute() ? path.parent_path() : directory / path.parent_path();
+      const auto root = path.is_absolute()
+        ? path.parent_path()
+        : current_directory / path.parent_path();
       const auto name = path.filename().string();
       std::vector<std::string> result;
       std::error_code error;
 
-      const auto add = [&directory, &name, &result](const std::filesystem::directory_entry& entry)
+      const auto add = [&name, &result](const std::filesystem::directory_entry& entry)
       {
         std::error_code entry_error;
 
         if (!entry.is_regular_file(entry_error) || !cmake_glob_match(entry.path().filename().string(), name))
           return;
 
-        if (const auto relative = project_relative_path(directory, entry.path()))
-          result.push_back(*relative);
+        result.push_back(entry.path().generic_string());
       };
 
       if (recursive)
@@ -455,6 +477,79 @@ namespace forge
       return result;
     }
 
+    bool is_cmake_dependency_directory(const std::filesystem::path& path)
+    {
+      for (const auto& component : path)
+      {
+        const auto name = lowercase(component.string());
+
+        if (name == "deps" || name == "dep" || name == "vendor" || name == "external"
+            || name == "third_party" || name == "third-party" || name == "submodules")
+        {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    std::vector<CMakeCommand> cmake_project_commands(
+      const std::filesystem::path& cmake_path,
+      std::ostream& error)
+    {
+      std::vector<CMakeCommand> result;
+      std::set<std::filesystem::path> visited;
+
+      const std::function<void(const std::filesystem::path&)> visit =
+        [&](const std::filesystem::path& path)
+      {
+        const auto normalized = path.lexically_normal();
+
+        if (!visited.insert(normalized).second)
+          return;
+
+        std::ifstream file { normalized };
+
+        if (!file)
+        {
+          error << "forge: could not open CMake project '" << normalized.string() << "'\n";
+          return;
+        }
+
+        const std::string contents {
+          std::istreambuf_iterator<char> { file },
+          std::istreambuf_iterator<char> {}
+        };
+        const auto commands = cmake_commands(contents, normalized.parent_path());
+
+        for (const auto& command : commands)
+        {
+          result.push_back(command);
+
+          if (command.name != "add_subdirectory" || command.arguments.empty())
+            continue;
+
+          const auto& argument = command.arguments.front();
+
+          if (argument.find('$') != std::string::npos)
+            continue;
+
+          const auto subdirectory = (normalized.parent_path() / argument).lexically_normal();
+
+          if (is_cmake_dependency_directory(subdirectory)
+              || !std::filesystem::is_regular_file(subdirectory / "CMakeLists.txt"))
+          {
+            continue;
+          }
+
+          visit(subdirectory / "CMakeLists.txt");
+        }
+      };
+
+      visit(cmake_path);
+      return result;
+    }
+
   } // namespace
 
   std::optional<VisualStudioProject> read_cmake_project(
@@ -469,16 +564,12 @@ namespace forge
         return std::nullopt;
       }
 
-      const std::string contents {
-        std::istreambuf_iterator<char> { file },
-        std::istreambuf_iterator<char> {}
-      };
       VisualStudioProject project;
       project.path = path;
       project.format = "CMake";
       project.name = path.parent_path().filename().string();
       const auto directory = path.parent_path();
-      const auto commands = cmake_commands(contents);
+      const auto commands = cmake_project_commands(path, error);
       int function_depth = 0;
 
       for (const auto& command : commands)
@@ -507,6 +598,10 @@ namespace forge
 
       std::map<std::string, bool> options;
       std::vector<CMakeCommand> declared_targets;
+      const auto expanded_target_name = [&project](std::string_view value)
+      {
+        return value == "${PROJECT_NAME}" ? project.name : std::string { value };
+      };
       function_depth = 0;
 
       for (const auto& command : commands)
@@ -530,8 +625,12 @@ namespace forge
           options[command.arguments.front()] = cmake_option_value(command.arguments.back());
         else if (command.name == "add_executable" || command.name == "add_library")
         {
+          const auto name = command.arguments.empty()
+            ? std::string {}
+            : expanded_target_name(command.arguments.front());
+
           if (command.arguments.empty()
-              || command.arguments.front().find('$') != std::string::npos
+              || name.find('$') != std::string::npos
               || (command.name == "add_library"
                   && command.arguments.size() > 1
                   && command.arguments[1] == "ALIAS"))
@@ -539,7 +638,9 @@ namespace forge
             continue;
           }
 
-          declared_targets.push_back(command);
+          auto declared = command;
+          declared.arguments.front() = std::move(name);
+          declared_targets.push_back(std::move(declared));
         }
       }
 
@@ -555,10 +656,11 @@ namespace forge
         : declared_targets.size() == 1
         ? std::optional<std::string> { declared_targets.front().arguments.front() }
         : std::optional<std::string> {};
-      const auto target_is_selected = [&selected_target](const CMakeCommand& command)
+      const auto target_is_selected = [&selected_target, &expanded_target_name](const CMakeCommand& command)
       {
         return !selected_target
-          || (!command.arguments.empty() && command.arguments.front() == *selected_target);
+          || (!command.arguments.empty()
+              && expanded_target_name(command.arguments.front()) == *selected_target);
       };
       const auto target_type = [](const CMakeCommand& command)
       {
@@ -807,9 +909,13 @@ namespace forge
 
         return std::vector<std::string> { std::string { argument } };
       };
-      const auto add_target_path = [&project, &directory](std::string_view argument)
+      const auto add_target_path = [&project, &directory](
+        std::string_view argument,
+        const std::filesystem::path& current_directory)
       {
-        const auto expanded = replace_cmake_paths(std::string { argument }, directory, project.name);
+        const auto expanded = replace_cmake_paths(
+          std::string { argument }, directory, current_directory, project.name
+        );
 
         if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
         {
@@ -817,7 +923,10 @@ namespace forge
           return;
         }
 
-        const auto relative = project_relative_path(directory, expanded);
+        const auto target_path = std::filesystem::path { expanded }.is_absolute()
+          ? std::filesystem::path { expanded }
+          : current_directory / expanded;
+        const auto relative = project_relative_path(directory, target_path);
 
         if (!relative)
           return;
@@ -1027,7 +1136,9 @@ namespace forge
           {
             for (const auto& pattern : expand_argument(command.arguments[index]))
             {
-              const auto paths = cmake_glob_paths(directory, pattern, recursive, project.name);
+              const auto paths = cmake_glob_paths(
+                directory, command.directory, pattern, recursive, project.name
+              );
               values.insert(values.end(), paths.begin(), paths.end());
             }
           }
@@ -1048,7 +1159,7 @@ namespace forge
             values.insert(values.end(), expanded.begin(), expanded.end());
           }
         }
-        else if (command.name == "add_subdirectory")
+        else if (command.name == "add_subdirectory" && active)
           project.has_cmake_subprojects = true;
         else if ((command.name == "add_custom_target" || command.name == "add_custom_command")
                  && active)
@@ -1119,7 +1230,9 @@ namespace forge
             }
           }
         }
-        else if (command.name == "project" && !command.arguments.empty())
+        else if (command.name == "project"
+                 && command.directory == directory
+                 && !command.arguments.empty())
         {
           project.name = command.arguments.front();
 
@@ -1165,7 +1278,7 @@ namespace forge
             }
 
             for (const auto& expanded : expand_argument(argument))
-              add_target_path(expanded);
+              add_target_path(expanded, command.directory);
           }
         }
         else if (command.name == "target_sources"
@@ -1180,7 +1293,7 @@ namespace forge
             if (!is_cmake_scope(argument))
             {
               for (const auto& expanded : expand_argument(argument))
-                add_target_path(expanded);
+                add_target_path(expanded, command.directory);
             }
           }
         }
@@ -1223,11 +1336,16 @@ namespace forge
 
             for (const auto& resolved : expand_argument(argument))
             {
-              const auto expanded = replace_cmake_paths(resolved, directory, project.name);
+              const auto expanded = replace_cmake_paths(
+                resolved, directory, command.directory, project.name
+              );
+              const auto include_path = std::filesystem::path { expanded }.is_absolute()
+                ? std::filesystem::path { expanded }
+                : command.directory / expanded;
 
               if (expanded.find("${") != std::string::npos || expanded.find("$<") != std::string::npos)
                 project.unresolved_properties.push_back(original_argument);
-              else if (const auto relative = project_relative_path(directory, expanded))
+              else if (const auto relative = project_relative_path(directory, include_path))
               {
                 if (!std::filesystem::is_directory(directory / *relative))
                 {

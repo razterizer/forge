@@ -1925,6 +1925,61 @@ namespace
     expect(build_error.str().empty(), "scoped CMake include inference does not write an error");
   }
 
+  void test_adopt_imports_nested_cmake_target_sources()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "cmake_minimum_required(VERSION 3.25)\n"
+      "project(Nested VERSION 1.2.3 LANGUAGES CXX)\n"
+      "add_library(${PROJECT_NAME} STATIC)\n"
+      "target_include_directories(${PROJECT_NAME} PUBLIC include)\n"
+      "add_subdirectory(src)\n"
+      "option(BUILD_OPTIONAL \"Build the optional target\" ON)\n"
+      "if(BUILD_OPTIONAL)\n"
+      "  add_library(optional STATIC optional.cpp)\n"
+      "endif()\n"
+    );
+    write_file(
+      directory.path() / "src/CMakeLists.txt",
+      "file(GLOB SOURCES CONFIGURE_DEPENDS *.cpp *.h)\n"
+      "target_sources(${PROJECT_NAME} PRIVATE ${SOURCES})\n"
+    );
+    write_file(
+      directory.path() / "src/answer.cpp",
+      "#include <Nested/answer.h>\nint answer() { return nested_answer(); }\n"
+    );
+    write_file(directory.path() / "src/private.h", "#pragma once\n");
+    write_file(
+      directory.path() / "include/Nested/answer.h",
+      "#pragma once\ninline int nested_answer() { return 42; }\n"
+    );
+    write_file(directory.path() / "optional.cpp", "#include <missing.h>\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt imports nested CMake target sources"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      contains(recipe, "type = \"static_library\"")
+        && contains(recipe, "paths = [\"src/answer.cpp\"]")
+        && !contains(recipe, "optional.cpp"),
+      "adopt selects the variable-expanded primary CMake target"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "nested CMake target source project builds"
+    );
+    expect(build_error.str().empty(), "nested CMake target build does not write an error");
+  }
+
   void test_adopt_imports_c_project()
   {
     TemporaryDirectory directory;
@@ -8437,6 +8492,7 @@ int main()
   test_adopt_imports_visual_studio_project();
   test_adopt_imports_cmake_project();
   test_adopt_scopes_cmake_include_inference_to_target_sources();
+  test_adopt_imports_nested_cmake_target_sources();
   test_adopt_imports_c_project();
   test_adopt_imports_mixed_cmake_project();
   test_adopt_imports_cmake_copy_directory_runtime_assets();

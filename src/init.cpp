@@ -1263,6 +1263,26 @@ namespace forge
         if (!visual_studio_project->headers.empty())
           headers = visual_studio_project->headers;
 
+        // CMake target_sources() commonly lists only implementation headers.
+        // Keep the discovered public include tree as the library interface
+        // even when the selected target supplied a narrower private list.
+        if (visual_studio_project->format == "CMake")
+        {
+          for (const auto& header : discovered_headers)
+          {
+            const auto path = std::filesystem::path { header };
+
+            if (path.empty() || path.begin()->string() != "include")
+              continue;
+
+            if (!std::ranges::binary_search(headers, header))
+              headers.push_back(header);
+          }
+
+          std::ranges::sort(headers);
+          headers.erase(std::unique(headers.begin(), headers.end()), headers.end());
+        }
+
         public_headers.clear();
         entry_points.clear();
 
