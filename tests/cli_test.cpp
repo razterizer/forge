@@ -1880,6 +1880,51 @@ namespace
     expect(build_error.str().empty(), "imported CMake build does not write an error");
   }
 
+  void test_adopt_scopes_cmake_include_inference_to_target_sources()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "cmake_minimum_required(VERSION 3.25)\n"
+      "project(ScopedIncludes LANGUAGES CXX)\n"
+      "add_executable(ScopedIncludes main.cpp)\n"
+      "target_include_directories(ScopedIncludes PRIVATE include)\n"
+    );
+    write_file(
+      directory.path() / "main.cpp",
+      "#include <api/library.h>\n"
+      "#include <string.h>\n"
+      "int main() { return strcmp(library(), \"library\"); }\n"
+    );
+    write_file(
+      directory.path() / "include/api/library.h",
+      "#pragma once\ninline const char* library() { return \"library\"; }\n"
+    );
+    write_file(directory.path() / "include/ak/string.h", "#pragma once\n");
+    write_file(directory.path() / "unused.h", "#include \"string.h\"\n");
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt succeeds with unrelated CMake headers"
+    );
+    const auto recipe = read_file(directory.path() / "forge.recipe.toml");
+    expect(
+      !contains(recipe, "include_dirs = [\"include\", \"include/ak\"]"),
+      "adopt excludes include roots inferred only from unrelated headers"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "CMake target build retains standard header precedence"
+    );
+    expect(build_error.str().empty(), "scoped CMake include inference does not write an error");
+  }
+
   void test_adopt_imports_c_project()
   {
     TemporaryDirectory directory;
@@ -8391,6 +8436,7 @@ int main()
   test_adopt_exports_vendored_public_header_closure();
   test_adopt_imports_visual_studio_project();
   test_adopt_imports_cmake_project();
+  test_adopt_scopes_cmake_include_inference_to_target_sources();
   test_adopt_imports_c_project();
   test_adopt_imports_mixed_cmake_project();
   test_adopt_imports_cmake_copy_directory_runtime_assets();

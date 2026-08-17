@@ -1331,14 +1331,11 @@ namespace forge
     if (show_progress)
       report_subprogress(output, 1, dependency_progress_total, "Inferring include directories");
 
-    auto include_directories = infer_include_directories(project_directory, sources, headers);
-
-    auto dependency_headers = headers;
+    std::vector<std::string> reachable_cmake_headers;
 
     if (visual_studio_project
         && visual_studio_project->format == "CMake"
-        && (visual_studio_project->type == "static_library"
-            || visual_studio_project->type == "dynamic_library"))
+        && !sources.empty())
     {
       std::set<std::string> reachable;
 
@@ -1348,7 +1345,23 @@ namespace forge
         reachable.insert(source_headers.begin(), source_headers.end());
       }
 
-      dependency_headers.assign(reachable.begin(), reachable.end());
+      reachable_cmake_headers.assign(reachable.begin(), reachable.end());
+    }
+
+    const auto& include_inference_headers = reachable_cmake_headers.empty()
+      ? headers
+      : reachable_cmake_headers;
+    auto include_directories =
+      infer_include_directories(project_directory, sources, include_inference_headers);
+
+    auto dependency_headers = headers;
+
+    if (visual_studio_project
+        && visual_studio_project->format == "CMake"
+        && (visual_studio_project->type == "static_library"
+            || visual_studio_project->type == "dynamic_library"))
+    {
+      dependency_headers = reachable_cmake_headers;
     }
 
     if (visual_studio_project)
