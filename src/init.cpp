@@ -1386,16 +1386,35 @@ namespace forge
 
     if (visual_studio_project)
     {
+      const auto cmake_include_directories = visual_studio_project->include_directories;
       include_directories.insert(
         include_directories.end(),
-        visual_studio_project->include_directories.begin(),
-        visual_studio_project->include_directories.end()
+        cmake_include_directories.begin(),
+        cmake_include_directories.end()
       );
       std::ranges::sort(include_directories);
       include_directories.erase(
         std::unique(include_directories.begin(), include_directories.end()),
         include_directories.end()
       );
+
+      if (visual_studio_project->format == "CMake")
+      {
+        std::erase_if(include_directories, [&cmake_include_directories](const std::string& include)
+        {
+          if (std::ranges::binary_search(cmake_include_directories, include))
+            return false;
+
+          const auto candidate = std::filesystem::path { include };
+
+          return std::ranges::any_of(cmake_include_directories, [&candidate](const std::string& parent)
+          {
+            const auto relative = candidate.lexically_relative(parent);
+            return !relative.empty() && relative != "."
+              && relative.begin()->string() != "..";
+          });
+        });
+      }
     }
 
     if (show_progress)

@@ -656,12 +656,6 @@ namespace forge
         : declared_targets.size() == 1
         ? std::optional<std::string> { declared_targets.front().arguments.front() }
         : std::optional<std::string> {};
-      const auto target_is_selected = [&selected_target, &expanded_target_name](const CMakeCommand& command)
-      {
-        return !selected_target
-          || (!command.arguments.empty()
-              && expanded_target_name(command.arguments.front()) == *selected_target);
-      };
       const auto target_type = [](const CMakeCommand& command)
       {
         if (command.name == "add_executable")
@@ -763,6 +757,33 @@ namespace forge
       std::map<std::string, std::vector<std::string>> variables;
       std::map<std::string, std::vector<std::string>> foreach_values;
       std::map<std::string, std::string> foreach_find_patterns;
+      const auto target_is_selected = [
+        &selected_target,
+        &expanded_target_name,
+        &foreach_values
+      ](const CMakeCommand& command)
+      {
+        if (!selected_target)
+          return true;
+
+        if (command.arguments.empty())
+          return false;
+
+        const auto& target = command.arguments.front();
+
+        if (target.starts_with("${") && target.ends_with('}'))
+        {
+          const auto variable = std::string { target.substr(2, target.size() - 3) };
+
+          if (foreach_values.contains(variable))
+          {
+            return std::ranges::find(foreach_values.at(variable), *selected_target)
+              != foreach_values.at(variable).end();
+          }
+        }
+
+        return expanded_target_name(target) == *selected_target;
+      };
 
       const auto condition_value = [&options, &variables, &foreach_find_patterns](
         const std::vector<std::string>& arguments
@@ -897,8 +918,11 @@ namespace forge
 
         return expression();
       };
-      const auto expand_argument = [&variables](std::string_view argument)
+      const auto expand_argument = [&project, &variables](std::string_view argument)
       {
+        if (argument == "${PROJECT_NAME}")
+          return std::vector<std::string> { project.name };
+
         if (argument.starts_with("${") && argument.ends_with('}'))
         {
           const auto name = std::string { argument.substr(2, argument.size() - 3) };
@@ -1049,6 +1073,22 @@ namespace forge
         {
           auto& values = foreach_values[command.arguments.front()];
           values.clear();
+
+          if (command.arguments.size() > 3
+              && command.arguments[1] == "IN"
+              && command.arguments[2] == "LISTS")
+          {
+            for (std::size_t index = 3; index < command.arguments.size(); ++index)
+            {
+              if (variables.contains(command.arguments[index]))
+              {
+                const auto& listed = variables.at(command.arguments[index]);
+                values.insert(values.end(), listed.begin(), listed.end());
+              }
+            }
+
+            continue;
+          }
 
           for (std::size_t index = 1; index < command.arguments.size(); ++index)
           {
