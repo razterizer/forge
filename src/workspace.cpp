@@ -537,83 +537,12 @@ namespace forge
                       std::ostream& output,
                       std::ostream& error)
   {
-    Workspace workspace;
-
-    std::map<std::filesystem::path, Recipe> recipes;
-
-    if (!load_workspace(workspace_directory, workspace, recipes, error))
-      return 2;
-
-    std::vector<const WorkspaceProject*> ordered;
-
-    if (!order_projects(workspace, recipes, project, profile, system_profile, ordered, error))
-      return 2;
-
-    std::set<std::filesystem::path> dependency_projects;
-
-    for (const auto* current : ordered)
-    {
-      auto recipe = recipes.at(current->path);
-
-      if (!select_dependency_profile(recipe, profile, false, error))
-        return 2;
-      if (!select_system_dependency_profile(recipe, system_profile, false, error))
-        return 2;
-
-      for (const auto& dependency : recipe.dependencies)
-      {
-        if (dependency.path.empty())
-          continue;
-
-        std::error_code filesystem_error;
-        const auto dependency_path =
-          std::filesystem::weakly_canonical(current->path / dependency.path, filesystem_error);
-
-        if (!filesystem_error && recipes.contains(dependency_path))
-          dependency_projects.insert(dependency_path);
-      }
-    }
-
-    output << "Building workspace " << workspace.name << '\n';
-
-    for (const auto* current : ordered)
-    {
-      if ((project && current->name != *project)
-          || (!project && dependency_projects.contains(current->path)))
-      {
-        continue;
-      }
-
-      auto recipe = recipes.at(current->path);
-
-      if (recipe.targets.empty())
-      {
-        BuildOptions options;
-        options.profile = profile;
-        options.system_profile = system_profile;
-        options.compile_definitions = compile_definitions;
-
-        if (build_project(current->path, options, process_runner, output, error) != 0)
-          return 2;
-      }
-      else
-      {
-        for (const auto& target : recipe.targets)
-        {
-          BuildOptions options;
-          options.profile = profile;
-          options.system_profile = system_profile;
-          options.target = target.name;
-          options.compile_definitions = compile_definitions;
-
-          if (build_project(current->path, options, process_runner, output, error) != 0)
-            return 2;
-        }
-      }
-    }
-
-    output << "Built workspace " << workspace.name << '\n';
-    return 0;
+    BuildOptions options;
+    options.target = project;
+    options.profile = profile;
+    options.system_profile = system_profile;
+    options.compile_definitions = compile_definitions;
+    return build_workspace(workspace_directory, options, process_runner, output, error);
   }
 
   int build_workspace(const std::filesystem::path& workspace_directory,
