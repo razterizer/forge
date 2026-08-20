@@ -1,6 +1,7 @@
 #include "build.h"
 
 #include "box.h"
+#include "dependency_lock.h"
 #include "file_support.h"
 #include "fprocess.h"
 #include "project_scan.h"
@@ -77,29 +78,6 @@ namespace forge
       std::string configuration;
       std::filesystem::path box;
       std::optional<BoxMetadata> box_metadata;
-    };
-
-    struct LockedDependency
-    {
-      std::string name;
-      std::string github;
-      std::string package;
-      std::string component;
-      std::string variant;
-      std::string version;
-      std::string target;
-      std::string url;
-      std::string sha256;
-    };
-
-    struct DependencyLock
-    {
-      std::map<std::string, LockedDependency> entries;
-      bool loaded = false;
-      bool dirty = false;
-
-      bool load(const std::filesystem::path& project_directory, std::ostream& error);
-      bool write(const std::filesystem::path& project_directory, std::ostream& error);
     };
 
     std::set<std::string> selector_dependency_names(const Recipe& recipe)
@@ -766,15 +744,6 @@ namespace forge
       return result.find('"') == std::string::npos;
     }
 
-    std::string lock_key(std::string_view name,
-                         std::string_view variant,
-                         std::string_view target)
-    {
-      return std::string { name }
-        + '\n' + std::string { variant }
-        + '\n' + std::string { target };
-    }
-
     bool validate_imported_project(const std::filesystem::path& project_directory,
                                    const Recipe& recipe,
                                    std::ostream& output,
@@ -855,219 +824,6 @@ namespace forge
       return true;
     }
 
-    bool DependencyLock::load(const std::filesystem::path& project_directory,
-                              std::ostream& error)
-    {
-      if (loaded)
-        return true;
-
-      loaded = true;
-      const auto path = project_directory / "forge.lock.toml";
-
-      if (!std::filesystem::is_regular_file(path))
-        return true;
-
-      std::ifstream file { path };
-      std::optional<LockedDependency> dependency;
-      std::string line;
-      std::size_t line_number = 0;
-      int format = 0;
-
-      const auto store_dependency =
-        [this, &dependency, &error]() -> bool
-        {
-          if (!dependency)
-            return true;
-
-          if (dependency->name.empty()
-              || dependency->github.empty()
-              || (!dependency->package.empty() && !is_safe_dependency_name(dependency->package))
-              || (!dependency->component.empty() && !is_safe_dependency_name(dependency->component))
-              || (!dependency->variant.empty() && !is_safe_dependency_name(dependency->variant))
-              || dependency->version.empty()
-              || dependency->target.empty()
-              || dependency->url.empty()
-              || !is_sha256(dependency->sha256))
-          {
-            error << "forge: forge.lock.toml contains an incomplete dependency\n";
-            return false;
-          }
-
-          if (dependency->package.empty())
-            dependency->package = dependency->name;
-
-          const auto key = lock_key(dependency->name, dependency->variant, dependency->target);
-
-          if (!entries.emplace(key, *dependency).second)
-          {
-            error << "forge: forge.lock.toml contains a duplicate dependency target\n";
-            return false;
-          }
-
-          dependency.reset();
-          return true;
-        };
-
-      while (std::getline(file, line))
-      {
-        ++line_number;
-        const auto content = trim(line);
-
-        if (content.empty() || content.front() == '#')
-          continue;
-
-        if (content == "[[dependency]]")
-        {
-          if (!store_dependency())
-            return false;
-
-          dependency.emplace();
-          continue;
-        }
-
-        const auto equals = content.find('=');
-
-        if (equals == std::string_view::npos)
-        {
-          error << "forge: invalid forge.lock.toml line " << line_number << '\n';
-          return false;
-        }
-
-        const auto key = trim(content.substr(0, equals));
-        const auto value = trim(content.substr(equals + 1));
-
-        if (!dependency && key == "format" && (value == "1" || value == "2"))
-        {
-          format = value == "1" ? 1 : 2;
-          continue;
-        }
-
-        std::string parsed;
-
-        if (!dependency
-            || !parse_lock_string(value, parsed)
-            || (key != "name"
-                && key != "github"
-                && key != "package"
-                && key != "component"
-                && key != "variant"
-                && key != "version"
-                && key != "target"
-                && key != "url"
-                && key != "sha256"))
-        {
-          error << "forge: invalid forge.lock.toml line " << line_number << '\n';
-          return false;
-        }
-
-        if (key == "name")
-          dependency->name = std::move(parsed);
-        else if (key == "github")
-          dependency->github = std::move(parsed);
-        else if (key == "package")
-          dependency->package = std::move(parsed);
-        else if (key == "component")
-          dependency->component = std::move(parsed);
-        else if (key == "variant")
-          dependency->variant = std::move(parsed);
-        else if (key == "version")
-          dependency->version = std::move(parsed);
-        else if (key == "target")
-          dependency->target = std::move(parsed);
-        else if (key == "url")
-          dependency->url = std::move(parsed);
-        else
-          dependency->sha256 = std::move(parsed);
-      }
-
-      if (!store_dependency() || format == 0)
-      {
-        if (format == 0)
-          error << "forge: forge.lock.toml has an unsupported or missing format\n";
-
-        return false;
-      }
-
-      return true;
-    }
-
-    bool DependencyLock::write(const std::filesystem::path& project_directory,
-                               std::ostream& error)
-    {
-      if (!dirty)
-        return true;
-
-      const auto lock_path = project_directory / "forge.lock.toml";
-      const auto temporary_path = project_directory / "forge.lock.toml.tmp";
-      std::ofstream lock { temporary_path };
-
-      if (!lock)
-      {
-        error << "forge: could not write forge.lock.toml\n";
-        return false;
-      }
-
-      lock << "format = 2\n";
-
-      for (const auto& entry : entries)
-      {
-        const auto& dependency = entry.second;
-        lock
-          << "\n[[dependency]]\n"
-          << "name = \"" << dependency.name << "\"\n"
-          << "github = \"" << dependency.github << "\"\n"
-          << "package = \"" << dependency.package << "\"\n";
-
-        if (!dependency.component.empty())
-          lock << "component = \"" << dependency.component << "\"\n";
-
-        if (!dependency.variant.empty())
-          lock << "variant = \"" << dependency.variant << "\"\n";
-
-        lock
-          << "version = \"" << dependency.version << "\"\n"
-          << "target = \"" << dependency.target << "\"\n"
-          << "url = \"" << dependency.url << "\"\n"
-          << "sha256 = \"" << dependency.sha256 << "\"\n";
-      }
-
-      if (!lock)
-      {
-        error << "forge: could not write forge.lock.toml\n";
-        return false;
-      }
-
-      lock.close();
-      const auto backup_path = project_directory / "forge.lock.toml.bak";
-      std::error_code filesystem_error;
-      std::filesystem::remove(backup_path, filesystem_error);
-      filesystem_error.clear();
-
-      if (std::filesystem::is_regular_file(lock_path))
-      {
-        std::filesystem::rename(lock_path, backup_path, filesystem_error);
-
-        if (filesystem_error)
-        {
-          error << "forge: could not replace forge.lock.toml\n";
-          return false;
-        }
-      }
-
-      std::filesystem::rename(temporary_path, lock_path, filesystem_error);
-
-      if (filesystem_error)
-      {
-        filesystem_error.clear();
-        std::filesystem::rename(backup_path, lock_path, filesystem_error);
-        error << "forge: could not replace forge.lock.toml\n";
-        return false;
-      }
-
-      std::filesystem::remove(backup_path, filesystem_error);
-      return true;
-    }
-
     bool load_lockfile(DependencyResolver& resolver,
                        const std::filesystem::path& project_directory,
                        std::ostream& error)
@@ -1127,7 +883,7 @@ namespace forge
         }
 
         resolver.lock.entries[
-          lock_key(dependency.name, dependency.variant, resolved_target)
+          DependencyLock::key(dependency.name, dependency.variant, resolved_target)
         ] =
           {
             dependency.name,
@@ -1145,13 +901,13 @@ namespace forge
       }
 
       auto locked = resolver.lock.entries.find(
-        lock_key(dependency.name, dependency.variant, target)
+        DependencyLock::key(dependency.name, dependency.variant, target)
       );
 
       if (locked == resolver.lock.entries.end())
       {
         locked = resolver.lock.entries.find(
-          lock_key(dependency.name, dependency.variant, "any")
+          DependencyLock::key(dependency.name, dependency.variant, "any")
         );
       }
 

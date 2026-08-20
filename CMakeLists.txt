@@ -17,6 +17,7 @@ add_library(forge_core STATIC
     src/clean.cpp
     src/cli.cpp
     src/cli_support.cpp
+    src/dependency_lock.cpp
     src/doctor.cpp
     src/file_support.cpp
     src/github.cpp
