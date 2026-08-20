@@ -100,6 +100,10 @@ namespace
     std::ostringstream error;
 
     expect(forge::cli::run({}, output, error) == 0, "empty arguments show help");
+    expect(
+      contains(output.str(), "Forge " + std::string { forge::cli::version }),
+      "help includes the compiled version"
+    );
     expect(contains(output.str(), "forge <command>"), "help includes usage");
     expect(
       contains(output.str(), "adopt           Discover an existing project"),

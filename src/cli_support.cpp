@@ -1,4 +1,5 @@
 #include "cli_support.h"
+#include "cli.h"
 
 #include <array>
 #include <ostream>
@@ -32,7 +33,7 @@ namespace forge::cli
   void print_help(std::ostream& output)
   {
     output
-      << "Forge - a project workflow system for C++\n\n"
+      << "Forge " << version << " - a project workflow system for C++\n\n"
       << "Usage:\n"
       << "  forge <command> [options]\n"
       << "  forge <command> --help\n"
