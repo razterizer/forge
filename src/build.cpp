@@ -1,6 +1,7 @@
 #include "build.h"
 
 #include "box.h"
+#include "box_internal.h"
 #include "dependency_lock.h"
 #include "file_support.h"
 #include "fprocess.h"
@@ -2914,7 +2915,7 @@ namespace forge
       box_options.profile = node.profile;
       box_options.system_profile = node.system_profile;
 
-      if (create_box(
+      if (create_box_with_builder(
         node.directory,
         node.target,
         box_options,

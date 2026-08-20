@@ -1969,7 +1969,9 @@ namespace forge::cli
         const auto target = arguments.size() == 3
           ? std::optional<std::string> { arguments[2] }
           : std::nullopt;
-        return create_box(working_directory, target, output, error);
+        BuildOptions options;
+        options.target = target;
+        return create_box(working_directory, target, options, run_process, output, error);
       }
 
       if (arguments.size() == 3 && arguments[1] == "inspect")

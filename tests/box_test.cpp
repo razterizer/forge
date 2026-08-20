@@ -189,7 +189,14 @@ namespace
       };
 
     expect(
-      forge::create_box(directory.path(), runner, output, error) == 0,
+      forge::create_box(
+        directory.path(),
+        std::nullopt,
+        forge::BuildOptions {},
+        runner,
+        output,
+        error
+      ) == 0,
       "box create succeeds when build and archive commands succeed"
     );
     expect(commands.size() == 3, "box create configures, builds, and archives");
@@ -250,7 +257,14 @@ namespace
       };
 
     expect(
-      forge::create_box(directory.path(), runner, output, error) == 0,
+      forge::create_box(
+        directory.path(),
+        std::nullopt,
+        forge::BuildOptions {},
+        runner,
+        output,
+        error
+      ) == 0,
       "box create succeeds with a build number"
     );
     expect(
@@ -311,7 +325,9 @@ namespace
       forge::create_box(
         directory.path(),
         std::nullopt,
-        std::optional<std::string> { "applaudio-release" },
+        forge::BuildOptions {
+          .profile = std::string { "applaudio-release" }
+        },
         runner,
         output,
         error
@@ -375,7 +391,14 @@ namespace
       };
 
     expect(
-      forge::create_box(directory.path(), std::optional<std::string> { "hello" }, runner, output, error) == 0,
+      forge::create_box(
+        directory.path(),
+        std::optional<std::string> { "hello" },
+        forge::BuildOptions { .target = std::string { "hello" } },
+        runner,
+        output,
+        error
+      ) == 0,
       "header-only box create succeeds with runtime assets"
     );
 
@@ -433,7 +456,14 @@ namespace
       };
 
     expect(
-      forge::create_box(directory.path(), runner, output, error) == 0,
+      forge::create_box(
+        directory.path(),
+        std::nullopt,
+        forge::BuildOptions {},
+        runner,
+        output,
+        error
+      ) == 0,
       "Windows dynamic-library box creation succeeds"
     );
 
@@ -498,7 +528,14 @@ namespace
       };
 
     expect(
-      forge::create_box(directory.path(), runner, output, error) == 0,
+      forge::create_box(
+        directory.path(),
+        std::nullopt,
+        forge::BuildOptions {},
+        runner,
+        output,
+        error
+      ) == 0,
       "imported-library box creation succeeds"
     );
     expect(commands.size() == 1, "imported-library box creation skips configure and build");

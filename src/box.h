@@ -1,9 +1,9 @@
 #pragma once
 
+#include "build.h"
 #include "fprocess.h"
 
 #include <filesystem>
-#include <functional>
 #include <iosfwd>
 #include <optional>
 #include <string>
@@ -11,15 +11,6 @@
 
 namespace forge
 {
-
-  struct BuildOptions;
-
-  using BoxProjectBuilder = std::function<int(
-    const std::filesystem::path&,
-    const BuildOptions&,
-    const ProcessRunner&,
-    std::ostream&,
-    std::ostream&)>;
 
   struct BoxArtifactMetadata
   {
@@ -85,47 +76,8 @@ namespace forge
 
   int create_box(const std::filesystem::path& project_directory,
                  const std::optional<std::string>& target,
-                 std::ostream& output,
-                 std::ostream& error);
-
-  int create_box(const std::filesystem::path& project_directory,
-                 const ProcessRunner& process_runner,
-                 std::ostream& output,
-                 std::ostream& error);
-
-  int create_box(const std::filesystem::path& project_directory,
-                 const std::optional<std::string>& target,
-                 const ProcessRunner& process_runner,
-                 std::ostream& output,
-                 std::ostream& error);
-
-  int create_box(const std::filesystem::path& project_directory,
-                 const std::optional<std::string>& target,
-                 const std::optional<std::string>& profile,
-                 const ProcessRunner& process_runner,
-                 std::ostream& output,
-                 std::ostream& error);
-
-  int create_box(const std::filesystem::path& project_directory,
-                 const std::optional<std::string>& target,
-                 const std::optional<std::string>& profile,
-                 const std::optional<std::string>& system_profile,
-                 const ProcessRunner& process_runner,
-                 std::ostream& output,
-                 std::ostream& error);
-
-  int create_box(const std::filesystem::path& project_directory,
-                 const std::optional<std::string>& target,
                  const BuildOptions& options,
                  const ProcessRunner& process_runner,
-                 std::ostream& output,
-                 std::ostream& error);
-
-  int create_box(const std::filesystem::path& project_directory,
-                 const std::optional<std::string>& target,
-                 const BuildOptions& options,
-                 const ProcessRunner& process_runner,
-                 const BoxProjectBuilder& project_builder,
                  std::ostream& output,
                  std::ostream& error);
 

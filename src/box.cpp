@@ -1,4 +1,4 @@
-#include "box.h"
+#include "box_internal.h"
 
 #include "box_manifest.h"
 
@@ -700,7 +700,7 @@ namespace forge
         auto target_options = requested_options;
         target_options.target = target.name;
 
-        if (create_box(
+        if (create_box_with_builder(
           project_directory,
           target.name,
           target_options,
@@ -804,69 +804,12 @@ namespace forge
                  std::ostream& output,
                  std::ostream& error)
   {
-    return create_box(project_directory, std::nullopt, run_process, output, error);
-  }
-
-  int create_box(const std::filesystem::path& project_directory,
-                 const std::optional<std::string>& target,
-                 std::ostream& output,
-                 std::ostream& error)
-  {
-    return create_box(project_directory, target, run_process, output, error);
-  }
-
-  int create_box(const std::filesystem::path& project_directory,
-                 const ProcessRunner& process_runner,
-                 std::ostream& output,
-                 std::ostream& error)
-  {
-    return create_box(project_directory, std::nullopt, process_runner, output, error);
-  }
-
-  int create_box(const std::filesystem::path& project_directory,
-                 const std::optional<std::string>& target,
-                 const ProcessRunner& process_runner,
-                 std::ostream& output,
-                 std::ostream& error)
-  {
-    return create_box(project_directory, target, std::nullopt, process_runner, output, error);
-  }
-
-  int create_box(const std::filesystem::path& project_directory,
-                 const std::optional<std::string>& target,
-                 const std::optional<std::string>& profile,
-                 const ProcessRunner& process_runner,
-                 std::ostream& output,
-                 std::ostream& error)
-  {
-    return create_box(
-      project_directory,
-      target,
-      profile,
-      std::nullopt,
-      process_runner,
-      output,
-      error
-    );
-  }
-
-  int create_box(const std::filesystem::path& project_directory,
-                 const std::optional<std::string>& target,
-                 const std::optional<std::string>& profile,
-                 const std::optional<std::string>& system_profile,
-                 const ProcessRunner& process_runner,
-                 std::ostream& output,
-                 std::ostream& error)
-  {
     BuildOptions options;
-    options.target = target;
-    options.profile = profile;
-    options.system_profile = system_profile;
     return create_box(
       project_directory,
-      target,
+      std::nullopt,
       options,
-      process_runner,
+      run_process,
       output,
       error
     );
@@ -879,7 +822,7 @@ namespace forge
                  std::ostream& output,
                  std::ostream& error)
   {
-    return create_box(
+    return create_box_with_builder(
       project_directory,
       target,
       requested_options,
@@ -890,13 +833,13 @@ namespace forge
     );
   }
 
-  int create_box(const std::filesystem::path& project_directory,
-                 const std::optional<std::string>& target,
-                 const BuildOptions& requested_options,
-                 const ProcessRunner& process_runner,
-                 const BoxProjectBuilder& project_builder,
-                 std::ostream& output,
-                 std::ostream& error)
+  int create_box_with_builder(const std::filesystem::path& project_directory,
+                              const std::optional<std::string>& target,
+                              const BuildOptions& requested_options,
+                              const ProcessRunner& process_runner,
+                              const BoxProjectBuilder& project_builder,
+                              std::ostream& output,
+                              std::ostream& error)
   {
     Recipe recipe;
 
@@ -1397,7 +1340,7 @@ namespace forge
 
       if (!read_recipe(project_directory / "forge.recipe.toml", dependency_recipe, error)
           || !select_recipe_target(dependency_recipe, dependency_name, error)
-          || create_box(
+          || create_box_with_builder(
             project_directory,
             dependency_name,
             options,

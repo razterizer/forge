@@ -1503,10 +1503,14 @@ namespace forge
              || recipe.type == "imported_library"
              || recipe.type == "header_only")
     {
+      BuildOptions box_options;
+      box_options.target = options.target;
+      box_options.profile = workflow_profile;
+
       if (create_box(
         project_directory,
         options.target,
-        workflow_profile,
+        box_options,
         process_runner,
         output,
         error
