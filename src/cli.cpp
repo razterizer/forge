@@ -1736,6 +1736,108 @@ namespace forge::cli
       return 2;
     }
 
+    int run_build_command(const std::filesystem::path& working_directory,
+                          std::span<const std::string_view> arguments,
+                          std::ostream& output,
+                          std::ostream& error)
+    {
+      BuildOptions options;
+
+      for (const auto argument : arguments.subspan(1))
+      {
+        if (argument.starts_with("--profile="))
+        {
+          if (!read_profile_option(argument, options.profile, error))
+            return 2;
+        }
+        else if (argument.starts_with("--sysprofile="))
+        {
+          if (!read_system_profile_option(argument, options.system_profile, error))
+            return 2;
+        }
+        else if (argument.starts_with("--style="))
+        {
+          const auto value = *option_value(argument, "--style=");
+
+          if (options.style || value.empty())
+          {
+            error << "forge: dependency style may only be specified once and cannot be empty\n";
+            return 2;
+          }
+
+          if (reject_cli_selector_wildcard("--style", value, error))
+            return 2;
+
+          options.style = std::string { value };
+        }
+        else if (argument.starts_with("--platform="))
+        {
+          const auto value = *option_value(argument, "--platform=");
+
+          if (options.platform || value.empty())
+          {
+            error << "forge: platform may only be specified once and cannot be empty\n";
+            return 2;
+          }
+
+          if (reject_cli_selector_wildcard("--platform", value, error))
+            return 2;
+
+          options.platform = std::string { value };
+        }
+        else if (argument.starts_with("--config="))
+        {
+          const auto value = *option_value(argument, "--config=");
+
+          if (options.config || value.empty())
+          {
+            error << "forge: configuration may only be specified once and cannot be empty\n";
+            return 2;
+          }
+
+          if (reject_cli_selector_wildcard("--config", value, error))
+            return 2;
+
+          options.config = std::string { value };
+        }
+        else if (argument.starts_with("--define="))
+        {
+          const auto definition = *option_value(argument, "--define=");
+
+          if (!is_valid_compile_definition(definition))
+          {
+            error << "forge: invalid compile definition '" << definition << "'\n";
+            return 2;
+          }
+
+          options.compile_definitions.emplace_back(definition);
+        }
+        else if (!options.target)
+        {
+          options.target = std::string { argument };
+        }
+        else
+        {
+          print_build_usage(error);
+          return 2;
+        }
+      }
+
+      if (options.profile && options.system_profile)
+      {
+        error << "forge: --profile and --sysprofile cannot be used together\n";
+        return 2;
+      }
+
+      if (!std::filesystem::exists(working_directory / "forge.recipe.toml")
+          && std::filesystem::exists(working_directory / "forge.workspace.toml"))
+      {
+        return build_workspace(working_directory, options, output, error);
+      }
+
+      return build_project(working_directory, options, output, error);
+    }
+
   } // namespace
 
   int run(std::span<const std::string_view> arguments,
@@ -2514,103 +2616,7 @@ namespace forge::cli
     }
 
     if (arguments.front() == "build")
-    {
-      BuildOptions options;
-
-      for (const auto argument : arguments.subspan(1))
-      {
-        if (argument.starts_with("--profile="))
-        {
-          if (!read_profile_option(argument, options.profile, error))
-            return 2;
-        }
-        else if (argument.starts_with("--sysprofile="))
-        {
-          if (!read_system_profile_option(argument, options.system_profile, error))
-            return 2;
-        }
-        else if (argument.starts_with("--style="))
-        {
-          const auto value = *option_value(argument, "--style=");
-
-          if (options.style || value.empty())
-          {
-            error << "forge: dependency style may only be specified once and cannot be empty\n";
-            return 2;
-          }
-
-          if (reject_cli_selector_wildcard("--style", value, error))
-            return 2;
-
-          options.style = std::string { value };
-        }
-        else if (argument.starts_with("--platform="))
-        {
-          const auto value = *option_value(argument, "--platform=");
-
-          if (options.platform || value.empty())
-          {
-            error << "forge: platform may only be specified once and cannot be empty\n";
-            return 2;
-          }
-
-          if (reject_cli_selector_wildcard("--platform", value, error))
-            return 2;
-
-          options.platform = std::string { value };
-        }
-        else if (argument.starts_with("--config="))
-        {
-          const auto value = *option_value(argument, "--config=");
-
-          if (options.config || value.empty())
-          {
-            error << "forge: configuration may only be specified once and cannot be empty\n";
-            return 2;
-          }
-
-          if (reject_cli_selector_wildcard("--config", value, error))
-            return 2;
-
-          options.config = std::string { value };
-        }
-        else if (argument.starts_with("--define="))
-        {
-          const auto definition = *option_value(argument, "--define=");
-
-          if (!is_valid_compile_definition(definition))
-          {
-            error << "forge: invalid compile definition '" << definition << "'\n";
-            return 2;
-          }
-
-          options.compile_definitions.emplace_back(definition);
-        }
-        else if (!options.target)
-        {
-          options.target = std::string { argument };
-        }
-        else
-        {
-          print_build_usage(error);
-          return 2;
-        }
-      }
-
-      if (options.profile && options.system_profile)
-      {
-        error << "forge: --profile and --sysprofile cannot be used together\n";
-        return 2;
-      }
-
-      if (!std::filesystem::exists(working_directory / "forge.recipe.toml")
-          && std::filesystem::exists(working_directory / "forge.workspace.toml"))
-      {
-        return build_workspace(working_directory, options, output, error);
-      }
-
-      return build_project(working_directory, options, output, error);
-    }
+      return run_build_command(working_directory, arguments, output, error);
 
     if (arguments.front() == "workflow")
     {
