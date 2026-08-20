@@ -289,8 +289,8 @@ namespace forge
     }
 
     // Dependency graph, lockfile, and cache state are owned by one resolver
-    // for the duration of a root build.  Nested builds join that resolver so
-    // they cannot accidentally choose a different cached dependency variant.
+    // for the duration of a root build. Nested builds receive it explicitly
+    // so they cannot accidentally choose a different cached dependency variant.
     struct DependencyResolver
     {
       std::map<std::filesystem::path, DependencyNode> nodes;
@@ -303,44 +303,26 @@ namespace forge
       bool update_dependency_found = false;
     };
 
-    thread_local DependencyResolver* dependency_session = nullptr;
-
-    class DependencyResolverScope
-    {
-    public:
-      DependencyResolverScope()
-      {
-        if (dependency_session == nullptr)
-        {
-          dependency_session = &owned_session_;
-          owns_session_ = true;
-        }
-      }
-
-      ~DependencyResolverScope()
-      {
-        if (owns_session_)
-          dependency_session = nullptr;
-      }
-
-    private:
-      DependencyResolver owned_session_;
-      bool owns_session_ = false;
-    };
+    int build_project_with_resolver(const std::filesystem::path& project_directory,
+                                    const BuildOptions& options,
+                                    const ProcessRunner& process_runner,
+                                    DependencyResolver& resolver,
+                                    std::ostream& output,
+                                    std::ostream& error);
 
     class ActiveProjectScope
     {
     public:
-      explicit ActiveProjectScope(std::filesystem::path project)
-        : project_ { std::move(project) }
+      ActiveProjectScope(DependencyResolver& resolver, std::filesystem::path project)
+        : resolver_ { resolver }, project_ { std::move(project) }
       {
-        inserted_ = dependency_session->active_projects.insert(project_).second;
+        inserted_ = resolver_.active_projects.insert(project_).second;
       }
 
       ~ActiveProjectScope()
       {
         if (inserted_)
-          dependency_session->active_projects.erase(project_);
+          resolver_.active_projects.erase(project_);
       }
 
       bool inserted() const
@@ -349,6 +331,7 @@ namespace forge
       }
 
     private:
+      DependencyResolver& resolver_;
       std::filesystem::path project_;
       bool inserted_ = false;
     };
@@ -404,27 +387,27 @@ namespace forge
     }
 #endif
 
-    std::string dependency_target()
+    std::string dependency_target(const DependencyResolver& resolver)
     {
-      if (dependency_session != nullptr && dependency_session->options.update_target)
-        return *dependency_session->options.update_target;
+      if (resolver.options.update_target)
+        return *resolver.options.update_target;
 
       return current_target();
     }
 
-    bool dependency_matches_target(const Dependency& dependency)
+    bool dependency_matches_target(const DependencyResolver& resolver, const Dependency& dependency)
     {
-      return forge::dependency_matches_target(dependency, dependency_target());
+      return forge::dependency_matches_target(dependency, dependency_target(resolver));
     }
 
-    std::string dependency_target_os()
+    std::string dependency_target_os(const DependencyResolver& resolver)
     {
-      return target_os_from_target(dependency_target());
+      return target_os_from_target(dependency_target(resolver));
     }
 
-    std::string dependency_target_arch()
+    std::string dependency_target_arch(const DependencyResolver& resolver)
     {
-      return target_arch_from_target(dependency_target());
+      return target_arch_from_target(dependency_target(resolver));
     }
 
     bool is_sha256(std::string_view value)
@@ -612,7 +595,8 @@ namespace forge
       return true;
     }
 
-    bool resolve_github_dependency(const std::filesystem::path& parent_directory,
+    bool resolve_github_dependency(const DependencyResolver& resolver,
+                                   const std::filesystem::path& parent_directory,
                                    Dependency& dependency,
                                    const ProcessRunner& process_runner,
                                    std::ostream& output,
@@ -630,9 +614,9 @@ namespace forge
       }
 
       const auto package = dependency.package.empty() ? dependency.name : dependency.package;
-      const auto selected_target = dependency_target();
-      const auto selected_os = dependency_target_os();
-      const auto selected_arch = dependency_target_arch();
+      const auto selected_target = dependency_target(resolver);
+      const auto selected_os = dependency_target_os(resolver);
+      const auto selected_arch = dependency_target_arch(resolver);
       const auto variant = dependency.variant.empty()
         ? std::string {}
         : "-" + dependency.variant;
@@ -1084,34 +1068,37 @@ namespace forge
       return true;
     }
 
-    bool load_lockfile(const std::filesystem::path& project_directory,
+    bool load_lockfile(DependencyResolver& resolver,
+                       const std::filesystem::path& project_directory,
                        std::ostream& error)
     {
-      return dependency_session->lock.load(project_directory, error);
+      return resolver.lock.load(project_directory, error);
     }
 
-    bool write_lockfile(std::ostream& error)
+    bool write_lockfile(DependencyResolver& resolver, std::ostream& error)
     {
-      return dependency_session->lock.write(dependency_session->root_project, error);
+      return resolver.lock.write(resolver.root_project, error);
     }
 
-    bool use_locked_github_dependency(Dependency& dependency,
+    bool use_locked_github_dependency(DependencyResolver& resolver,
+                                      Dependency& dependency,
                                       const ProcessRunner& process_runner,
                                       std::ostream& output,
                                       std::ostream& error)
     {
-      const auto target = dependency_target();
+      const auto target = dependency_target(resolver);
       const auto update =
-        dependency_session->options.update_dependencies
-        && (!dependency_session->options.update_dependency
-            || *dependency_session->options.update_dependency == dependency.name);
+        resolver.options.update_dependencies
+        && (!resolver.options.update_dependency
+            || *resolver.options.update_dependency == dependency.name);
 
       if (update)
       {
-        dependency_session->update_dependency_found = true;
+        resolver.update_dependency_found = true;
 
         if (!resolve_github_dependency(
-          dependency_session->root_project,
+          resolver,
+          resolver.root_project,
           dependency,
           process_runner,
           output,
@@ -1125,21 +1112,21 @@ namespace forge
           ? target
           : dependency.resolved_target;
 
-        for (auto entry = dependency_session->lock.entries.begin();
-             entry != dependency_session->lock.entries.end();)
+        for (auto entry = resolver.lock.entries.begin();
+             entry != resolver.lock.entries.end();)
         {
           if (entry->second.name == dependency.name
               && entry->second.variant == dependency.variant
               && (resolved_target == "any" || entry->second.target == "any"
                   || entry->second.target == resolved_target))
           {
-            entry = dependency_session->lock.entries.erase(entry);
+            entry = resolver.lock.entries.erase(entry);
           }
           else
             ++entry;
         }
 
-        dependency_session->lock.entries[
+        resolver.lock.entries[
           lock_key(dependency.name, dependency.variant, resolved_target)
         ] =
           {
@@ -1153,30 +1140,30 @@ namespace forge
             dependency.url,
             dependency.sha256
           };
-        dependency_session->lock.dirty = true;
+        resolver.lock.dirty = true;
         return true;
       }
 
-      auto locked = dependency_session->lock.entries.find(
+      auto locked = resolver.lock.entries.find(
         lock_key(dependency.name, dependency.variant, target)
       );
 
-      if (locked == dependency_session->lock.entries.end())
+      if (locked == resolver.lock.entries.end())
       {
-        locked = dependency_session->lock.entries.find(
+        locked = resolver.lock.entries.find(
           lock_key(dependency.name, dependency.variant, "any")
         );
       }
 
-      if (locked == dependency_session->lock.entries.end())
+      if (locked == resolver.lock.entries.end())
       {
         error << "forge: dependency '" << dependency.name << "' is not locked for "
               << target << "; run forge update " << dependency.name;
 
-        if (dependency_session->options.profile)
-          error << " --profile=" << *dependency_session->options.profile;
-        else if (dependency_session->options.system_profile)
-          error << " --sysprofile=" << *dependency_session->options.system_profile;
+        if (resolver.options.profile)
+          error << " --profile=" << *resolver.options.profile;
+        else if (resolver.options.system_profile)
+          error << " --sysprofile=" << *resolver.options.system_profile;
 
         error << '\n';
         return false;
@@ -1192,10 +1179,10 @@ namespace forge
               << "' conflicts with forge.lock.toml; run forge update "
               << dependency.name;
 
-        if (dependency_session->options.profile)
-          error << " --profile=" << *dependency_session->options.profile;
-        else if (dependency_session->options.system_profile)
-          error << " --sysprofile=" << *dependency_session->options.system_profile;
+        if (resolver.options.profile)
+          error << " --profile=" << *resolver.options.profile;
+        else if (resolver.options.system_profile)
+          error << " --sysprofile=" << *resolver.options.system_profile;
 
         error << '\n';
         return false;
@@ -2446,7 +2433,8 @@ namespace forge
       return true;
     }
 
-    bool dependency_graph_matches(const Recipe& recipe,
+    bool dependency_graph_matches(const DependencyResolver& resolver,
+                                  const Recipe& recipe,
                                   const BoxMetadata& metadata,
                                   std::ostream& error)
     {
@@ -2454,7 +2442,7 @@ namespace forge
 
       for (const auto& dependency : recipe.dependencies)
       {
-        if (dependency_matches_target(dependency))
+        if (dependency_matches_target(resolver, dependency))
           active_dependencies.emplace_back(dependency);
       }
 
@@ -2464,14 +2452,14 @@ namespace forge
 
       for (const auto& dependency : active_dependencies)
       {
-        const auto child_path = dependency_session->names.find(dependency.get().name);
+        const auto child_path = resolver.names.find(dependency.get().name);
 
-        if (child_path == dependency_session->names.end())
+        if (child_path == resolver.names.end())
           return false;
 
-        const auto child = dependency_session->nodes.find(child_path->second);
+        const auto child = resolver.nodes.find(child_path->second);
 
-        if (child == dependency_session->nodes.end() || child->second.box.empty())
+        if (child == resolver.nodes.end() || child->second.box.empty())
           return false;
 
         std::string checksum;
@@ -2528,7 +2516,8 @@ namespace forge
       return true;
     }
 
-    bool find_compatible_dependency_box(DependencyNode& node,
+    bool find_compatible_dependency_box(const DependencyResolver& resolver,
+                                        DependencyNode& node,
                                         const ProcessRunner& process_runner,
                                         bool report_reuse,
                                         std::ostream& output,
@@ -2581,12 +2570,12 @@ namespace forge
             && metadata.build_number == node.recipe.build_number
             && metadata.type == node.recipe.type
             && ((metadata.type == "header_only" && !has_platform_specific_requirements(node.recipe))
-                || (metadata.os == dependency_target_os()
-                    && metadata.arch == dependency_target_arch()))
+                || (metadata.os == dependency_target_os(resolver)
+                    && metadata.arch == dependency_target_arch(resolver)))
             && (metadata.type == "header_only"
                 || (metadata.toolchain
                     && metadata.toolchain->configuration == node.configuration))
-            && dependency_graph_matches(node.recipe, metadata, error))
+            && dependency_graph_matches(resolver, node.recipe, metadata, error))
         {
           node.box = entry.path();
           node.box_metadata = std::move(metadata);
@@ -2607,7 +2596,8 @@ namespace forge
       return true;
     }
 
-    bool checkout_git_dependency(const std::filesystem::path& parent_directory,
+    bool checkout_git_dependency(const DependencyResolver& resolver,
+                                 const std::filesystem::path& parent_directory,
                                  const Dependency& dependency,
                                  const ProcessRunner& process_runner,
                                  std::filesystem::path& checkout,
@@ -2615,7 +2605,7 @@ namespace forge
                                  std::ostream& error)
     {
       checkout =
-        dependency_session->root_project
+        resolver.root_project
         / ".forge"
         / "cache"
         / "git"
@@ -2688,7 +2678,8 @@ namespace forge
       return true;
     }
 
-    bool validate_box_dependency(const Dependency& dependency,
+    bool validate_box_dependency(const DependencyResolver& resolver,
+                                 const Dependency& dependency,
                                  const Dependency& resolved_dependency,
                                  const BoxMetadata& metadata,
                                  const BoxMetadata& container_metadata,
@@ -2740,20 +2731,21 @@ namespace forge
       }
 
       if (metadata.type != "header_only"
-          && (metadata.os != dependency_target_os()
-              || metadata.arch != dependency_target_arch()))
+          && (metadata.os != dependency_target_os(resolver)
+              || metadata.arch != dependency_target_arch(resolver)))
       {
         error << "forge: dependency '" << dependency.name
               << "' box targets " << metadata.os << '-' << metadata.arch
               << ", but this build targets "
-              << dependency_target_os() << '-' << dependency_target_arch() << '\n';
+              << dependency_target_os(resolver) << '-' << dependency_target_arch(resolver) << '\n';
         return false;
       }
 
       return true;
     }
 
-    bool read_dependency_node(const std::filesystem::path& parent_directory,
+    bool read_dependency_node(DependencyResolver& resolver,
+                              const std::filesystem::path& parent_directory,
                               const Dependency& dependency,
                               const ProcessRunner& process_runner,
                               DependencyNode*& node,
@@ -2774,7 +2766,7 @@ namespace forge
       const auto has_local_github_fallback =
         !resolved_dependency.path.empty() && !resolved_dependency.github.empty();
       const auto updating_github_dependency =
-        dependency_session->options.update_dependencies && !resolved_dependency.github.empty();
+        resolver.options.update_dependencies && !resolved_dependency.github.empty();
 
       if (has_local_github_fallback && !updating_github_dependency)
       {
@@ -2795,6 +2787,7 @@ namespace forge
 
       if (!resolved_dependency.github.empty()
           && !use_locked_github_dependency(
+            resolver,
             resolved_dependency,
             process_runner,
             output,
@@ -2820,6 +2813,7 @@ namespace forge
       if (!resolved_dependency.git.empty())
       {
         if (!checkout_git_dependency(
+          resolver,
           parent_directory,
           resolved_dependency,
           process_runner,
@@ -2853,7 +2847,7 @@ namespace forge
         return false;
       }
 
-      if (!is_box && dependency_session->active_projects.contains(directory))
+      if (!is_box && resolver.active_projects.contains(directory))
       {
         error << "forge: dependency cycle detected at '" << dependency.name << "'\n";
         return false;
@@ -2881,6 +2875,7 @@ namespace forge
           &container_metadata
         )
             || !validate_box_dependency(
+              resolver,
               dependency,
               resolved_dependency,
               metadata,
@@ -2895,19 +2890,19 @@ namespace forge
         box_metadata = std::move(metadata);
       }
 
-      const auto existing_name = dependency_session->names.find(dependency.name);
+      const auto existing_name = resolver.names.find(dependency.name);
 
-      if (existing_name != dependency_session->names.end() && existing_name->second != directory)
+      if (existing_name != resolver.names.end() && existing_name->second != directory)
       {
-        const auto existing = dependency_session->nodes.find(existing_name->second);
-        const auto existing_version = existing == dependency_session->nodes.end()
+        const auto existing = resolver.nodes.find(existing_name->second);
+        const auto existing_version = existing == resolver.nodes.end()
           ? std::string {}
           : package_version(existing->second.recipe);
         std::string existing_checksum;
         std::string requested_checksum;
 
         if (is_box
-            && existing != dependency_session->nodes.end()
+            && existing != resolver.nodes.end()
             && !existing->second.box.empty())
         {
           if (!sha256_file(existing->second.box, existing_checksum, error)
@@ -2966,9 +2961,9 @@ namespace forge
         return false;
       }
 
-      auto existing_node = dependency_session->nodes.find(directory);
+      auto existing_node = resolver.nodes.find(directory);
 
-      if (existing_node == dependency_session->nodes.end())
+      if (existing_node == resolver.nodes.end())
       {
         Recipe dependency_recipe;
 
@@ -3011,7 +3006,7 @@ namespace forge
 
         std::optional<std::string> selected_dependency_profile;
         std::optional<std::string> selected_dependency_system_profile;
-        auto dependency_configuration = dependency_session->options.configuration;
+        auto dependency_configuration = resolver.options.configuration;
 
         if (!is_box && dependency_recipe.type.empty() && !dependency_recipe.targets.empty())
         {
@@ -3047,13 +3042,13 @@ namespace forge
           if (!resolve_effective_build_selection(
             dependency_recipe,
             {
-              .profile = dependency_session->options.profile,
-              .system_profile = dependency_session->options.system_profile,
-              .style = dependency_session->options.style,
-              .platform = dependency_session->options.platform.value_or(current_target()),
-              .selector_configuration = dependency_session->options.config,
-              .build_configuration = dependency_session->options.configuration,
-              .profile_resolution = dependency_session->profile_is_legacy
+              .profile = resolver.options.profile,
+              .system_profile = resolver.options.system_profile,
+              .style = resolver.options.style,
+              .platform = resolver.options.platform.value_or(current_target()),
+              .selector_configuration = resolver.options.config,
+              .build_configuration = resolver.options.configuration,
+              .profile_resolution = resolver.profile_is_legacy
                 ? ProfileResolution::inherited_legacy
                 : ProfileResolution::selectors_only,
               .require_profile = false,
@@ -3071,15 +3066,15 @@ namespace forge
           if (!selected_dependency_profile && !effective_selection.selectors.profile.empty())
             selected_dependency_profile = effective_selection.selectors.profile;
 
-          if (dependency_session->options.system_profile
+          if (resolver.options.system_profile
               && (dependency_recipe.system_dependency_profiles.contains(
-                    *dependency_session->options.system_profile
+                    *resolver.options.system_profile
                   )
                   || dependency_recipe.system_build_profiles.contains(
-                    *dependency_session->options.system_profile
+                    *resolver.options.system_profile
                   )))
           {
-            selected_dependency_system_profile = dependency_session->options.system_profile;
+            selected_dependency_system_profile = resolver.options.system_profile;
           }
           dependency_configuration = std::move(effective_selection.configuration);
         }
@@ -3105,8 +3100,8 @@ namespace forge
           return false;
         }
 
-        dependency_session->names.emplace(dependency.name, directory);
-        existing_node = dependency_session->nodes.emplace(
+        resolver.names.emplace(dependency.name, directory);
+        existing_node = resolver.nodes.emplace(
           directory,
           DependencyNode
             {
@@ -3141,7 +3136,8 @@ namespace forge
       return true;
     }
 
-    bool ensure_dependency_box(DependencyNode& node,
+    bool ensure_dependency_box(DependencyResolver& resolver,
+                               DependencyNode& node,
                                const ProcessRunner& process_runner,
                                std::ostream& output,
                                std::ostream& error)
@@ -3149,7 +3145,7 @@ namespace forge
       if (!node.box.empty())
         return true;
 
-      if (!find_compatible_dependency_box(node, process_runner, true, output, error))
+      if (!find_compatible_dependency_box(resolver, node, process_runner, true, output, error))
         return false;
 
       if (!node.box.empty())
@@ -3157,7 +3153,7 @@ namespace forge
 
       output << "Resolving dependency " << node.recipe.name << '\n';
 
-      auto box_options = dependency_session->options;
+      auto box_options = resolver.options;
       box_options.target = node.target;
       box_options.profile = node.profile;
       box_options.system_profile = node.system_profile;
@@ -3167,6 +3163,21 @@ namespace forge
         node.target,
         box_options,
         process_runner,
+        [&resolver](const std::filesystem::path& project_directory,
+                    const BuildOptions& options,
+                    const ProcessRunner& process_runner,
+                    std::ostream& output,
+                    std::ostream& error)
+        {
+          return build_project_with_resolver(
+            project_directory,
+            options,
+            process_runner,
+            resolver,
+            output,
+            error
+          );
+        },
         output,
         error
       ) != 0)
@@ -3174,11 +3185,12 @@ namespace forge
         return false;
       }
 
-      return find_compatible_dependency_box(node, process_runner, false, output, error)
+      return find_compatible_dependency_box(resolver, node, process_runner, false, output, error)
         && !node.box.empty();
     }
 
-    bool collect_dependency(const std::filesystem::path& parent_directory,
+    bool collect_dependency(DependencyResolver& resolver,
+                            const std::filesystem::path& parent_directory,
                             const Dependency& dependency,
                             const ProcessRunner& process_runner,
                             std::set<std::filesystem::path>& collected,
@@ -3187,9 +3199,9 @@ namespace forge
                             std::ostream& output,
                             std::ostream& error)
     {
-      if (dependency_session->options.dependencies_only
-          && dependency_session->options.update_dependency
-          && *dependency_session->options.update_dependency != dependency.name
+      if (resolver.options.dependencies_only
+          && resolver.options.update_dependency
+          && *resolver.options.update_dependency != dependency.name
           && !dependency.github.empty())
       {
         return true;
@@ -3197,7 +3209,7 @@ namespace forge
 
       DependencyNode* node = nullptr;
 
-      if (!read_dependency_node(parent_directory, dependency, process_runner, node, output, error))
+      if (!read_dependency_node(resolver, parent_directory, dependency, process_runner, node, output, error))
         return false;
 
       if (active.contains(node->directory))
@@ -3213,10 +3225,11 @@ namespace forge
 
       for (const auto& child : node->recipe.dependencies)
       {
-        if (!dependency_matches_target(child))
+        if (!dependency_matches_target(resolver, child))
           continue;
 
         if (!collect_dependency(
+          resolver,
           node->directory,
           child,
           process_runner,
@@ -3234,7 +3247,7 @@ namespace forge
 
       active.erase(node->directory);
 
-      if (!ensure_dependency_box(*node, process_runner, output, error))
+      if (!ensure_dependency_box(resolver, *node, process_runner, output, error))
         return false;
 
       ordered.push_back(node);
@@ -3757,7 +3770,8 @@ namespace forge
       return true;
     }
 
-    bool resolve_dependencies(const std::filesystem::path& project_directory,
+    bool resolve_dependencies(DependencyResolver& resolver,
+                              const std::filesystem::path& project_directory,
                               const Recipe& recipe,
                               const ProcessRunner& process_runner,
                               std::vector<ResolvedDependency>& resolved,
@@ -3775,7 +3789,7 @@ namespace forge
 
       for (const auto& dependency : recipe.dependencies)
       {
-        if (!dependency_matches_target(dependency))
+        if (!dependency_matches_target(resolver, dependency))
           continue;
 
         if (!direct_names.insert(dependency.name).second)
@@ -3785,6 +3799,7 @@ namespace forge
         }
 
         if (!collect_dependency(
+          resolver,
           project_directory,
           dependency,
           process_runner,
@@ -3855,7 +3870,27 @@ namespace forge
                     std::ostream& output,
                     std::ostream& error)
   {
-    DependencyResolverScope session_scope;
+    DependencyResolver resolver;
+    return build_project_with_resolver(
+      project_directory,
+      options,
+      process_runner,
+      resolver,
+      output,
+      error
+    );
+  }
+
+  namespace
+  {
+
+  int build_project_with_resolver(const std::filesystem::path& project_directory,
+                                  const BuildOptions& options,
+                                  const ProcessRunner& process_runner,
+                                  DependencyResolver& resolver,
+                                  std::ostream& output,
+                                  std::ostream& error)
+  {
     std::error_code canonical_error;
     const auto canonical_project =
       std::filesystem::weakly_canonical(project_directory, canonical_error);
@@ -3866,12 +3901,12 @@ namespace forge
       return 2;
     }
 
-    const auto is_root_project = dependency_session->root_project.empty();
+    const auto is_root_project = resolver.root_project.empty();
 
     if (is_root_project)
     {
-      dependency_session->root_project = canonical_project;
-      dependency_session->options = options;
+      resolver.root_project = canonical_project;
+      resolver.options = options;
 
       if (options.update_target && !is_supported_dependency_target(*options.update_target))
       {
@@ -3892,11 +3927,11 @@ namespace forge
         return 2;
       }
 
-      if (!load_lockfile(canonical_project, error))
+      if (!load_lockfile(resolver, canonical_project, error))
         return 2;
     }
 
-    ActiveProjectScope active_project { canonical_project };
+    ActiveProjectScope active_project { resolver, canonical_project };
 
     if (!active_project.inserted())
     {
@@ -3912,11 +3947,11 @@ namespace forge
     auto requested_target = options.target
       ? options.target
       : is_root_project
-        ? dependency_session->options.target
+        ? resolver.options.target
         : std::optional<std::string> {};
 
     if (is_root_project
-        && dependency_session->options.dependencies_only
+        && resolver.options.dependencies_only
         && !requested_target
         && !recipe.targets.empty())
     {
@@ -3930,12 +3965,12 @@ namespace forge
       recipe,
       {
         .target = requested_target,
-        .profile = dependency_session->options.profile,
-        .system_profile = dependency_session->options.system_profile,
-        .style = dependency_session->options.style,
-        .platform = dependency_session->options.platform.value_or(current_target()),
-        .selector_configuration = dependency_session->options.config,
-        .build_configuration = dependency_session->options.configuration,
+        .profile = resolver.options.profile,
+        .system_profile = resolver.options.system_profile,
+        .style = resolver.options.style,
+        .platform = resolver.options.platform.value_or(current_target()),
+        .selector_configuration = resolver.options.config,
+        .build_configuration = resolver.options.configuration,
         .profile_resolution = is_root_project
           ? ProfileResolution::automatic
           : ProfileResolution::inherited_legacy,
@@ -3954,14 +3989,14 @@ namespace forge
 
     if (is_root_project)
     {
-      dependency_session->profile_is_legacy = legacy_profile.has_value();
+      resolver.profile_is_legacy = legacy_profile.has_value();
 
       if (!legacy_profile)
       {
-        dependency_session->options.style = selection.style;
-        dependency_session->options.platform = selection.platform;
-        dependency_session->options.config = selection.configuration;
-        dependency_session->options.profile = selection.profile.empty()
+        resolver.options.style = selection.style;
+        resolver.options.platform = selection.platform;
+        resolver.options.config = selection.configuration;
+        resolver.options.profile = selection.profile.empty()
           ? std::optional<std::string> {}
           : std::optional<std::string> { selection.profile };
       }
@@ -4200,6 +4235,7 @@ namespace forge
       return 2;
 
     if (!resolve_dependencies(
+      resolver,
       project_directory,
       recipe,
       process_runner,
@@ -4212,20 +4248,20 @@ namespace forge
     }
 
     if (is_root_project
-        && dependency_session->options.update_dependency
-        && !dependency_session->update_dependency_found)
+        && resolver.options.update_dependency
+        && !resolver.update_dependency_found)
     {
-      error << "forge: GitHub dependency '" << *dependency_session->options.update_dependency
+      error << "forge: GitHub dependency '" << *resolver.options.update_dependency
             << "' was not found\n";
       return 2;
     }
 
-    if (is_root_project && dependency_session->options.dependencies_only)
+    if (is_root_project && resolver.options.dependencies_only)
     {
-      if (!write_lockfile(error))
+      if (!write_lockfile(resolver, error))
         return 2;
 
-      output << "Updated locked dependencies for " << dependency_target() << '\n';
+      output << "Updated locked dependencies for " << dependency_target(resolver) << '\n';
       return 0;
     }
 
@@ -4352,7 +4388,7 @@ namespace forge
 
       output << '\n';
 
-      if (is_root_project && !write_lockfile(error))
+      if (is_root_project && !write_lockfile(resolver, error))
         return 2;
 
       return 0;
@@ -4394,8 +4430,8 @@ namespace forge
 
     if (run_selection.profile.empty() && legacy_profile)
       run_selection.profile = *legacy_profile;
-    else if (run_selection.profile.empty() && dependency_session->options.system_profile)
-      run_selection.profile = *dependency_session->options.system_profile;
+    else if (run_selection.profile.empty() && resolver.options.system_profile)
+      run_selection.profile = *resolver.options.system_profile;
 
     if (is_root_project
         && recipe.type == "executable"
@@ -4414,10 +4450,12 @@ namespace forge
       return 2;
     }
 
-    if (is_root_project && !write_lockfile(error))
+    if (is_root_project && !write_lockfile(resolver, error))
       return 2;
 
     return 0;
   }
+
+  } // namespace
 
 } // namespace forge

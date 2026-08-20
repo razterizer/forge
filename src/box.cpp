@@ -670,9 +670,9 @@ namespace forge
 
     int create_container_box(const std::filesystem::path& project_directory,
                              const Recipe& recipe,
-                             const std::optional<std::string>& profile,
-                             const std::optional<std::string>& system_profile,
+                             const BuildOptions& requested_options,
                              const ProcessRunner& process_runner,
+                             const BoxProjectBuilder& project_builder,
                              std::ostream& output,
                              std::ostream& error)
     {
@@ -697,12 +697,15 @@ namespace forge
 
       for (const auto& target : recipe.targets)
       {
+        auto target_options = requested_options;
+        target_options.target = target.name;
+
         if (create_box(
           project_directory,
           target.name,
-          profile,
-          system_profile,
+          target_options,
           process_runner,
+          project_builder,
           output,
           error
         ) != 0)
@@ -876,6 +879,25 @@ namespace forge
                  std::ostream& output,
                  std::ostream& error)
   {
+    return create_box(
+      project_directory,
+      target,
+      requested_options,
+      process_runner,
+      BoxProjectBuilder {},
+      output,
+      error
+    );
+  }
+
+  int create_box(const std::filesystem::path& project_directory,
+                 const std::optional<std::string>& target,
+                 const BuildOptions& requested_options,
+                 const ProcessRunner& process_runner,
+                 const BoxProjectBuilder& project_builder,
+                 std::ostream& output,
+                 std::ostream& error)
+  {
     Recipe recipe;
 
     if (!read_recipe(project_directory / "forge.recipe.toml", recipe, error))
@@ -885,9 +907,9 @@ namespace forge
       return create_container_box(
         project_directory,
         recipe,
-        requested_options.profile,
-        requested_options.system_profile,
+        requested_options,
         process_runner,
+        project_builder,
         output,
         error
       );
@@ -919,7 +941,11 @@ namespace forge
     if (legacy_profile == workflow_release_profile)
       options.configuration = "Release";
 
-    if (build_project(project_directory, options, process_runner, output, error) != 0)
+    const auto build_result = project_builder
+      ? project_builder(project_directory, options, process_runner, output, error)
+      : build_project(project_directory, options, process_runner, output, error);
+
+    if (build_result != 0)
       return 2;
 
     if (!is_safe_path_component(recipe.name) || !is_safe_path_component(recipe.version))
@@ -1376,6 +1402,7 @@ namespace forge
             dependency_name,
             options,
             process_runner,
+            project_builder,
             output,
             error
           ) != 0)
