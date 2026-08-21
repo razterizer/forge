@@ -349,8 +349,10 @@ Declare persistent preprocessor definitions for a legacy project target:
 defines = ["TERMIN8OR_ENABLE_AUDIO", "VERSION_MAJOR=3"]
 ```
 
-Named targets may declare their own `defines`. Definitions use `NAME` or
-`NAME=value` syntax. Add temporary definitions to a selected root build by
+Named targets may declare their own `defines`. Use `public_defines` when a
+definition is required by consumers of a library's public headers; Forge
+records it in the generated cbox and applies it to dependents. Definitions use
+`NAME` or `NAME=value` syntax. Add temporary definitions to a selected root build by
 repeating `--define`:
 
 ```sh

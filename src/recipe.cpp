@@ -922,6 +922,8 @@ namespace forge
         valid = parse_boolean(value, recipe.python_extension_with_soabi);
       else if (section == "build" && key == "defines")
         valid = parse_definitions(value, recipe.compile_definitions);
+      else if (section == "build" && key == "public_defines")
+        valid = parse_definitions(value, recipe.public_compile_definitions);
       else if (section == "build" && key == "macos_system_include_dirs")
         valid = parse_sources(value, recipe.macos_system_include_directories);
       else if (section == "build" && key == "linux_system_include_dirs")
@@ -1005,6 +1007,8 @@ namespace forge
           valid = parse_sources(value, target->windows_system_library_directories);
         else if (key == "defines")
           valid = parse_definitions(value, target->compile_definitions);
+        else if (key == "public_defines")
+          valid = parse_definitions(value, target->public_compile_definitions);
         else if (key == "runtime_files")
           valid = parse_runtime_files(value, target->runtime_files);
         else if (key == "dependencies")
@@ -1453,6 +1457,7 @@ namespace forge
     const auto base_linux_system_library_directories = recipe.linux_system_library_directories;
     const auto base_windows_system_library_directories = recipe.windows_system_library_directories;
     const auto base_compile_definitions = recipe.compile_definitions;
+    const auto base_public_compile_definitions = recipe.public_compile_definitions;
     const auto base_macos_frameworks = recipe.macos_frameworks;
     const auto base_macos_libraries = recipe.macos_libraries;
     const auto base_macos_brew_packages = recipe.macos_brew_packages;
@@ -1482,6 +1487,7 @@ namespace forge
     recipe.linux_system_library_directories = selected->linux_system_library_directories;
     recipe.windows_system_library_directories = selected->windows_system_library_directories;
     recipe.compile_definitions = selected->compile_definitions;
+    recipe.public_compile_definitions = selected->public_compile_definitions;
     recipe.macos_frameworks = selected->macos_frameworks;
     recipe.macos_libraries = selected->macos_libraries;
     recipe.macos_brew_packages = selected->macos_brew_packages;
@@ -1497,6 +1503,7 @@ namespace forge
     append(recipe.linux_system_library_directories, base_linux_system_library_directories);
     append(recipe.windows_system_library_directories, base_windows_system_library_directories);
     append(recipe.compile_definitions, base_compile_definitions);
+    append(recipe.public_compile_definitions, base_public_compile_definitions);
     append(recipe.macos_frameworks, base_macos_frameworks);
     append(recipe.macos_libraries, base_macos_libraries);
     append(recipe.macos_brew_packages, base_macos_brew_packages);

@@ -44,8 +44,10 @@ rules:
 - `[project].c_std` and named-target `c_std` select the C language standard
   for C sources. Supported values are `90`, `99`, `11`, `17`, and `23`.
   Recipes with both C and C++ sources may also declare `cpp_std`.
-- `[build].defines` and named-target `defines` declare persistent preprocessor
-  definitions. Definitions use `NAME` or `NAME=value` syntax. Repeatable
+- `[build].defines` and named-target `defines` declare persistent private
+  preprocessor definitions. `public_defines` exports definitions required by a
+  library's public headers to its cbox consumers. Definitions use `NAME` or
+  `NAME=value` syntax. Repeatable
   `forge build --define=<symbol>` options temporarily add private definitions
   to selected root builds without changing their recipes.
 - Build numbers must be non-negative.

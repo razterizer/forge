@@ -53,6 +53,7 @@ namespace forge
     std::string os;
     std::string arch;
     std::optional<ToolchainIdentity> toolchain;
+    std::vector<std::string> public_compile_definitions;
     std::vector<std::filesystem::path> macos_system_include_directories;
     std::vector<std::filesystem::path> linux_system_include_directories;
     std::vector<std::filesystem::path> windows_system_include_directories;

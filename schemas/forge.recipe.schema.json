@@ -126,6 +126,10 @@
           "$ref": "#/$defs/compileDefinitions",
           "description": "Private preprocessor definitions applied when compiling the project."
         },
+        "public_defines": {
+          "$ref": "#/$defs/compileDefinitions",
+          "description": "Preprocessor definitions exported to consumers of this project's public headers."
+        },
         "macos_system_include_dirs": {
           "$ref": "#/$defs/paths",
           "description": "macOS-only external include search directories passed to CMake as SYSTEM includes."
@@ -283,6 +287,10 @@
           "defines": {
             "$ref": "#/$defs/compileDefinitions",
             "description": "Preprocessor definitions applied when compiling this target."
+          },
+          "public_defines": {
+            "$ref": "#/$defs/compileDefinitions",
+            "description": "Preprocessor definitions exported to consumers of this target's public headers."
           },
           "runtime_files": {
             "$ref": "#/$defs/runtimeFiles",

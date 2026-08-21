@@ -1632,17 +1632,29 @@ namespace forge
                  && target_is_selected(command)
                  && active)
         {
+          bool public_definition = false;
+          bool target_definition = true;
+
           for (std::size_t index = 1; index < command.arguments.size(); ++index)
           {
             const auto& argument = command.arguments[index];
 
             if (is_cmake_scope(argument))
+            {
+              public_definition = argument == "PUBLIC" || argument == "INTERFACE";
+              target_definition = argument != "INTERFACE";
               continue;
+            }
 
             for (const auto& expanded : expand_argument(argument))
             {
               if (is_valid_compile_definition(expanded))
-                project.definitions.push_back(expanded);
+              {
+                if (target_definition)
+                  project.definitions.push_back(expanded);
+                if (public_definition)
+                  project.public_definitions.push_back(expanded);
+              }
               else if (expanded.find('$') != std::string::npos)
                 project.unresolved_properties.push_back(expanded);
             }
@@ -1701,6 +1713,7 @@ namespace forge
         &project.include_directories,
         &project.public_include_directories,
         &project.definitions,
+        &project.public_definitions,
         &project.macos_frameworks,
         &project.macos_libraries,
         &project.macos_brew_packages,

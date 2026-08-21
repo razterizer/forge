@@ -3348,7 +3348,8 @@ namespace
     );
     write_file(
       directory.path() / "App/main.c",
-      "#include <lib.h>\nint main(void) { return answer() == 42 ? 0 : 1; }\n"
+      "#include <lib.h>\n#ifndef PLATFORM_DESKTOP\n#error public library definition missing\n#endif\n"
+      "int main(void) { return answer() == 42 ? 0 : 1; }\n"
     );
     std::ostringstream output;
     std::ostringstream error;
@@ -3360,9 +3361,10 @@ namespace
     const auto recipe = read_file(directory.path() / "Lib/forge.recipe.toml");
     expect(
       contains(recipe, "defines = [\"PLATFORM_DESKTOP\"]")
+        && contains(recipe, "public_defines = [\"PLATFORM_DESKTOP\"]")
         && contains(recipe, "dependencies = [\"vendor\"]")
         && contains(recipe, "[target.vendor]"),
-      "included CMake definitions and object-library dependencies are retained"
+      "included CMake public definitions and object-library dependencies are retained"
     );
     std::ostringstream build_output;
     std::ostringstream build_error;

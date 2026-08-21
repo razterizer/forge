@@ -73,6 +73,8 @@ namespace forge
     std::vector<std::filesystem::path> linux_system_library_directories;
     std::vector<std::filesystem::path> windows_system_library_directories;
     std::vector<std::string> compile_definitions;
+    // Definitions required by consumers of this target's public headers.
+    std::vector<std::string> public_compile_definitions;
     std::vector<RuntimeFile> runtime_files;
     std::vector<std::string> dependencies;
     std::vector<std::string> macos_frameworks;
@@ -189,6 +191,7 @@ namespace forge
     std::vector<std::filesystem::path> linux_system_library_directories;
     std::vector<std::filesystem::path> windows_system_library_directories;
     std::vector<std::string> compile_definitions;
+    std::vector<std::string> public_compile_definitions;
     std::vector<std::string> macos_frameworks;
     std::vector<std::string> macos_libraries;
     std::vector<std::string> macos_brew_packages;

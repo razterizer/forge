@@ -379,6 +379,7 @@ namespace forge
           return true;
 
         if (metadata.type != "header_only"
+            || !metadata.public_compile_definitions.empty()
             || !metadata.macos_system_include_directories.empty()
             || !metadata.linux_system_include_directories.empty()
             || !metadata.windows_system_include_directories.empty()
@@ -1957,6 +1958,7 @@ namespace forge
         manifest.os,
         manifest.arch,
         manifest.toolchain,
+        manifest.public_compile_definitions,
         manifest.macos_system_include_directories,
         manifest.linux_system_include_directories,
         manifest.windows_system_include_directories,

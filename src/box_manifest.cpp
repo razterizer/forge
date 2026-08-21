@@ -207,7 +207,8 @@ namespace forge
           || !recipe.macos_brew_packages.empty()
           || !recipe.linux_libraries.empty()
           || !recipe.linux_apt_packages.empty()
-          || !recipe.windows_libraries.empty())
+          || !recipe.windows_libraries.empty()
+          || !recipe.public_compile_definitions.empty())
       {
         manifest << "\n[requirements]\n";
         write_path_array(
@@ -246,6 +247,7 @@ namespace forge
         write_string_array(manifest, "linux_libraries", recipe.linux_libraries);
         write_string_array(manifest, "linux_apt_packages", recipe.linux_apt_packages);
         write_string_array(manifest, "windows_libraries", recipe.windows_libraries);
+        write_string_array(manifest, "public_defines", recipe.public_compile_definitions);
       }
 
       for (const auto& artifact : artifacts)
@@ -513,6 +515,8 @@ namespace forge
           valid = parse_strings(value, manifest.linux_apt_packages);
         else if (identity == "requirements.windows_libraries")
           valid = parse_strings(value, manifest.windows_libraries);
+        else if (identity == "requirements.public_defines")
+          valid = parse_strings(value, manifest.public_compile_definitions);
         else if (section == "artifact" && artifact_index && key == "path")
         {
           std::string artifact_path;

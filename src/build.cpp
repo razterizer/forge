@@ -69,6 +69,7 @@ namespace forge
       std::vector<ResolvedLibrary> libraries;
       std::vector<std::filesystem::path> runtimes;
       std::vector<RuntimeAsset> runtime_assets;
+      std::vector<std::string> public_compile_definitions;
     };
 
     std::set<std::string> selector_dependency_names(const Recipe& recipe)
@@ -1714,10 +1715,26 @@ namespace forge
 
         for (const auto& definition : target.compile_definitions)
         {
+          if (std::find(
+                target.public_compile_definitions.begin(),
+                target.public_compile_definitions.end(),
+                definition
+              ) != target.public_compile_definitions.end())
+          {
+            continue;
+          }
+
           const auto definition_visibility =
             target.type == "header_only" ? "INTERFACE" : "PRIVATE";
           file
             << "target_compile_definitions(" << target_name << ' ' << definition_visibility << " \""
+            << escape_cmake(definition) << "\")\n";
+        }
+
+        for (const auto& definition : target.public_compile_definitions)
+        {
+          file
+            << "target_compile_definitions(" << target_name << ' ' << visibility << " \""
             << escape_cmake(definition) << "\")\n";
         }
 
@@ -1867,8 +1884,24 @@ namespace forge
 
       for (const auto& definition : recipe.compile_definitions)
       {
+        if (std::find(
+              recipe.public_compile_definitions.begin(),
+              recipe.public_compile_definitions.end(),
+              definition
+            ) != recipe.public_compile_definitions.end())
+        {
+          continue;
+        }
+
         file
           << "target_compile_definitions(forge_project PRIVATE \""
+          << escape_cmake(definition) << "\")\n";
+      }
+
+      for (const auto& definition : recipe.public_compile_definitions)
+      {
+        file
+          << "target_compile_definitions(forge_project PUBLIC \""
           << escape_cmake(definition) << "\")\n";
       }
 
@@ -1929,6 +1962,13 @@ namespace forge
           dependency.linux_apt_packages,
           dependency.windows_libraries
         );
+
+        for (const auto& definition : dependency.public_compile_definitions)
+        {
+          file
+            << "target_compile_definitions(forge_project PRIVATE \""
+            << escape_cmake(definition) << "\")\n";
+        }
 
         for (std::size_t library_index = 0;
              library_index < dependency.libraries.size();
@@ -2950,7 +2990,9 @@ namespace forge
           node.box_metadata ? node.box_metadata->windows_libraries : std::vector<std::string> {},
           {},
           {},
-          {}
+          {},
+          node.box_metadata ? node.box_metadata->public_compile_definitions
+                            : std::vector<std::string> {}
         };
 
       add_dependency_include_directories(resolved, node.box_metadata);
@@ -3121,6 +3163,18 @@ namespace forge
 
             for (const auto& include_directory : child_resolved.include_directories)
               add_unique_path(resolved.include_directories, include_directory);
+
+            for (const auto& definition : child_metadata.public_compile_definitions)
+            {
+              if (std::find(
+                    resolved.public_compile_definitions.begin(),
+                    resolved.public_compile_definitions.end(),
+                    definition
+                  ) == resolved.public_compile_definitions.end())
+              {
+                resolved.public_compile_definitions.push_back(definition);
+              }
+            }
 
             for (const auto& artifact : child_metadata.artifacts)
             {

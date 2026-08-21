@@ -262,6 +262,11 @@ namespace forge
         additional.definitions.begin(),
         additional.definitions.end()
       );
+      project.public_definitions.insert(
+        project.public_definitions.end(),
+        additional.public_definitions.begin(),
+        additional.public_definitions.end()
+      );
       project.macos_frameworks.insert(
         project.macos_frameworks.end(),
         additional.macos_frameworks.begin(),
@@ -310,6 +315,7 @@ namespace forge
       for (auto* values : {
         &project.include_directories,
         &project.definitions,
+        &project.public_definitions,
         &project.macos_frameworks,
         &project.macos_libraries,
         &project.linux_libraries,
@@ -1800,6 +1806,9 @@ namespace forge
         if (visual_studio_project && !visual_studio_project->definitions.empty())
           recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
 
+        if (visual_studio_project && !visual_studio_project->public_definitions.empty())
+          recipe += "public_defines = " + format_sources(visual_studio_project->public_definitions) + "\n";
+
         if (visual_studio_project)
           recipe += format_system_links(*visual_studio_project);
       }
@@ -1849,6 +1858,9 @@ namespace forge
 
           if (visual_studio_project && !visual_studio_project->definitions.empty())
             recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
+
+          if (visual_studio_project && !visual_studio_project->public_definitions.empty())
+            recipe += "public_defines = " + format_sources(visual_studio_project->public_definitions) + "\n";
 
           if (visual_studio_project)
             recipe += format_system_links(*visual_studio_project);
@@ -1905,6 +1917,9 @@ namespace forge
         if (visual_studio_project && !visual_studio_project->definitions.empty())
           recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
 
+        if (visual_studio_project && !visual_studio_project->public_definitions.empty())
+          recipe += "public_defines = " + format_sources(visual_studio_project->public_definitions) + "\n";
+
         if (visual_studio_project)
           recipe += format_system_links(*visual_studio_project);
 
@@ -1948,6 +1963,9 @@ namespace forge
           if (!target.definitions.empty())
             recipe += "defines = " + format_sources(target.definitions) + "\n";
 
+          if (!target.public_definitions.empty())
+            recipe += "public_defines = " + format_sources(target.public_definitions) + "\n";
+
           recipe += format_system_links(target);
         }
 
@@ -1979,6 +1997,7 @@ namespace forge
             || (visual_studio_project
                 && (visual_studio_project->python_extension
                     || !visual_studio_project->definitions.empty()
+                    || !visual_studio_project->public_definitions.empty()
                     || !format_system_links(*visual_studio_project).empty())))
         {
           recipe += "\n[build]\n";
@@ -2006,6 +2025,9 @@ namespace forge
 
           if (visual_studio_project && !visual_studio_project->definitions.empty())
             recipe += "defines = " + format_sources(visual_studio_project->definitions) + "\n";
+
+          if (visual_studio_project && !visual_studio_project->public_definitions.empty())
+            recipe += "public_defines = " + format_sources(visual_studio_project->public_definitions) + "\n";
 
           if (visual_studio_project)
             recipe += format_system_links(*visual_studio_project);
