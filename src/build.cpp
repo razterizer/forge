@@ -1535,6 +1535,16 @@ namespace forge
           }
         );
       };
+      const auto uses_objective_c = [](const auto& sources)
+      {
+        return std::ranges::any_of(
+          sources,
+          [](const std::filesystem::path& source)
+          {
+            return source.extension() == ".m";
+          }
+        );
+      };
       const auto uses_c = [](const auto& sources)
       {
         return std::ranges::any_of(
@@ -1558,11 +1568,13 @@ namespace forge
         );
       };
       auto has_objective_cpp_sources = uses_objective_cpp(recipe.sources);
+      auto has_objective_c_sources = uses_objective_c(recipe.sources);
       auto has_c_sources = uses_c(recipe.sources) || recipe.c_standard != 0;
 
       for (const auto& target : recipe.internal_targets)
       {
         has_objective_cpp_sources = has_objective_cpp_sources || uses_objective_cpp(target.sources);
+        has_objective_c_sources = has_objective_c_sources || uses_objective_c(target.sources);
         has_c_sources = has_c_sources || uses_c(target.sources) || target.c_standard != 0;
       }
 
@@ -1570,6 +1582,7 @@ namespace forge
         << "cmake_minimum_required(VERSION 3.25)\n"
         << "project(forge_project LANGUAGES CXX"
         << (has_c_sources ? " C" : "")
+        << (has_objective_c_sources ? " OBJC" : "")
         << (has_objective_cpp_sources ? " OBJCXX" : "")
         << ")\n\n"
         << "if(WIN32)\n"

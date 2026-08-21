@@ -3295,6 +3295,84 @@ namespace
     expect(build_error.str().empty(), "ordered CMake workspace build does not write an error");
   }
 
+  void test_adopt_imports_included_cmake_configuration_and_object_targets()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "project(ConfiguredSuite)\ninclude(Options.cmake)\n"
+      "add_subdirectory(Lib)\nadd_subdirectory(App)\n"
+    );
+    write_file(
+      directory.path() / "Options.cmake",
+      "enum_option(PLATFORM \"Desktop;Headless\" \"Platform to build for\")\n"
+    );
+    write_file(
+      directory.path() / "Lib/CMakeLists.txt",
+      "project(Lib C)\ninclude(Platform)\n"
+      "add_library(Lib STATIC library.c ${LIB_SOURCES})\n"
+      "target_include_directories(Lib PUBLIC include)\n"
+      "target_compile_definitions(Lib PUBLIC ${PLATFORM_DEFINE})\n"
+    );
+    write_file(
+      directory.path() / "cmake/Platform.cmake",
+      "if(\"${PLATFORM}\" MATCHES \"Desktop\")\n"
+      "  set(PLATFORM_DEFINE PLATFORM_DESKTOP)\n"
+      "  add_subdirectory(external/vendor)\n"
+      "  list(APPEND LIB_SOURCES $<TARGET_OBJECTS:vendor>)\n"
+      "endif()\n"
+    );
+    write_file(
+      directory.path() / "Lib/library.c",
+      "#include <lib.h>\n#ifndef PLATFORM_DESKTOP\n#error expected desktop platform\n#endif\n"
+      "int answer(void) { return vendor_answer() + 1; }\n"
+    );
+    write_file(
+      directory.path() / "Lib/include/lib.h",
+      "int vendor_answer(void);\nint answer(void);\n"
+    );
+    write_file(
+      directory.path() / "Lib/external/vendor/CMakeLists.txt",
+      "project(Vendor C)\nadd_subdirectory(src)\n"
+    );
+    write_file(
+      directory.path() / "Lib/external/vendor/src/CMakeLists.txt",
+      "add_library(vendor OBJECT vendor.c)\n"
+    );
+    write_file(directory.path() / "Lib/external/vendor/src/vendor.c", "int vendor_answer(void) { return 41; }\n");
+    write_file(
+      directory.path() / "App/CMakeLists.txt",
+      "project(App C)\nadd_executable(App main.c)\n"
+    );
+    write_file(
+      directory.path() / "App/main.c",
+      "#include <lib.h>\nint main(void) { return answer() == 42 ? 0 : 1; }\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt imports included CMake platform configuration"
+    );
+    const auto recipe = read_file(directory.path() / "Lib/forge.recipe.toml");
+    expect(
+      contains(recipe, "defines = [\"PLATFORM_DESKTOP\"]")
+        && contains(recipe, "dependencies = [\"vendor\"]")
+        && contains(recipe, "[target.vendor]"),
+      "included CMake definitions and object-library dependencies are retained"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "workspace builds through included CMake configuration and object library"
+    );
+    expect(build_error.str().empty(), "included CMake configuration build does not write an error");
+  }
+
   void test_adopt_imports_visual_studio_solution()
   {
     TemporaryDirectory directory;
@@ -8742,6 +8820,7 @@ int main()
   test_adopt_infers_library_and_single_program_from_mirrored_projects();
   test_adopt_imports_cmake_superproject_as_workspace();
   test_adopt_preserves_cmake_superproject_dependency_order();
+  test_adopt_imports_included_cmake_configuration_and_object_targets();
   test_adopt_imports_visual_studio_solution();
   test_adopt_reports_unresolved_dependency_includes();
   test_adopt_reports_include_directory_dependency_evidence();

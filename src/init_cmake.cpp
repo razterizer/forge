@@ -25,6 +25,9 @@ namespace forge
       std::string name;
       std::vector<std::string> arguments;
       std::filesystem::path directory;
+      // CMAKE_CURRENT_SOURCE_DIR.  This remains the caller's source
+      // directory while an included CMake module has its own list directory.
+      std::filesystem::path source_directory;
     };
 
     std::vector<std::string> cmake_arguments(std::string_view value)
@@ -76,7 +79,8 @@ namespace forge
 
     std::vector<CMakeCommand> cmake_commands(
       std::string_view contents,
-      const std::filesystem::path& directory = {})
+      const std::filesystem::path& directory = {},
+      const std::filesystem::path& source_directory = {})
     {
       std::vector<CMakeCommand> commands;
       std::size_t position = 0;
@@ -159,7 +163,8 @@ namespace forge
           commands.push_back({
             std::move(command_name),
             cmake_arguments(contents.substr(arguments_begin, position - arguments_begin - 1)),
-            directory
+            directory,
+            source_directory.empty() ? directory : source_directory
           });
         }
       }
@@ -498,14 +503,59 @@ namespace forge
       std::ostream& error)
     {
       std::vector<CMakeCommand> result;
-      std::set<std::filesystem::path> visited;
+      std::set<std::pair<std::filesystem::path, std::filesystem::path>> visited;
 
-      const std::function<void(const std::filesystem::path&)> visit =
-        [&](const std::filesystem::path& path)
+      const auto resolve_include = [](std::string_view argument,
+                                      const std::filesystem::path& list_directory,
+                                      const std::filesystem::path& source_directory)
+        -> std::optional<std::filesystem::path>
+      {
+        if (argument.empty() || argument.find('$') != std::string_view::npos)
+          return std::nullopt;
+
+        const auto include = std::filesystem::path { argument };
+        std::vector<std::filesystem::path> candidates;
+        const auto add_candidates = [&candidates, &include](const std::filesystem::path& directory)
+        {
+          candidates.push_back(directory / include);
+
+          if (!include.has_extension())
+            candidates.push_back(directory / (include.string() + ".cmake"));
+        };
+
+        if (include.is_absolute())
+          add_candidates({});
+        else
+        {
+          add_candidates(list_directory);
+          add_candidates(source_directory);
+
+          for (auto ancestor = source_directory;
+               !ancestor.empty() && ancestor != ancestor.root_path();
+               ancestor = ancestor.parent_path())
+          {
+            add_candidates(ancestor / "cmake");
+          }
+        }
+
+        for (const auto& candidate : candidates)
+        {
+          if (std::filesystem::is_regular_file(candidate))
+            return candidate.lexically_normal();
+        }
+
+        return std::nullopt;
+      };
+
+      const std::function<void(const std::filesystem::path&, const std::filesystem::path&, bool)> visit =
+        [&](const std::filesystem::path& path,
+            const std::filesystem::path& source_directory,
+            bool visit_subdirectories)
       {
         const auto normalized = path.lexically_normal();
+        const auto normalized_source_directory = source_directory.lexically_normal();
 
-        if (!visited.insert(normalized).second)
+        if (!visited.insert({ normalized, normalized_source_directory }).second)
           return;
 
         std::ifstream file { normalized };
@@ -520,13 +570,31 @@ namespace forge
           std::istreambuf_iterator<char> { file },
           std::istreambuf_iterator<char> {}
         };
-        const auto commands = cmake_commands(contents, normalized.parent_path());
+        const auto commands = cmake_commands(
+          contents,
+          normalized.parent_path(),
+          normalized_source_directory
+        );
 
         for (const auto& command : commands)
         {
           result.push_back(command);
 
-          if (command.name != "add_subdirectory" || command.arguments.empty())
+          if (command.name == "include" && !command.arguments.empty())
+          {
+            if (const auto included = resolve_include(
+                  command.arguments.front(), command.directory, command.source_directory
+                ))
+            {
+              visit(*included, command.source_directory, visit_subdirectories);
+            }
+
+            continue;
+          }
+
+          if (!visit_subdirectories
+              || command.name != "add_subdirectory"
+              || command.arguments.empty())
             continue;
 
           const auto& argument = command.arguments.front();
@@ -534,19 +602,50 @@ namespace forge
           if (argument.find('$') != std::string::npos)
             continue;
 
-          const auto subdirectory = (normalized.parent_path() / argument).lexically_normal();
+          const auto subdirectory = (command.source_directory / argument).lexically_normal();
 
-          if (is_cmake_dependency_directory(subdirectory)
+          if ((is_cmake_dependency_directory(subdirectory)
+               && !is_cmake_dependency_directory(cmake_path.parent_path()))
               || !std::filesystem::is_regular_file(subdirectory / "CMakeLists.txt"))
           {
             continue;
           }
 
-          visit(subdirectory / "CMakeLists.txt");
+          visit(subdirectory / "CMakeLists.txt", subdirectory, true);
         }
       };
 
-      visit(cmake_path);
+      const auto component_directory = cmake_path.parent_path();
+      const auto parent_directory = component_directory.parent_path();
+      const auto parent_cmake = parent_directory / "CMakeLists.txt";
+
+      // A child project inherits the options and modules established by its
+      // superproject.  Read those settings without descending into siblings.
+      if (std::filesystem::is_regular_file(parent_cmake))
+      {
+        std::ifstream parent_file { parent_cmake };
+        const std::string parent_contents {
+          std::istreambuf_iterator<char> { parent_file },
+          std::istreambuf_iterator<char> {}
+        };
+        const auto parent_commands = cmake_commands(parent_contents, parent_directory, parent_directory);
+        const auto contains_component = std::ranges::any_of(
+          parent_commands,
+          [&component_directory, &parent_directory](const CMakeCommand& command)
+          {
+            return command.name == "add_subdirectory"
+              && !command.arguments.empty()
+              && command.arguments.front().find('$') == std::string::npos
+              && (parent_directory / command.arguments.front()).lexically_normal()
+                == component_directory;
+          }
+        );
+
+        if (contains_component)
+          visit(parent_cmake, parent_directory, false);
+      }
+
+      visit(cmake_path, component_directory, true);
       return result;
     }
 
@@ -571,6 +670,12 @@ namespace forge
       project.name = path.parent_path().filename().string();
       const auto directory = path.parent_path();
       const auto commands = cmake_project_commands(path, error);
+      const auto source_is_within_project = [&directory](const std::filesystem::path& source_directory)
+      {
+        const auto relative = source_directory.lexically_relative(directory);
+        return source_directory == directory
+          || (!relative.empty() && !relative.is_absolute() && relative.begin()->string() != "..");
+      };
       int function_depth = 0;
 
       for (const auto& command : commands)
@@ -590,7 +695,9 @@ namespace forge
         if (function_depth != 0)
           continue;
 
-        if (command.name == "project" && !command.arguments.empty())
+        if (command.name == "project"
+            && command.source_directory == directory
+            && !command.arguments.empty())
         {
           project.name = command.arguments.front();
           break;
@@ -633,7 +740,7 @@ namespace forge
 
         if (command.name == "option" && command.arguments.size() > 2)
           options[command.arguments.front()] = cmake_option_value(command.arguments.back());
-        else if (is_target_declaration(command))
+        else if (is_target_declaration(command) && source_is_within_project(command.source_directory))
         {
           const auto name = command.arguments.empty()
             ? std::string {}
@@ -904,14 +1011,42 @@ namespace forge
             return options.contains(name) || variables.contains(name);
           }
 
-          const auto find_result = [](std::string_view name)
+          const auto find_result = [&variables](std::string_view name)
           {
             if (name.starts_with("${") && name.ends_with('}'))
-              return std::string { name.substr(2, name.size() - 3) };
+            {
+              const auto variable = std::string { name.substr(2, name.size() - 3) };
+
+              if (variables.contains(variable) && !variables.at(variable).empty())
+                return variables.at(variable).front();
+
+              return variable;
+            }
 
             return std::string { name };
           };
           const auto name = find_result(tokens[position]);
+
+          if (position + 2 < tokens.size()
+              && (tokens[position + 1] == "STREQUAL"
+                  || tokens[position + 1] == "EQUAL"
+                  || tokens[position + 1] == "MATCHES"))
+          {
+            const auto expected = find_result(tokens[position + 2]);
+            position += 3;
+
+            if (tokens[position - 2] != "MATCHES")
+              return name == expected;
+
+            try
+            {
+              return std::regex_search(name, std::regex { expected });
+            }
+            catch (const std::regex_error&)
+            {
+              return false;
+            }
+          }
 
           if (foreach_find_patterns.contains(name)
               && position + 2 < tokens.size()
@@ -970,6 +1105,20 @@ namespace forge
         std::string_view argument,
         const std::filesystem::path& current_directory)
       {
+        constexpr std::string_view target_objects_prefix { "$<TARGET_OBJECTS:" };
+
+        if (argument.starts_with(target_objects_prefix) && argument.ends_with('>'))
+        {
+          const auto target = argument.substr(
+            target_objects_prefix.size(), argument.size() - target_objects_prefix.size() - 1
+          );
+
+          if (!target.empty() && target.find('$') == std::string_view::npos)
+            project.cmake_link_dependencies.emplace_back(target);
+
+          return;
+        }
+
         const auto expanded = replace_cmake_paths(
           std::string { argument }, directory, current_directory, project.name
         );
@@ -990,7 +1139,8 @@ namespace forge
 
         const auto extension = std::filesystem::path { *relative }.extension().string();
 
-        if (extension == ".c" || extension == ".cpp" || extension == ".cc" || extension == ".cxx" || extension == ".mm")
+        if (extension == ".c" || extension == ".cpp" || extension == ".cc" || extension == ".cxx"
+            || extension == ".m" || extension == ".mm")
           project.sources.push_back(*relative);
         else if (extension == ".h" || extension == ".hpp" || extension == ".hh")
           project.headers.push_back(*relative);
@@ -1101,6 +1251,29 @@ namespace forge
           {
             read_standard(project.c_standard);
           }
+        }
+        else if (command.name == "enum_option" && command.arguments.size() > 1 && active)
+        {
+          // CMake projects often define a platform option through a helper
+          // function.  Its first choice is the default when no cache value is
+          // supplied, matching the common enum_option implementation.
+          auto value = command.arguments[1];
+          const auto separator = value.find(';');
+
+          if (separator != std::string::npos)
+            value.resize(separator);
+
+          variables[command.arguments.front()] = { std::move(value) };
+        }
+        else if (command.name == "cmake_dependent_option"
+                 && command.arguments.size() > 4
+                 && active)
+        {
+          const auto enabled = cmake_option_value(command.arguments[2])
+            && condition_value({ command.arguments[3] });
+          variables[command.arguments.front()] = {
+            enabled ? command.arguments[2] : command.arguments[4]
+          };
         }
         else if (command.name == "foreach" && command.arguments.size() > 1 && active)
         {
@@ -1236,11 +1409,12 @@ namespace forge
         {
           project.has_cmake_subprojects = true;
 
-          if (command.directory == directory
+          if (command.source_directory == directory
               && !command.arguments.empty()
               && command.arguments.front().find('$') == std::string::npos)
           {
-            const auto subdirectory = (directory / command.arguments.front()).lexically_normal();
+            const auto subdirectory =
+              (command.source_directory / command.arguments.front()).lexically_normal();
 
             if (std::filesystem::is_regular_file(subdirectory / "CMakeLists.txt"))
             {
@@ -1278,47 +1452,48 @@ namespace forge
         {
           for (std::size_t index = 1; index < command.arguments.size(); ++index)
           {
-            const auto& argument = command.arguments[index];
-
-            if (is_cmake_scope(argument))
-              continue;
-
-            if (platform == "macos" && argument.starts_with("-framework "))
+            for (const auto& argument : expand_argument(command.arguments[index]))
             {
-              const auto framework = argument.substr(std::string_view { "-framework " }.size());
+              if (is_cmake_scope(argument))
+                continue;
 
-              if (!framework.empty())
-                project.macos_frameworks.push_back(framework);
+              if (platform == "macos" && argument.starts_with("-framework "))
+              {
+                const auto framework = argument.substr(std::string_view { "-framework " }.size());
 
-              continue;
+                if (!framework.empty())
+                  project.macos_frameworks.push_back(framework);
+
+                continue;
+              }
+
+              if (argument.starts_with("${") && argument.ends_with('}'))
+              {
+                const auto variable = argument.substr(2, argument.size() - 3);
+
+                if (platform == "macos" && frameworks.contains(variable))
+                  project.macos_frameworks.push_back(frameworks.at(variable));
+              }
+              else if (pkg_config_targets.contains(argument) && platform == "linux")
+                project.linux_libraries.push_back(pkg_config_targets.at(argument));
+              else if (argument.find('$') == std::string::npos
+                       && argument.find("::") == std::string::npos)
+              {
+                project.cmake_link_dependencies.push_back(argument);
+                add_known_system_link(argument);
+
+                auto* libraries =
+                  platform == "macos" ? &project.macos_libraries
+                  : platform == "linux" ? &project.linux_libraries
+                  : platform == "windows" ? &project.windows_libraries
+                  : nullptr;
+
+                if (libraries)
+                  libraries->push_back(argument);
+              }
+              else if (argument.find('$') == std::string::npos)
+                project.cmake_link_dependencies.push_back(argument);
             }
-
-            if (argument.starts_with("${") && argument.ends_with('}'))
-            {
-              const auto variable = argument.substr(2, argument.size() - 3);
-
-              if (platform == "macos" && frameworks.contains(variable))
-                project.macos_frameworks.push_back(frameworks.at(variable));
-            }
-            else if (pkg_config_targets.contains(argument) && platform == "linux")
-              project.linux_libraries.push_back(pkg_config_targets.at(argument));
-            else if (argument.find('$') == std::string::npos
-                     && argument.find("::") == std::string::npos)
-            {
-              project.cmake_link_dependencies.push_back(argument);
-              add_known_system_link(argument);
-
-              auto* libraries =
-                platform == "macos" ? &project.macos_libraries
-                : platform == "linux" ? &project.linux_libraries
-                : platform == "windows" ? &project.windows_libraries
-                : nullptr;
-
-              if (libraries)
-                libraries->push_back(argument);
-            }
-            else if (argument.find('$') == std::string::npos)
-              project.cmake_link_dependencies.push_back(argument);
           }
         }
         else if (command.name == "project"
@@ -1461,10 +1636,16 @@ namespace forge
           {
             const auto& argument = command.arguments[index];
 
-            if (!is_cmake_scope(argument) && is_valid_compile_definition(argument))
-              project.definitions.push_back(argument);
-            else if (argument.find('$') != std::string::npos)
-              project.unresolved_properties.push_back(argument);
+            if (is_cmake_scope(argument))
+              continue;
+
+            for (const auto& expanded : expand_argument(argument))
+            {
+              if (is_valid_compile_definition(expanded))
+                project.definitions.push_back(expanded);
+              else if (expanded.find('$') != std::string::npos)
+                project.unresolved_properties.push_back(expanded);
+            }
           }
         }
         else if (command.name == "set_target_properties"
