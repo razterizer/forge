@@ -1581,12 +1581,14 @@ namespace forge
 
         const auto project = (cmake_path.parent_path() / argument).lexically_normal();
 
-        if (std::filesystem::is_regular_file(project / "CMakeLists.txt"))
+        if (std::filesystem::is_regular_file(project / "CMakeLists.txt")
+            && std::ranges::find(projects, project) == projects.end())
           projects.push_back(project);
       }
 
-      std::ranges::sort(projects);
-      projects.erase(std::unique(projects.begin(), projects.end()), projects.end());
+      // Keep the declaration order.  CMake superprojects conventionally add
+      // libraries before their consumers; adoption relies on that order so a
+      // consumer can discover an already-created sibling Forge recipe.
       return projects;
     }
 

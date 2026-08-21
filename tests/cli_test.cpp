@@ -3242,6 +3242,59 @@ namespace
     expect(build_error.str().empty(), "imported CMake workspace build does not write an error");
   }
 
+  void test_adopt_preserves_cmake_superproject_dependency_order()
+  {
+    TemporaryDirectory directory;
+    constexpr std::array adopt_arguments { std::string_view { "adopt" } };
+    constexpr std::array build_arguments { std::string_view { "build" } };
+    write_file(
+      directory.path() / "CMakeLists.txt",
+      "project(OrderedSuite)\nadd_subdirectory(Library)\nadd_subdirectory(Examples)\n"
+    );
+    write_file(
+      directory.path() / "Library/CMakeLists.txt",
+      "project(Library)\nadd_library(Library STATIC library.c)\n"
+      "target_include_directories(Library PUBLIC include)\n"
+    );
+    write_file(
+      directory.path() / "Library/library.c",
+      "#include <library.h>\nint answer(void) { return 42; }\n"
+    );
+    write_file(directory.path() / "Library/include/library.h", "int answer(void);\n");
+    write_file(
+      directory.path() / "Examples/CMakeLists.txt",
+      "project(Examples)\nadd_executable(example main.c)\n"
+    );
+    write_file(
+      directory.path() / "Examples/main.c",
+      "#include <library.h>\nint main(void) { return answer() == 42 ? 0 : 1; }\n"
+    );
+    std::ostringstream output;
+    std::ostringstream error;
+
+    expect(
+      forge::cli::run(adopt_arguments, directory.path(), output, error) == 0,
+      "adopt preserves CMake superproject declaration order"
+    );
+    const auto workspace = read_file(directory.path() / "forge.workspace.toml");
+    const auto examples_recipe = read_file(directory.path() / "Examples/forge.recipe.toml");
+    expect(
+      contains(workspace, "projects = [\"Library\", \"Examples\"]"),
+      "CMake workspace retains library-before-consumer project order"
+    );
+    expect(
+      contains(examples_recipe, "Library = { path = \"../Library\" }"),
+      "later CMake subprojects infer dependencies on earlier library projects"
+    );
+    std::ostringstream build_output;
+    std::ostringstream build_error;
+    expect(
+      forge::cli::run(build_arguments, directory.path(), build_output, build_error) == 0,
+      "CMake workspace builds when the library precedes an alphabetically earlier consumer"
+    );
+    expect(build_error.str().empty(), "ordered CMake workspace build does not write an error");
+  }
+
   void test_adopt_imports_visual_studio_solution()
   {
     TemporaryDirectory directory;
@@ -8688,6 +8741,7 @@ int main()
   test_adopt_imports_xcode_project();
   test_adopt_infers_library_and_single_program_from_mirrored_projects();
   test_adopt_imports_cmake_superproject_as_workspace();
+  test_adopt_preserves_cmake_superproject_dependency_order();
   test_adopt_imports_visual_studio_solution();
   test_adopt_reports_unresolved_dependency_includes();
   test_adopt_reports_include_directory_dependency_evidence();
