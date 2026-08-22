@@ -209,6 +209,43 @@ workspace, box, runtime-assembly, and hosted-release milestones. The remaining
 roadmap focuses on making those features compose cleanly and stabilizing them
 for 1.0.
 
+### Adoption confidence and language expansion
+
+Forge should extend to new ecosystems only after its evidence-based C/C++
+adoption is dependable across a broad, continuously exercised corpus of real
+repositories. The order matters:
+
+1. **Make C/C++ detective work boringly reliable.** Continue improving source,
+   header, entry-point, local-dependency, runtime-asset, and platform-requirement
+   inference. Track clean adoptions and regressions across representative pure
+   C, pure C++, and mixed C/C++ repositories, so each repair prevents the same
+   class of incident from returning.
+2. **Use build metadata as validated evidence.** Once the heuristic baseline is
+   stable, increasingly rely on CMake and Visual Studio (`.vcxproj`) hints for
+   targets, public interfaces, compile definitions, dependencies, generated
+   files, and resource-copy rules. Imported metadata must be checked against
+   the project tree and the resulting Forge build; it is a foundation to
+   validate and enrich, not an instruction to reproduce blindly.
+3. **Add ecosystems in adoption order, not merely popularity order.** Start
+   with Python because it complements existing native-extension support, then
+   JavaScript/TypeScript, Go, Kotlin/Java, and Jupyter notebooks as a
+   Python-based runnable-documentation layer.
+
+The initial goals for those ecosystems are deliberately narrow:
+
+- Python: adopt `pyproject.toml`, virtual-environment and test commands,
+  Python packages, wheels, and native extension modules.
+- JavaScript/TypeScript: adopt `package.json`, committed lockfiles, and
+  declared build, test, and runnable scripts.
+- Go: adopt `go.mod`, module dependencies, packages, commands, and tests.
+- Kotlin/Java: adopt Gradle projects, tests, and JVM artifacts.
+- Jupyter: execute and validate notebooks through the adopted Python
+  environment; notebooks are not a replacement build backend.
+
+Release criterion: Forge can adopt, build, test, run, clean, and reproduce a
+curated cross-language repository corpus, with every imported declaration
+validated by the selected ecosystem's native tooling.
+
 ### Workspace and adoption follow-up
 
 - Add workspace release preparation and publication.
