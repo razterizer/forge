@@ -29,7 +29,10 @@
   them to downstream consumers.
 - Library CBoxes package configured build-header trees as well as public
   headers, including common implementation-header extensions. Dynamic
-  libraries and CBoxes no longer require public headers.
+  libraries no longer require public headers.
+- CBoxes also support headerless static components, allowing adopted CMake
+  `OBJECT` library dependencies to build and package as part of their parent
+  library's link closure.
 - Source dependencies can consume component CBoxes and their embedded CBox
   dependencies, preserving the nested static-library link closure.
 - The top-level help banner now displays the installed Forge version.
@@ -41,6 +44,8 @@
   control-character or colon paths, and case-colliding paths before extraction.
 - Failed recipe parsing is atomic: invalid sections, keys, or values leave the
   caller's existing recipe unchanged.
+- Fixed profile-scoped local and Git source dependencies: a root-only profile
+  is no longer forwarded to a dependency that has no matching selector rules.
 - Added `scripts/validate-showcases.sh`, an isolated clean-checkout validation
   suite for Raylib, Meshoptimizer, AssetKit, assetkit-blender, fmt, and spdlog.
   It verifies both runtime assets and CBox/package dependency chains.
