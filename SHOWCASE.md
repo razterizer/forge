@@ -20,19 +20,20 @@ The walkthroughs were verified on macOS arm64 with AppleClang and Homebrew.
 The walkthroughs below include historical compatibility and package-selection
 steps, so they are not all candidates for unattended adoption validation. The
 separate suite records only demos that must work from a clean checkout without
-editing a generated recipe. Run it against local sibling checkouts:
+editing a generated recipe. After building Forge, run it directly from this
+checkout:
 
 ```sh
 scripts/validate-showcases.sh \
-  --root ~/source/github \
   --forge /path/to/forge/build/dev/forge \
-  --clean --run
+  --run
 ```
 
-`--clean` removes untracked and ignored files in every registered checkout,
-including prior `.forge/` state, and therefore refuses tracked changes. The
-current suite adopts and builds Raylib's `textures_tiled_drawing` and
-`audio_module_playing` demos, verifies that their resources are staged, then
+The runner clones the pinned Raylib 6.0 source into a fresh temporary sandbox,
+then removes it when validation finishes. It never changes an existing Raylib
+checkout; pass `--keep` to retain the sandbox for inspection. The current
+suite adopts and builds Raylib's `textures_tiled_drawing` and
+`audio_sound_loading` demos, verifies that their resources are staged, then
 launches them for manual graphics and audio verification. Add a showcase to
 the script only after it satisfies the no-tinkering adoption gate.
 

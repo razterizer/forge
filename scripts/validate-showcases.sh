@@ -3,43 +3,38 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-usage: scripts/validate-showcases.sh --root <checkout-directory> [--forge <path>] [--clean] [--run]
+usage: scripts/validate-showcases.sh [--forge <path>] [--keep] [--run]
 
-Validate every no-tinkering showcase registered by this script.
+Clone and validate every no-tinkering showcase in an isolated temporary
+sandbox. The script downloads the pinned Raylib source from GitHub.
 
-  --root <directory>  Directory containing the showcase checkouts (required).
-  --forge <path>      Forge executable (default: this checkout's build/dev/forge).
-  --clean             Remove untracked and ignored files from each checkout
-                      before adoption. Required for a fresh-state validation.
-  --run               Launch each validated demo after it builds. Close each
-                      graphical demo to continue to the next one.
+  --forge <path>  Forge executable (default: this checkout's build/dev/forge).
+  --keep          Preserve the temporary sandbox after validation and print its
+                  path for inspection.
+  --run           Launch each validated demo after it builds. Close each
+                  graphical demo to continue to the next one.
 
-The current suite validates Raylib's textures_tiled_drawing and
-audio_module_playing demos. A successful build verifies adoption and runtime
+The current suite validates Raylib 6.0's textures_tiled_drawing and
+audio_sound_loading demos. A successful build verifies adoption and runtime
 resource staging; --run is the manual graphics and audio verification step.
 EOF
 }
 
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-root=""
 forge="$script_directory/../build/dev/forge"
-clean=false
+raylib_revision="dbc56a87da87d973a9c5baa4e7438a9d20121d28"
+keep=false
 run=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --root)
-      [[ $# -ge 2 ]] || { usage >&2; exit 2; }
-      root="$2"
-      shift 2
-      ;;
     --forge)
       [[ $# -ge 2 ]] || { usage >&2; exit 2; }
       forge="$2"
       shift 2
       ;;
-    --clean)
-      clean=true
+    --keep)
+      keep=true
       shift
       ;;
     --run)
@@ -57,33 +52,26 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -n "$root" ]] || { usage >&2; exit 2; }
-[[ -d "$root" ]] || { echo "showcase validation: root does not exist: $root" >&2; exit 2; }
 if [[ "$forge" != /* ]]; then
   forge="$(cd "$(dirname "$forge")" && pwd)/$(basename "$forge")"
 fi
-[[ -x "$forge" ]] || { echo "showcase validation: Forge executable is not runnable: $forge" >&2; exit 2; }
 
-prepare_checkout() {
-  local project="$1"
-
-  [[ -d "$project/.git" ]] || {
-    echo "showcase validation: expected a Git checkout: $project" >&2
-    exit 2
-  }
-
-  if ! git -C "$project" diff --quiet || ! git -C "$project" diff --cached --quiet; then
-    echo "showcase validation: tracked changes prevent a clean validation: $project" >&2
-    exit 2
-  fi
-
-  if [[ "$clean" != true ]]; then
-    echo "showcase validation: --clean is required to remove prior Forge state in $project" >&2
-    exit 2
-  fi
-
-  git -C "$project" clean -fdx
+[[ -x "$forge" ]] || {
+  echo "showcase validation: Forge executable is not runnable: $forge" >&2
+  echo "Build Forge first with: cmake --preset dev && cmake --build --preset dev" >&2
+  exit 2
 }
+
+sandbox="$(mktemp -d "${TMPDIR:-/tmp}/forge-showcases.XXXXXX")"
+
+cleanup() {
+  if [[ "$keep" == true ]]; then
+    echo "Showcase sandbox preserved at $sandbox"
+  else
+    rm -rf -- "$sandbox"
+  fi
+}
+trap cleanup EXIT
 
 require_staged_file() {
   local project="$1"
@@ -96,22 +84,34 @@ require_staged_file() {
 }
 
 validate_raylib() {
-  local project="$root/raylib"
+  local project="$sandbox/raylib"
 
-  prepare_checkout "$project"
+  git clone --depth 1 --branch 6.0 https://github.com/raysan5/raylib.git "$project"
+  [[ "$(git -C "$project" rev-parse HEAD)" == "$raylib_revision" ]] || {
+    echo "showcase validation: Raylib 6.0 did not resolve to its validated revision" >&2
+    exit 1
+  }
   (
     cd "$project"
-    "$forge" adopt
+    if ! "$forge" adopt > "$sandbox/raylib-adopt.log" 2>&1; then
+      cat "$sandbox/raylib-adopt.log" >&2
+      exit 1
+    fi
+  )
+  echo "Adopted Raylib (full log: $sandbox/raylib-adopt.log)"
+
+  (
+    cd "$project/examples"
 
     "$forge" build textures_tiled_drawing
-    require_staged_file "$project" patterns.png
+    require_staged_file "$project/examples" patterns.png
 
-    "$forge" build audio_module_playing
-    require_staged_file "$project" sound.wav
+    "$forge" build audio_sound_loading
+    require_staged_file "$project/examples" sound.wav
 
     if [[ "$run" == true ]]; then
       "$forge" run textures_tiled_drawing
-      "$forge" run audio_module_playing
+      "$forge" run audio_sound_loading
     fi
   )
 }
