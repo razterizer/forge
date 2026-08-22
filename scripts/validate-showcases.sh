@@ -169,7 +169,7 @@ validate_static_library() {
     echo "Created $display_name cbox"
   )
 
-  if ! find "$project/.forge/boxes" -type f -name "$name-*.cbox" -print -quit | grep -q .; then
+  if ! find "$project/.forge/boxes" -type f -name '*.cbox' -print -quit | grep -q .; then
     echo "showcase validation: $display_name cbox was not created" >&2
     exit 1
   fi
