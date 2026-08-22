@@ -15,6 +15,27 @@ It demonstrates three related Forge capabilities working together:
 
 The walkthroughs were verified on macOS arm64 with AppleClang and Homebrew.
 
+## Validated no-tinkering suite
+
+The walkthroughs below include historical compatibility and package-selection
+steps, so they are not all candidates for unattended adoption validation. The
+separate suite records only demos that must work from a clean checkout without
+editing a generated recipe. Run it against local sibling checkouts:
+
+```sh
+scripts/validate-showcases.sh \
+  --root ~/source/github \
+  --forge /path/to/forge/build/dev/forge \
+  --clean --run
+```
+
+`--clean` removes untracked and ignored files in every registered checkout,
+including prior `.forge/` state, and therefore refuses tracked changes. The
+current suite adopts and builds Raylib's `textures_tiled_drawing` and
+`audio_module_playing` demos, verifies that their resources are staged, then
+launches them for manual graphics and audio verification. Add a showcase to
+the script only after it satisfies the no-tinkering adoption gate.
+
 ## Package a native dependency chain for a Blender extension
 
 [meshoptimizer](https://github.com/zeux/meshoptimizer),
