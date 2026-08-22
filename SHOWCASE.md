@@ -46,6 +46,28 @@ retain the sandbox for inspection.
 Add a showcase to the script only after it satisfies the no-tinkering adoption
 gate.
 
+### Deferred examples
+
+These projects are intentionally excluded from the unattended suite until the
+underlying clean-checkout build issue is resolved. They are useful regression
+candidates, not successful showcase adoptions.
+
+| Showcase | Current status |
+| --- | --- |
+| Catch2 | Its untouched checkout builds with errors. |
+| EnTT | Its untouched checkout builds with errors. |
+| EnTT-Pacman | Deferred with EnTT; it cannot be a clean adoption while its EnTT dependency fails. |
+
+### Next candidates
+
+- AssetKit and assetkit-blender appear to adopt, build, and package without
+  recipe edits. Add them only after a fresh, pinned, submodule-aware dependency
+  chain validates in the sandbox; assetkit-blender is a non-runnable Python
+  extension, so a Python import check is the appropriate final assertion.
+- StellarEngine appears to build and run well. It needs the same fresh-sandbox
+  validation, including its declared platform dependencies and runtime
+  resources, before joining the unattended suite.
+
 ## Package a native dependency chain for a Blender extension
 
 [meshoptimizer](https://github.com/zeux/meshoptimizer),
