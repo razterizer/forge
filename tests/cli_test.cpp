@@ -3348,8 +3348,7 @@ namespace
     );
     write_file(
       directory.path() / "App/main.c",
-      "#include <lib.h>\n#ifndef PLATFORM_DESKTOP\n#error public library definition missing\n#endif\n"
-      "int main(void) { return answer() == 42 ? 0 : 1; }\n"
+      "#include <lib.h>\nint main(void) { return answer() == 42 ? 0 : 1; }\n"
     );
     std::ostringstream output;
     std::ostringstream error;
@@ -4083,12 +4082,16 @@ namespace
       "  std::ifstream file { \"Blocks.txt\" };\n"
       "  TextureFile::load(texture, \"colors.tx\");\n"
       "  sprite->load_frame(0, \"background.tx\");\n"
+      "  LoadTexture(\"patterns.png\");\n"
+      "  LoadSound(\"sound.wav\");\n"
       "  return 0;\n"
       "}\n"
     );
     write_file(directory.path() / "Examples/Blocks.txt", "0000..007F; Basic Latin\n");
     write_file(directory.path() / "Examples/colors.tx", "colors\n");
     write_file(directory.path() / "Examples/background.tx", "background\n");
+    write_file(directory.path() / "Examples/patterns.png", "patterns\n");
+    write_file(directory.path() / "Examples/sound.wav", "sound\n");
     write_file(directory.path() / "Examples/bin/Blocks.txt", "generated copy\n");
 
     expect(
@@ -4110,6 +4113,11 @@ namespace
       )
         && contains(recipe, "{ source = \"Examples/colors.tx\", destination = \"colors.tx\" }"),
       "adopt infers runtime assets loaded through domain-specific load functions"
+    );
+    expect(
+      contains(recipe, "{ source = \"Examples/patterns.png\", destination = \"patterns.png\" }")
+        && contains(recipe, "{ source = \"Examples/sound.wav\", destination = \"sound.wav\" }"),
+      "adopt infers runtime assets loaded through PascalCase C API functions"
     );
     expect(
       contains(output.str(), "Examples/Blocks.txt -> Blocks.txt"),

@@ -451,7 +451,10 @@ namespace forge
         std::string_view { ".load(" },
         std::string_view { "::load_" },
         std::string_view { "->load_" },
-        std::string_view { ".load_" }
+        std::string_view { ".load_" },
+        // C APIs commonly use PascalCase loaders, including raylib's
+        // LoadTexture(), LoadSound(), and LoadMusicStream().
+        std::string_view { "Load" }
       };
 
       return std::ranges::any_of(
