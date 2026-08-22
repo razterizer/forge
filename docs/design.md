@@ -226,6 +226,16 @@ repositories. The order matters:
    files, and resource-copy rules. Imported metadata must be checked against
    the project tree and the resulting Forge build; it is a foundation to
    validate and enrich, not an instruction to reproduce blindly.
+   Provide matching `forge adopt` hint arguments so users can resolve the
+   remaining ambiguity without hand-editing a generated recipe. Hints should
+   cover the intended target and type, entry points, public-header and include
+   roots, source ownership, runtime assets, dependencies, and platform
+   requirements. Each hint must be validated against the project tree, shown
+   in the adoption report as user-supplied evidence, and either applied to the
+   recipe or rejected with a precise explanation. Repeated adoption should be
+   able to retain these choices through an explicit, source-controlled
+   adoption-hints file rather than silently preserving arbitrary generated
+   recipe edits.
 3. **Add ecosystems in adoption order, not merely popularity order.** Start
    with Python because it complements existing native-extension support, then
    JavaScript/TypeScript, Go, Kotlin/Java, and Jupyter notebooks as a
