@@ -261,8 +261,6 @@ validated by the selected ecosystem's native tooling.
 - Add workspace release preparation and publication.
 - Make repeated `forge adopt` runs safe, preserving intentional recipe and
   workflow edits while reporting newly discovered or changed metadata.
-- Add consistency checks across release notes, recipe versions, build numbers,
-  and generated version headers before release tagging.
 - Improve ambiguous source ownership and dependency resolution.
 - Finish CMake, Visual Studio solution, and Xcode workspace interoperability
   for mixed and mirrored project layouts.
@@ -275,7 +273,6 @@ parallel hand-written build graph.
 
 ### Reproducible dependency follow-up
 
-- Support dependencies of `imported_library` packages.
 - Lock every remotely resolved artifact, including target-qualified boxes,
   selected components, hosted workflow assets, and imported-library inputs.
 - Define version-constraint syntax and deterministic update behavior.
@@ -284,22 +281,10 @@ parallel hand-written build graph.
 - Improve dependency diagnostics for conflicts, unavailable components,
   incompatible boxes, and missing import profiles for the current target.
 - Improve imported-library ergonomics:
-  - Add clearer docs and help for `imported_library`.
-  - Add clearer recipe examples for import profiles.
   - Harden OpenAL-style Windows-only dependency boxes as a reference case.
-  - Support header-only adapters that depend on platform-specific imported
-    libraries.
-  - Let release workflows gracefully skip unsupported host targets.
-- Keep workflow-specific release dependency conventions reproducible:
-  - Use `[profile.workflow-release.dependencies]` for release-only
-    dependency replacements.
-  - Make adoption leave clear TODOs for local dependencies that need
-    reproducible workflow replacements.
-  - Document cross-target updates such as
-    `forge update dep --profile=workflow-release --target=windows-x86_64`.
-- Keep `release-boxes` and other hosted release asset jobs updateable, ensure
-  workflow jobs choose the correct OS and toolchain behavior, and preserve
-  `--skip-unsupported` behavior for platform-specific imported libraries.
+- Keep the generated release-asset jobs covered across operating systems and
+  toolchains, including `--skip-unsupported` behavior for platform-specific
+  imported libraries.
 
 Release criterion: a committed recipe and lockfile reproduce the same complete
 dependency graph and selected artifacts on every supported host.
@@ -307,11 +292,8 @@ dependency graph and selected artifacts on every supported host.
 ### Declarative workflow follow-up
 
 - Extend declarative release variants with platform-specific contents.
-- Generate release manifests containing artifacts, checksums, components,
-  dependencies, and toolchain identities.
-- Extend the existing `release-git --dry-run` preflight to release preparation
-  and publication.
-- Validate Forge-managed version headers during release preflight.
+- Extend release manifests beyond their existing artifact and checksum records
+  with component, dependency, and toolchain identities.
 - Finish thin, updateable CI adapters around locally runnable Forge commands.
 - Deprecate repo-local `tag_release.sh` scripts by letting Forge own version
   bumping, version-header updates, release notes, tags, and release
@@ -350,12 +332,9 @@ Asciiroid_Belt project family.
 ### Immediate next candidates
 
 1. Harden `imported_library` workflows with OpenAL as the reference case.
-2. Finish and document `workflow-release` dependency locking across targets.
-3. Improve adopt/new version-header setup and release notes consistency.
-4. Add roadmap and docs for package distribution, starting with `.deb` and
+2. Improve adopt/new version-header setup and release notes consistency.
+3. Add roadmap and docs for package distribution, starting with `.deb` and
    APT-style installation.
-5. Expand end-to-end tests around header-only adapter packages depending on
-   imported dynamic libraries.
 
 ## Post-1.0 directions
 
