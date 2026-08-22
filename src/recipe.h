@@ -142,12 +142,12 @@ namespace forge
 
   struct BuildSelectionRequest
   {
-    std::optional<std::string> target;
-    std::optional<std::string> profile;
-    std::optional<std::string> system_profile;
-    std::optional<std::string> style;
+    std::optional<std::string> target = std::nullopt;
+    std::optional<std::string> profile = std::nullopt;
+    std::optional<std::string> system_profile = std::nullopt;
+    std::optional<std::string> style = std::nullopt;
     std::string platform;
-    std::optional<std::string> selector_configuration;
+    std::optional<std::string> selector_configuration = std::nullopt;
     std::string build_configuration = "Debug";
     ProfileResolution profile_resolution = ProfileResolution::automatic;
     bool require_profile = true;

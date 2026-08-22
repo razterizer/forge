@@ -831,7 +831,7 @@ namespace forge
       );
       const auto source_language = c_source_count == 0
         ? "C++"
-        : c_source_count == static_cast<decltype(c_source_count)>(scan.sources.size())
+        : c_source_count == std::ssize(scan.sources)
         ? "C"
         : "C/C++";
 

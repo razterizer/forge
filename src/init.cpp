@@ -1249,7 +1249,7 @@ namespace forge
       const auto rebase_paths = [&](auto& paths, const std::filesystem::path& prefix)
       {
         for (auto& path : paths)
-          path = (prefix / path).lexically_normal();
+          path = (prefix / path).lexically_normal().generic_string();
       };
       const auto under_directory = [](const std::filesystem::path& path,
                                       const std::filesystem::path& directory)
@@ -2195,7 +2195,7 @@ namespace forge
     );
     const auto source_language = c_source_count == 0
       ? "C++"
-      : c_source_count == static_cast<decltype(c_source_count)>(sources.size())
+      : c_source_count == std::ssize(sources)
       ? "C"
       : "C/C++";
 
