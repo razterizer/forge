@@ -5,6 +5,7 @@
 #include "sha256.h"
 #include "test_support.h"
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fstream>
