@@ -29,10 +29,10 @@ scripts/validate-showcases.sh \
   --run
 ```
 
-The runner clones pinned Raylib 6.0, Meshoptimizer 1.2, fmt 12.2.0, and
-spdlog 1.17.0 sources into a fresh temporary sandbox, then removes it when
-validation finishes. It never changes an existing checkout; pass `--keep` to
-retain the sandbox for inspection.
+The runner clones pinned Raylib 6.0, Meshoptimizer 1.2, AssetKit 0.7.1,
+assetkit-blender 0.2.6, fmt 12.2.0, and spdlog 1.17.0 sources into a fresh
+temporary sandbox, then removes it when validation finishes. It never changes
+an existing checkout; pass `--keep` to retain the sandbox for inspection.
 
 ### Registered examples
 
@@ -40,6 +40,8 @@ retain the sandbox for inspection.
 | --- | --- | --- |
 | Raylib 6.0 | Builds `textures_tiled_drawing` and `audio_sound_loading`, verifies staged resources, and runs them with `--run` | Runtime demos; no separate showcase cbox |
 | Meshoptimizer 1.2 | Adopts and builds the static library | Creates and verifies a cbox |
+| AssetKit 0.7.1 | Initializes submodules, adopts, and packages the `assetkit` component using the sibling Meshoptimizer checkout | Creates and verifies the component cbox and embedded dependency closure |
+| assetkit-blender 0.2.6 | Adopts and builds the C Python extension using the sibling AssetKit component | Creates and verifies a cbox plus the extension module in its Python package |
 | fmt 12.2.0 | Adopts and builds the static library | Creates and verifies a cbox |
 | spdlog 1.17.0 | Adopts and builds the static library | Creates and verifies a cbox |
 
@@ -60,10 +62,6 @@ candidates, not successful showcase adoptions.
 
 ### Next candidates
 
-- AssetKit and assetkit-blender appear to adopt, build, and package without
-  recipe edits. Add them only after a fresh, pinned, submodule-aware dependency
-  chain validates in the sandbox; assetkit-blender is a non-runnable Python
-  extension, so a Python import check is the appropriate final assertion.
 - StellarEngine appears to build and run well. It needs the same fresh-sandbox
   validation, including its declared platform dependencies and runtime
   resources, before joining the unattended suite.

@@ -6,8 +6,8 @@ usage() {
 usage: scripts/validate-showcases.sh [--forge <path>] [--keep] [--run]
 
 Clone and validate every no-tinkering showcase in an isolated temporary
-sandbox. The script downloads pinned Raylib, Meshoptimizer, fmt, and spdlog
-sources from GitHub.
+sandbox. The script downloads pinned Raylib, Meshoptimizer, AssetKit,
+assetkit-blender, fmt, and spdlog sources from GitHub.
 
   --forge <path>  Forge executable (default: this checkout's build/dev/forge).
   --keep          Preserve the temporary sandbox after validation and print its
@@ -16,10 +16,10 @@ sources from GitHub.
                   graphical demo to continue to the next one.
 
 The current suite validates Raylib 6.0's textures_tiled_drawing and
-audio_sound_loading demos, plus static-library cboxes for Meshoptimizer 1.2,
-fmt 12.2.0, and spdlog 1.17.0. A successful build verifies adoption and
-runtime resource staging; --run is the manual graphics and audio verification
-step.
+audio_sound_loading demos; static-library cboxes for Meshoptimizer 1.2,
+AssetKit 0.7.1, fmt 12.2.0, and spdlog 1.17.0; and assetkit-blender 0.2.6's
+Python extension module. A successful build verifies adoption and runtime
+resource staging; --run is the manual graphics and audio verification step.
 EOF
 }
 
@@ -27,6 +27,8 @@ script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 forge="$script_directory/../build/dev/forge"
 raylib_revision="dbc56a87da87d973a9c5baa4e7438a9d20121d28"
 meshoptimizer_revision="9d9890c73011d75920af614485296d1e03e95448"
+assetkit_revision="f17a266b90af0682158aebfe11bae0f259d93141"
+assetkit_blender_revision="b748497cdb138fbdd7b07b3b579e1dac4e7b7585"
 fmt_revision="1be298e1bd68957e4cd352e1f676f00e07dcfb57"
 spdlog_revision="79524ddd08a4ec981b7fea76afd08ee05f83755d"
 keep=false
@@ -115,6 +117,16 @@ run_logged() {
   fi
 }
 
+require_cbox() {
+  local project="$1"
+  local display_name="$2"
+
+  if ! find "$project/.forge/boxes" -type f -name '*.cbox' -print -quit | grep -q .; then
+    echo "showcase validation: $display_name cbox was not created" >&2
+    exit 1
+  fi
+}
+
 section() {
   printf '\n========== %s ==========\n' "$1"
 }
@@ -169,18 +181,62 @@ validate_static_library() {
     echo "Created $display_name cbox"
   )
 
-  if ! find "$project/.forge/boxes" -type f -name '*.cbox' -print -quit | grep -q .; then
-    echo "showcase validation: $display_name cbox was not created" >&2
+  require_cbox "$project" "$display_name"
+}
+
+validate_assetkit() {
+  local project="$sandbox/AssetKit"
+
+  git clone --depth 1 --recurse-submodules --shallow-submodules --branch v0.7.1 \
+    https://github.com/recp/AssetKit.git "$project"
+  [[ "$(git -C "$project" rev-parse HEAD)" == "$assetkit_revision" ]] || {
+    echo "showcase validation: AssetKit v0.7.1 did not resolve to its validated revision" >&2
+    exit 1
+  }
+  adopt_project "$project" assetkit
+  (
+    cd "$project"
+    run_logged assetkit-box "$forge" box create assetkit
+    echo "Created AssetKit assetkit component cbox"
+  )
+  require_cbox "$project" AssetKit
+}
+
+validate_assetkit_blender() {
+  local project="$sandbox/assetkit-blender"
+
+  git clone --depth 1 --branch v0.2.6 https://github.com/recp/assetkit-blender.git "$project"
+  [[ "$(git -C "$project" rev-parse HEAD)" == "$assetkit_blender_revision" ]] || {
+    echo "showcase validation: assetkit-blender v0.2.6 did not resolve to its validated revision" >&2
+    exit 1
+  }
+  adopt_project "$project" assetkit-blender
+  (
+    cd "$project"
+    run_logged assetkit-blender-build "$forge" build
+    echo "Built assetkit-blender Python extension"
+    run_logged assetkit-blender-box "$forge" box create
+    echo "Created assetkit-blender cbox"
+  )
+  require_cbox "$project" assetkit-blender
+
+  if ! find "$project/src/assetkit_blender" -maxdepth 1 -type f \
+    -name '_assetkit_blender.*' -print -quit | grep -q .; then
+    echo "showcase validation: assetkit-blender extension was not written to its Python package" >&2
     exit 1
   fi
 }
 
-section "[1/4] Raylib 6.0 runtime-resource showcase"
+section "[1/6] Raylib 6.0 runtime-resource showcase"
 validate_raylib
-section "[2/4] Meshoptimizer 1.2 static-library cbox"
+section "[2/6] Meshoptimizer 1.2 static-library cbox"
 validate_static_library meshoptimizer Meshoptimizer https://github.com/zeux/meshoptimizer.git v1.2 "$meshoptimizer_revision"
-section "[3/4] fmt 12.2.0 static-library cbox"
+section "[3/6] AssetKit 0.7.1 component cbox"
+validate_assetkit
+section "[4/6] assetkit-blender 0.2.6 Python extension cbox"
+validate_assetkit_blender
+section "[5/6] fmt 12.2.0 static-library cbox"
 validate_static_library fmt fmt https://github.com/fmtlib/fmt.git 12.2.0 "$fmt_revision"
-section "[4/4] spdlog 1.17.0 static-library cbox"
+section "[6/6] spdlog 1.17.0 static-library cbox"
 validate_static_library spdlog spdlog https://github.com/gabime/spdlog.git v1.17.0 "$spdlog_revision"
 section "Validated all registered no-tinkering showcase demos"
