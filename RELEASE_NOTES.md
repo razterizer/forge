@@ -1,5 +1,61 @@
 # Release notes
 
+## 0.19.0
+
+### Adoption and language support
+
+- Forge now adopts and builds C, C++, and mixed-language projects. Recipes and
+  named targets can use `c_std` to select C90, C99, C11, C17, or C23 alongside
+  their C++ standard.
+- CMake adoption follows considerably more real-world project structure:
+  included platform configuration, nested target sources, loop-expanded target
+  properties, transitive include directories, public headers and definitions,
+  and library-before-consumer superproject ordering. It avoids unavailable
+  include paths and no longer lets project headers shadow system headers.
+- CMake projects whose selected target links private `add_subdirectory()`
+  libraries now adopt those libraries as named components, choose the primary
+  target by default, and retain the complete link closure when building and
+  packaging.
+- `Python3_add_library(... MODULE ... WITH_SOABI)` targets are adopted as
+  Python extension modules. Forge retains their import name, ABI suffix, and
+  package output directory when building and boxing them.
+- Runtime-asset inference now recognizes PascalCase C API loaders such as
+  `LoadTexture` and `LoadSound`.
+
+### Building and packaging
+
+- `public_defines` is available for root and named targets. Forge imports CMake
+  `PUBLIC` and `INTERFACE` definitions, records them in CBoxes, and applies
+  them to downstream consumers.
+- Library CBoxes package configured build-header trees as well as public
+  headers, including common implementation-header extensions. Dynamic
+  libraries and CBoxes no longer require public headers.
+- Source dependencies can consume component CBoxes and their embedded CBox
+  dependencies, preserving the nested static-library link closure.
+- The top-level help banner now displays the installed Forge version.
+
+### Reliability and validation
+
+- CBox archive validation is stricter: it validates the complete central
+  directory and rejects multi-disk or ZIP64 archives, symbolic links,
+  control-character or colon paths, and case-colliding paths before extraction.
+- Failed recipe parsing is atomic: invalid sections, keys, or values leave the
+  caller's existing recipe unchanged.
+- Added `scripts/validate-showcases.sh`, an isolated clean-checkout validation
+  suite for Raylib, Meshoptimizer, AssetKit, assetkit-blender, fmt, and spdlog.
+  It verifies both runtime assets and CBox/package dependency chains.
+
+### Documentation and maintenance
+
+- Expanded the recipe schema and documentation for C projects, Python
+  extensions, exported definitions, and the validated showcase chain. Corrected
+  the self-hosting source manifest, test labels, and workflow marker so the
+  documented commands match current Forge behavior.
+- Internal build selection, workspace routing, dependency cache and lockfile
+  handling, run-cache metadata, and CBox creation paths were consolidated to
+  keep build, box, release, and workspace commands on the same resolution
+  model.
+
 ## 0.18.1
 
 - Source dependencies now rebuild when switching build configuration, preventing
