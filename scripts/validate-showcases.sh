@@ -115,6 +115,10 @@ run_logged() {
   fi
 }
 
+section() {
+  printf '\n========== %s ==========\n' "$1"
+}
+
 validate_raylib() {
   local project="$sandbox/raylib"
 
@@ -171,12 +175,12 @@ validate_static_library() {
   fi
 }
 
-echo "[1/4] Raylib runtime-resource showcase"
+section "[1/4] Raylib 6.0 runtime-resource showcase"
 validate_raylib
-echo "[2/4] Meshoptimizer static-library showcase"
+section "[2/4] Meshoptimizer 1.2 static-library cbox"
 validate_static_library meshoptimizer Meshoptimizer https://github.com/zeux/meshoptimizer.git v1.2 "$meshoptimizer_revision"
-echo "[3/4] fmt static-library showcase"
+section "[3/4] fmt 12.2.0 static-library cbox"
 validate_static_library fmt fmt https://github.com/fmtlib/fmt.git 12.2.0 "$fmt_revision"
-echo "[4/4] spdlog static-library showcase"
+section "[4/4] spdlog 1.17.0 static-library cbox"
 validate_static_library spdlog spdlog https://github.com/gabime/spdlog.git v1.17.0 "$spdlog_revision"
-echo "Validated all registered no-tinkering showcase demos."
+section "Validated all registered no-tinkering showcase demos"

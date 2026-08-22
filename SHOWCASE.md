@@ -32,12 +32,19 @@ scripts/validate-showcases.sh \
 The runner clones pinned Raylib 6.0, Meshoptimizer 1.2, fmt 12.2.0, and
 spdlog 1.17.0 sources into a fresh temporary sandbox, then removes it when
 validation finishes. It never changes an existing checkout; pass `--keep` to
-retain the sandbox for inspection. The current suite adopts and builds
-Raylib's `textures_tiled_drawing` and `audio_sound_loading` demos, verifies
-that their resources are staged, and creates static-library cboxes for
-Meshoptimizer, fmt, and spdlog. With `--run`, it launches the Raylib demos for
-manual graphics and audio verification. Add a showcase to the script only
-after it satisfies the no-tinkering adoption gate.
+retain the sandbox for inspection.
+
+### Registered examples
+
+| Showcase | Validation | Package output |
+| --- | --- | --- |
+| Raylib 6.0 | Builds `textures_tiled_drawing` and `audio_sound_loading`, verifies staged resources, and runs them with `--run` | Runtime demos; no separate showcase cbox |
+| Meshoptimizer 1.2 | Adopts and builds the static library | Creates and verifies a cbox |
+| fmt 12.2.0 | Adopts and builds the static library | Creates and verifies a cbox |
+| spdlog 1.17.0 | Adopts and builds the static library | Creates and verifies a cbox |
+
+Add a showcase to the script only after it satisfies the no-tinkering adoption
+gate.
 
 ## Package a native dependency chain for a Blender extension
 
