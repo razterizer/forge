@@ -761,7 +761,6 @@ namespace forge
                || executable_count + runtime_asset_count != manifest.artifacts.size()))
           || (manifest.type == "static_library"
               && (library_count != 1
-                  || header_count == 0
                   || library_count + header_count + runtime_asset_count
                      != manifest.artifacts.size()))
           || (manifest.type == "dynamic_library"

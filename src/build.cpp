@@ -2699,7 +2699,14 @@ namespace forge
 
           selected_dependency_profile = effective_selection.legacy_profile;
 
-          if (!selected_dependency_profile && !effective_selection.selectors.profile.empty())
+          // A profile selector only belongs to a dependency when its selector
+          // rules can affect that dependency.  Passing a root-only legacy
+          // profile to an unprofiled source dependency makes box creation
+          // reject an otherwise valid project.
+          if (!selected_dependency_profile
+              && (!dependency_recipe.build_rules.empty()
+                  || !dependency_recipe.dependency_rules.empty())
+              && !effective_selection.selectors.profile.empty())
             selected_dependency_profile = effective_selection.selectors.profile;
 
           if (resolver.options.system_profile
@@ -3714,9 +3721,12 @@ namespace forge
         return 2;
       }
 
-      if (target.public_headers.empty() && target.type != "dynamic_library")
+      // CMake OBJECT libraries become private static components.  They need
+      // sources, but do not expose a public interface of their own.
+      if (target.public_headers.empty() && target.type == "header_only")
       {
-        error << "forge: internal library target '" << target.name << "' requires public headers\n";
+        error << "forge: internal header-only target '" << target.name
+              << "' requires public headers\n";
         return 2;
       }
 
@@ -3805,7 +3815,8 @@ namespace forge
       }
     }
 
-    if ((recipe.type == "static_library" || recipe.type == "header_only")
+    if ((recipe.type == "header_only"
+         || (recipe.type == "static_library" && !recipe.selected_target))
         && recipe.public_headers.empty())
     {
       error << "forge: library projects require public headers\n";
