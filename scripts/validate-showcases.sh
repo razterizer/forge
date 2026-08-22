@@ -6,7 +6,8 @@ usage() {
 usage: scripts/validate-showcases.sh [--forge <path>] [--keep] [--run]
 
 Clone and validate every no-tinkering showcase in an isolated temporary
-sandbox. The script downloads the pinned Raylib source from GitHub.
+sandbox. The script downloads pinned Raylib and Meshoptimizer sources from
+GitHub.
 
   --forge <path>  Forge executable (default: this checkout's build/dev/forge).
   --keep          Preserve the temporary sandbox after validation and print its
@@ -15,14 +16,16 @@ sandbox. The script downloads the pinned Raylib source from GitHub.
                   graphical demo to continue to the next one.
 
 The current suite validates Raylib 6.0's textures_tiled_drawing and
-audio_sound_loading demos. A successful build verifies adoption and runtime
-resource staging; --run is the manual graphics and audio verification step.
+audio_sound_loading demos, plus Meshoptimizer 1.2's static-library cbox. A
+successful build verifies adoption and runtime resource staging; --run is the
+manual graphics and audio verification step.
 EOF
 }
 
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 forge="$script_directory/../build/dev/forge"
 raylib_revision="dbc56a87da87d973a9c5baa4e7438a9d20121d28"
+meshoptimizer_revision="9d9890c73011d75920af614485296d1e03e95448"
 keep=false
 run=false
 
@@ -83,6 +86,32 @@ require_staged_file() {
   fi
 }
 
+adopt_project() {
+  local project="$1"
+  local name="$2"
+  local log="$sandbox/$name-adopt.log"
+
+  (
+    cd "$project"
+    if ! "$forge" adopt > "$log" 2>&1; then
+      cat "$log" >&2
+      exit 1
+    fi
+  )
+  echo "Adopted $name (full log: $log)"
+}
+
+run_logged() {
+  local name="$1"
+  shift
+  local log="$sandbox/$name.log"
+
+  if ! "$@" > "$log" 2>&1; then
+    cat "$log" >&2
+    exit 1
+  fi
+}
+
 validate_raylib() {
   local project="$sandbox/raylib"
 
@@ -91,22 +120,17 @@ validate_raylib() {
     echo "showcase validation: Raylib 6.0 did not resolve to its validated revision" >&2
     exit 1
   }
-  (
-    cd "$project"
-    if ! "$forge" adopt > "$sandbox/raylib-adopt.log" 2>&1; then
-      cat "$sandbox/raylib-adopt.log" >&2
-      exit 1
-    fi
-  )
-  echo "Adopted Raylib (full log: $sandbox/raylib-adopt.log)"
+  adopt_project "$project" raylib
 
   (
     cd "$project/examples"
 
-    "$forge" build textures_tiled_drawing
+    run_logged raylib-textures-build "$forge" build textures_tiled_drawing
+    echo "Built Raylib textures_tiled_drawing"
     require_staged_file "$project/examples" patterns.png
 
-    "$forge" build audio_sound_loading
+    run_logged raylib-audio-build "$forge" build audio_sound_loading
+    echo "Built Raylib audio_sound_loading"
     require_staged_file "$project/examples" sound.wav
 
     if [[ "$run" == true ]]; then
@@ -116,6 +140,31 @@ validate_raylib() {
   )
 }
 
-echo "[1/1] Raylib runtime-resource showcase"
+validate_meshoptimizer() {
+  local project="$sandbox/meshoptimizer"
+
+  git clone --depth 1 --branch v1.2 https://github.com/zeux/meshoptimizer.git "$project"
+  [[ "$(git -C "$project" rev-parse HEAD)" == "$meshoptimizer_revision" ]] || {
+    echo "showcase validation: Meshoptimizer v1.2 did not resolve to its validated revision" >&2
+    exit 1
+  }
+  adopt_project "$project" meshoptimizer
+  (
+    cd "$project"
+    run_logged meshoptimizer-build "$forge" build
+    echo "Built Meshoptimizer"
+    run_logged meshoptimizer-box "$forge" box create
+    echo "Created Meshoptimizer cbox"
+  )
+
+  if ! find "$project/.forge/boxes" -type f -name 'meshoptimizer-*.cbox' -print -quit | grep -q .; then
+    echo "showcase validation: Meshoptimizer cbox was not created" >&2
+    exit 1
+  fi
+}
+
+echo "[1/2] Raylib runtime-resource showcase"
 validate_raylib
+echo "[2/2] Meshoptimizer static-library showcase"
+validate_meshoptimizer
 echo "Validated all registered no-tinkering showcase demos."
