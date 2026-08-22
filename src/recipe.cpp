@@ -811,7 +811,7 @@ namespace forge
   }
 
   bool read_recipe(const std::filesystem::path& path,
-                   Recipe& recipe,
+                   Recipe& result,
                    std::ostream& error)
   {
     std::ifstream file { path };
@@ -822,6 +822,7 @@ namespace forge
       return false;
     }
 
+    Recipe recipe;
     std::string section;
     std::vector<TomlStatement> statements;
     std::size_t invalid_line = 0;
@@ -840,6 +841,13 @@ namespace forge
       if (content.front() == '[' && content.back() == ']')
       {
         section = std::string { trim(content.substr(1, content.size() - 2)) };
+
+        if (section.empty())
+        {
+          error << "forge: invalid recipe section on line " << line_number << '\n';
+          return false;
+        }
+
         continue;
       }
 
@@ -853,6 +861,13 @@ namespace forge
 
       const auto key = trim(content.substr(0, equals));
       const auto value = trim(content.substr(equals + 1));
+
+      if (key.empty())
+      {
+        error << "forge: invalid recipe key on line " << line_number << '\n';
+        return false;
+      }
+
       bool valid = true;
 
       if (section == "project" && key == "name")
@@ -1344,6 +1359,7 @@ namespace forge
       }
     }
 
+    result = std::move(recipe);
     return true;
   }
 

@@ -141,6 +141,34 @@ namespace
     expect(error.str().empty(), "valid TOML recipe writes no error");
   }
 
+  void test_recipe_failure_does_not_mutate_output()
+  {
+    TemporaryDirectory directory;
+    std::ofstream recipe_file { directory.path() / "forge.recipe.toml" };
+    recipe_file
+      << "[project]\n"
+      << "name = \"candidate\"\n"
+      << "version = \"0.1.0\"\n"
+      << "type = \"executable\"\n"
+      << "cpp_std = invalid\n";
+    recipe_file.close();
+
+    forge::Recipe recipe;
+    recipe.name = "preserved";
+    recipe.version = "9.9.9";
+    std::ostringstream error;
+
+    expect(
+      !forge::read_recipe(directory.path() / "forge.recipe.toml", recipe, error),
+      "recipe rejects invalid values"
+    );
+    expect(
+      recipe.name == "preserved" && recipe.version == "9.9.9",
+      "failed recipe parsing preserves the caller's existing value"
+    );
+    expect(contains(error.str(), "invalid recipe value"), "invalid recipe has a useful error");
+  }
+
   void write_u16(std::ofstream& file, std::uint16_t value)
   {
     file.put(static_cast<char>(value & 0xff));
@@ -2614,6 +2642,7 @@ namespace
 int main()
 {
   test_recipe_accepts_toml_comments_multiline_arrays_and_escapes();
+  test_recipe_failure_does_not_mutate_output();
   test_build_generates_cmake_and_commands();
   test_build_generates_c_cmake();
   test_build_generates_static_library();

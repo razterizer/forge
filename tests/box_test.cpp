@@ -2,6 +2,7 @@
 #include "fprocess.h"
 #include "sha256.h"
 #include "test_support.h"
+#include "zip.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -63,20 +64,22 @@ namespace
       << "runtime = \"default\"\n";
   }
 
-  void write_u16(std::ofstream& file, std::uint16_t value)
+  void write_u16(std::ostream& file, std::uint16_t value)
   {
     file.put(static_cast<char>(value & 0xff));
     file.put(static_cast<char>((value >> 8) & 0xff));
   }
 
-  void write_u32(std::ofstream& file, std::uint32_t value)
+  void write_u32(std::ostream& file, std::uint32_t value)
   {
     write_u16(file, static_cast<std::uint16_t>(value & 0xffff));
     write_u16(file, static_cast<std::uint16_t>((value >> 16) & 0xffff));
   }
 
   void write_test_zip(const std::filesystem::path& path,
-                      const std::vector<std::string>& entries)
+                      const std::vector<std::string>& entries,
+                      std::uint16_t version_made_by = 20,
+                      std::uint32_t external_attributes = 0)
   {
     std::ofstream file { path, std::ios::binary };
     const auto central_offset = static_cast<std::uint32_t>(file.tellp());
@@ -84,7 +87,7 @@ namespace
     for (const auto& entry : entries)
     {
       write_u32(file, 0x02014b50);
-      write_u16(file, 20);
+      write_u16(file, version_made_by);
       write_u16(file, 20);
       write_u16(file, 0);
       write_u16(file, 0);
@@ -98,7 +101,7 @@ namespace
       write_u16(file, 0);
       write_u16(file, 0);
       write_u16(file, 0);
-      write_u32(file, 0);
+      write_u32(file, external_attributes);
       write_u32(file, 0);
       file << entry;
     }
@@ -762,6 +765,58 @@ namespace
     expect(contains(error.str(), "unsafe archive entry"), "unsafe archive entry has a useful error");
   }
 
+  void test_zip_reader_rejects_inconsistent_central_directory_size()
+  {
+    TemporaryDirectory directory;
+    const auto box = directory.path() / "malformed.cbox";
+    write_test_zip(box, { "cbox.toml" });
+
+    std::fstream file { box, std::ios::in | std::ios::out | std::ios::binary };
+    file.seekp(-10, std::ios::end);
+    write_u32(file, 0);
+    file.close();
+
+    std::vector<std::string> entries { "unchanged" };
+    std::ostringstream error;
+
+    expect(
+      !forge::read_zip_entries(box, entries, error),
+      "ZIP reader rejects a central directory whose declared size is inconsistent"
+    );
+    expect(entries.empty(), "failed ZIP reads do not retain stale entries");
+    expect(contains(error.str(), "invalid ZIP directory"), "malformed ZIP has a useful error");
+  }
+
+  void test_zip_reader_rejects_symbolic_link_entry()
+  {
+    TemporaryDirectory directory;
+    const auto box = directory.path() / "symlink.cbox";
+    write_test_zip(box, { "cbox.toml" }, 0x0314, 0120000U << 16);
+    std::vector<std::string> entries;
+    std::ostringstream error;
+
+    expect(
+      !forge::read_zip_entries(box, entries, error),
+      "ZIP reader rejects symbolic links before extraction"
+    );
+    expect(contains(error.str(), "unsupported symbolic link"), "symbolic link ZIP has a useful error");
+  }
+
+  void test_zip_reader_rejects_case_colliding_entries()
+  {
+    TemporaryDirectory directory;
+    const auto box = directory.path() / "case-collision.cbox";
+    write_test_zip(box, { "cbox.toml", "bin/Hello", "bin/hello" });
+    std::vector<std::string> entries;
+    std::ostringstream error;
+
+    expect(
+      !forge::read_zip_entries(box, entries, error),
+      "ZIP reader rejects entries that collide on case-insensitive filesystems"
+    );
+    expect(contains(error.str(), "case-colliding"), "case-colliding ZIP has a useful error");
+  }
+
   void test_sha256_known_value()
   {
     TemporaryDirectory directory;
@@ -820,6 +875,9 @@ int main()
   test_verify_rejects_unsupported_format();
   test_verify_rejects_unsafe_artifact_path();
   test_verify_rejects_unsafe_archive_entry();
+  test_zip_reader_rejects_inconsistent_central_directory_size();
+  test_zip_reader_rejects_symbolic_link_entry();
+  test_zip_reader_rejects_case_colliding_entries();
   test_sha256_known_value();
   test_extract_refuses_existing_destination();
 
