@@ -60,4 +60,4 @@ add_executable(forge_aggregate_box_e2e_tests
 target_link_libraries(forge_aggregate_box_e2e_tests PRIVATE forge::core)
 
 add_test(NAME forge.aggregate-box.e2e COMMAND forge_aggregate_box_e2e_tests)
-set_tests_properties(forge.aggregate-box.e2e PROPERTIES LABELS "integration;unit")
+set_tests_properties(forge.aggregate-box.e2e PROPERTIES LABELS integration)

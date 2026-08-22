@@ -50,6 +50,12 @@ rules:
   `NAME=value` syntax. Repeatable
   `forge build --define=<symbol>` options temporarily add private definitions
   to selected root builds without changing their recipes.
+- `[build].python_extension = true` builds a dynamic-library recipe with
+  CMake's `Python3_add_library(... MODULE)`. Set
+  `python_extension_name` to preserve the import-module name,
+  `python_extension_output_dir` to place the built module in a
+  project-relative package directory, and `python_extension_with_soabi = true`
+  to append Python's ABI suffix.
 - Build numbers must be non-negative.
 - `[release].build_number_format` may be `"dotted"` or `"semver"` to make
   release-note headings use `<version>.<number>` or
@@ -156,6 +162,26 @@ rules:
   library target dependencies are recursively packaged as embedded boxes.
 
 `shared_library` remains accepted as a legacy alias for `dynamic_library`.
+
+A Python extension module can be declared manually when it was not adopted
+from CMake:
+
+```toml
+[project]
+name = "python-bridge"
+version = "1.0.0"
+type = "dynamic_library"
+c_std = 11
+
+[build]
+python_extension = true
+python_extension_name = "_python_bridge"
+python_extension_output_dir = "python/python_bridge"
+python_extension_with_soabi = true
+
+[sources]
+paths = ["src/module.c"]
+```
 
 Imported-library profiles use `[import.<os>-<arch>]`, for example:
 

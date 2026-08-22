@@ -176,7 +176,7 @@ forge workflow add-feature release-boxes \
 ```
 
 Preview is the default. Applying injects a self-contained
-`forge-release-boxes` job marked with `# forge-managed: release-boxes@5`.
+`forge-release-boxes` job marked with `# forge-managed: release-boxes@6`.
 The job runs only for Git tag refs, even if the containing workflow has broader
 triggers. It resolves and checks out the latest published Forge release before
 preparing boxes. Published assets are append-only, so rerunning a tag cannot silently
