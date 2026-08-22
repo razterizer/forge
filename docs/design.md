@@ -241,6 +241,13 @@ repositories. The order matters:
    JavaScript/TypeScript, Go, Kotlin/Java, and Jupyter notebooks as a
    Python-based runnable-documentation layer.
 
+Validated showcase demos are the no-tinkering acceptance gate for C/C++
+adoption: from a fresh checkout and clean Forge state, `forge adopt` followed
+by the normal build, test, and run commands must produce a working demo with
+no hand edits to `forge.recipe.toml`. A demo that needs a recipe adjustment is
+either an adoption regression to fix or a case that needs an explicit,
+validated `forge adopt` hint; it is not a successful showcase adoption.
+
 The initial goals for those ecosystems are deliberately narrow:
 
 - Python: adopt `pyproject.toml`, virtual-environment and test commands,
